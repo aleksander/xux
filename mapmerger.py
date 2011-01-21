@@ -20,19 +20,15 @@ def name2coord(name):
 	und2 = name.index('_',und1+1)
 	und3 = name.index('.',und2+1)
 	return (int(name[und1+1:und2]), int(name[und2+1:und3]))
-
+def remove_empty_dir(path):
+	if len(os.listdir(path)) == 0:
+		print('remove empty dir:',os.path.basename(path))
+		os.rmdir(path)
+		return True
+	return False
 
 cwd = os.getcwd()
-
-dirs_list = dirs(cwd)
-
-for d in dirs_list:
-	p = os.path.join(cwd,d)
-	if len(os.listdir(p)) == 0:
-		print('remove empty dir:',d)
-		os.rmdir(p)
-
-dirs_list = dirs(cwd)
+dirs_list = [d for d in dirs(cwd) if not remove_empty_dir(os.path.join(cwd,d))]
 
 for i,dir1 in enumerate(dirs_list):
 	for dir2 in dirs_list[i+1:]:
@@ -82,8 +78,8 @@ for i,dir1 in enumerate(dirs_list):
 					else:
 						os.rename(os.path.join(dir2path,f3),os.path.join(dir1path,f3))
 
-						
 dirs_list = dirs(cwd)
+
 for d in dirs_list:
 	p = os.path.join(cwd,d)
 	if len(os.listdir(p)) == 0:
