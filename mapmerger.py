@@ -12,34 +12,6 @@ def ispng(f):
 	if ext == '.png':
 		return True
 	return False
-
-cwd = os.getcwd()
-dst = os.path.join(cwd,'assembled')
-
-# if os.path.exists(dst):
-	# try:
-		# shutil.rmtree(dst)
-	# except:
-		# print("while rmtree() raise error:", sys.exc_info()[0])
-		# exit()
-
-dirs_list = dirs(cwd)
-
-for d in dirs_list:
-	p = os.path.join(cwd,d)
-	if len(os.listdir(p)) == 0:
-		print('remove empty dir:',d)
-		os.rmdir(p)
-		# dirs_list.remove(d)
-
-dirs_list = dirs(cwd)
-
-# try:
-	# os.mkdir(dst)
-# except:
-	# print("while mkdir() raise error:", sys.exc_info()[0])
-	# exit()
-
 def name2coord(name):
 	if name.count('_') != 2:
 		print('wrong tile filename')
@@ -48,6 +20,19 @@ def name2coord(name):
 	und2 = name.index('_',und1+1)
 	und3 = name.index('.',und2+1)
 	return (int(name[und1+1:und2]), int(name[und2+1:und3]))
+
+
+cwd = os.getcwd()
+
+dirs_list = dirs(cwd)
+
+for d in dirs_list:
+	p = os.path.join(cwd,d)
+	if len(os.listdir(p)) == 0:
+		print('remove empty dir:',d)
+		os.rmdir(p)
+
+dirs_list = dirs(cwd)
 
 for i,dir1 in enumerate(dirs_list):
 	for dir2 in dirs_list[i+1:]:
@@ -104,6 +89,5 @@ for d in dirs_list:
 	if len(os.listdir(p)) == 0:
 		os.rmdir(p)
 		print(d,'removed')
-		# dirs_list.remove(d)
 	else:
 		print(d,'has',len(os.listdir(p)),'entries')
