@@ -77,6 +77,7 @@ for i,dir1 in enumerate(dirs_list):
 							os.remove(os.path.join(dir2path,f3))
 					else:
 						os.rename(os.path.join(dir2path,f3),os.path.join(dir1path,f3))
+				# TODO: remove dir2 from fs and from dirs_list
 
 dirs_list = dirs(cwd)
 
