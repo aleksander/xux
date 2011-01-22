@@ -1,5 +1,7 @@
 ﻿#!/usr/bin/python3
 
+ENOUGH_FOR_MERGE = 3
+
 import os,sys,shutil,glob,hashlib
 
 def dirs(path):
@@ -59,7 +61,7 @@ for i,dir1 in enumerate(dirs_list):
 				break
 		if not diff_shift:
 			print('  matches: {0}, shift: ({1},{2})'.format(same_hash_cnt,pdx,pdy))
-			if same_hash_cnt > 2:
+			if same_hash_cnt >= ENOUGH_FOR_MERGE:
 				if pdx != 0 or pdy != 0:
 					for f3 in filter(ispng,files(dir2path)):
 						(x3,y3) = name2coord(f3)
