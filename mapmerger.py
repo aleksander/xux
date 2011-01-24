@@ -25,8 +25,12 @@ def name2coord(name):
 	und2 = name.index('_',und1+1)
 	und3 = name.index('.',und2+1)
 	return (int(name[und1+1:und2]), int(name[und2+1:und3]))
-def remove_empty_dir(path):
+def dir_is_empty(path):
 	if len(listdir(path)) == 0:
+		return True
+	return False
+def remove_empty_dir(path):
+	if dir_is_empty(path):
 		print('remove empty dir:',basename(path))
 		rmdir(path)
 		return True
@@ -36,10 +40,14 @@ cwd = getcwd()
 dirs_list = [d for d in dirs(cwd) if not remove_empty_dir(join(cwd,d))]
 
 for i,dir1 in enumerate(dirs_list):
+	dir1path = join(cwd,dir1)
+	if dir_is_empty(dir1path):
+		continue
 	for dir2 in dirs_list[i+1:]:
-		print(dir1,'-',dir2)
-		dir1path = join(cwd,dir1)
 		dir2path = join(cwd,dir2)
+		if dir_is_empty(dir2path):
+			continue
+		print(dir1,'-',dir2)
 		same_hash_cnt = 0
 		diff_shift = False
 		(pdx,pdy) = (0,0)
