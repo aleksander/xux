@@ -19,7 +19,7 @@ def ispng(f):
 	return False
 def name2coord(name):
 	if name.count('_') != 2:
-		print('wrong tile filename')
+		print('wrong tile filename:',name)
 		exit()
 	und1 = name.index('_')
 	und2 = name.index('_',und1+1)
