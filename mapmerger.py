@@ -1,4 +1,4 @@
-﻿#!/usr/bin/python3
+#!/usr/bin/python3
 
 ENOUGH_FOR_MERGE = 3
 
