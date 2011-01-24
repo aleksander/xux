@@ -51,6 +51,7 @@ for i,dir1 in enumerate(dirs_list):
 		same_hash_cnt = 0
 		diff_shift = False
 		(pdx,pdy) = (0,0)
+		# TODO: use enumerate() to visualize calculation process
 		for f1 in filter(ispng,files(dir1path)):
 			for f2 in filter(ispng,files(dir2path)):
 				f1hash = md5()
@@ -96,8 +97,9 @@ dirs_list = dirs(cwd)
 
 for d in dirs_list:
 	p = join(cwd,d)
-	if len(listdir(p)) == 0:
+	l = len(listdir(p))
+	if l == 0:
 		rmdir(p)
 		print(d,'removed')
 	else:
-		print(d,'has',len(listdir(p)),'entries')
+		print(d,'has',l,'entries')
