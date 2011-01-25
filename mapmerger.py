@@ -17,7 +17,6 @@ def ispng(f):
 	(name,ext) = splitext(f)
 	if ((name.count('tile_') == 1) or (name.count('tmp_') == 1)) and (name.count('_') == 2) and (ext == '.png'):
 		return True
-	print('filtered:',f)
 	return False
 def name2coord(name):
 	und1 = name.index('_')
