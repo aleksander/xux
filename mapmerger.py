@@ -15,8 +15,9 @@ def files(path):
 	return [f for f in listdir(path) if isfile(join(path, f))]
 def ispng(f):
 	(name,ext) = splitext(f)
-	if name.count('tile_') == 1 and name.count('_') == 2 and ext == '.png':
+	if ((name.count('tile_') == 1) or (name.count('tmp_') == 1)) and (name.count('_') == 2) and (ext == '.png'):
 		return True
+	print('filtered:',f)
 	return False
 def name2coord(name):
 	und1 = name.index('_')
@@ -51,7 +52,6 @@ for i,dir1 in enumerate(dirs_list):
 		same_hash_cnt = 0
 		diff_shift = False
 		(pdx,pdy) = (0,0)
-		# TODO: use enumerate() to visualize calculation process
 		for f1 in filter(ispng,files(dir1path)):
 			for f2 in filter(ispng,files(dir2path)):
 				f1hash = md5()
@@ -69,11 +69,11 @@ for i,dir1 in enumerate(dirs_list):
 							break
 					(pdx,pdy) = (dx,dy)
 					same_hash_cnt = same_hash_cnt + 1
-					if not CHECK_ALL_FILES and same_hash_cnt == ENOUGH_FOR_MERGE:
+					if (not CHECK_ALL_FILES) and (same_hash_cnt >= ENOUGH_FOR_MERGE):
 						break
 			if diff_shift:
 				break
-			if not CHECK_ALL_FILES and same_hash_cnt == ENOUGH_FOR_MERGE:
+			if (not CHECK_ALL_FILES) and (same_hash_cnt >= ENOUGH_FOR_MERGE):
 				break
 		if not diff_shift:
 			print('  matches: {0}, shift: ({1},{2})'.format(same_hash_cnt,pdx,pdy))
