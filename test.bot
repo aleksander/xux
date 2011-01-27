@@ -1,0 +1,210 @@
+void clear_inventory() {
+	if (have_inventory("Inventory") == 0) {
+		open_inventory();
+		while (have_inventory("Inventory") == 0) {
+			print("not openeed yet");
+			sleep(100);
+		}
+	}
+	print("set inventory");
+	set_inventory("Inventory");
+	reset_inventory();
+	print("items");
+	print(get_items_count());
+	while (next_item() == 1) {
+		print("drop");
+		print(item_coord_x());
+		print(item_coord_y());
+		item_click("drop");
+	}
+	open_inventory();
+	set_inventory("Inventory");
+	print("items");
+	print(get_items_count());
+	reset_inventory();
+	// this cycle is endless sometimes because of buggy get_items_count()
+	while(get_items_count() > 0) {
+		print("dropping...");
+		print(get_items_count());
+		sleep(100);
+	}
+}
+
+void chop(int id) {
+	do_click(id, 3, 0);
+	while(ContextMenuReady == 0);
+	select_context_menu("Chop");
+	while(HourGlass == 0);
+	while(HourGlass == 1);
+}
+
+void remove(int id) {
+	do_click(id, 3, 0);
+	while(ContextMenuReady == 0);
+	select_context_menu("Remove");
+	while(HourGlass == 0);
+	while(HourGlass == 1);
+}
+
+void blocks(int id) {
+	do_click(id, 3, 0);
+	while(ContextMenuReady == 0);
+	select_context_menu("Chop into Blocks");
+	while(HourGlass == 0);
+	while(HourGlass == 1);
+}
+
+void free_hands() {
+	if(DraggingItem == 1) {
+		drop(3);
+	}
+	while(DraggingItem == 1);
+}
+
+void restore_stamina(int percent) {
+	while(Stamina < percent) {
+		print(Stamina);
+		sleep(1000);
+	}
+}
+
+int nearest_tree(int radius) {
+	int r = 1;
+	int t = 0;
+	while(r <= radius) {
+		t = find_object_by_type("tree", r);
+		if(t != 0) {
+			break;
+		}
+		r++;
+	}
+	return t;
+}
+
+int nearest_tree_r(int radius) {
+	int r = 1;
+	int t = 0;
+	while(r <= radius) {
+		t = find_object_by_type("tree", r);
+		if(t != 0) {
+			break;
+		}
+		r++;
+	}
+	return r;
+}
+
+int nearest_stump(int radius) {
+	int r = 1;
+	int t = 0;
+	while(r <= radius) {
+		t = find_object_by_name("stump", r);
+		if(t != 0) {
+			break;
+		}
+		r++;
+	}
+	return t;
+}
+
+int nearest_stump_r(int radius) {
+	int r = 1;
+	int t = 0;
+	while(r <= radius) {
+		t = find_object_by_name("stump", r);
+		if(t != 0) {
+			break;
+		}
+		r++;
+	}
+	return r;
+}
+
+int nearest_log(int radius) {
+	int r = 1;
+	int t = 0;
+	while(r <= radius) {
+		t = find_object_by_name("log", r);
+		if(t != 0) {
+			break;
+		}
+		r++;
+	}
+	return t;
+}
+
+int nearest_log_r(int radius) {
+	int r = 1;
+	int t = 0;
+	while(r <= radius) {
+		t = find_object_by_name("log", r);
+		if(t != 0) {
+			break;
+		}
+		r++;
+	}
+	return r;
+}
+
+
+void move_to(int x, int y) {
+	map_abs_click(x, y, 1, 0);
+	while(Moving == 0);
+	while(Moving == 1);
+}
+
+void main() {
+	print("----------- START");
+
+	int sx = my_coord_x();
+	int sy = my_coord_y();
+	int R = 20;
+	// int cnt;
+
+	while(1) {
+		int t = nearest_tree(R);
+		int tr;
+		if(t != 0) {
+			tr = nearest_tree_r(R);
+		}
+
+		int s = nearest_stump(R);
+		int sr;
+		if(s != 0) {
+			sr = nearest_stump_r(R);
+		}
+
+		int l = nearest_log(R);
+		int lr;
+		if(l != 0) {
+			lr = nearest_log_r(R);
+		}
+		if((s != 0) && (t != 0)) {
+			if(sr < tr) {
+				remove(s);
+			}
+			if(sr >= tr) {
+				chop(t);
+			}
+		}
+		if((s != 0) && (t == 0)) {
+			remove(s);
+		}
+		if((s == 0) && (t != 0)) {
+			chop(t);
+		}
+		if((s == 0) && (t == 0)) {
+			if(l != 0) {
+				blocks(l);
+			}
+			if(l == 0) {
+				break;
+			}
+		}
+		move_to(sx, sy);
+		free_hands();
+		restore_stamina(80);
+	}
+
+	print("----------- STOP");
+}

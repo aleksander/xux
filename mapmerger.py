@@ -6,7 +6,7 @@ CHECK_ALL_FILES = False
 from os import listdir,rmdir,getcwd,rename,remove
 from os.path import isdir,isfile,splitext,basename,join,exists,getctime
 from hashlib import md5
-from time import time
+#from time import time
 
 def dirs(path):
 	# TODO: replace with filter(os.path.isdir(os.path.join(path, f)), os.listdir(path))
@@ -34,7 +34,7 @@ def remove_empty_dir(path):
 		return True
 	return False
 
-start_time = time()
+# start_time = time()
 	
 cwd = getcwd()
 dirs_list = [d for d in dirs(cwd) if not remove_empty_dir(join(cwd,d))]
@@ -107,4 +107,4 @@ for d in dirs_list:
 	else:
 		print(d,'has',l,'entries')
 
-print('finished in ',int(time()-start_time),'seconds')
+# print('finished in ',int(time()-start_time),'seconds')
