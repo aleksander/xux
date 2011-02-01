@@ -46,6 +46,14 @@ void remove(int id) {
 	while(HourGlass == 1);
 }
 
+void harvest(int id) {
+	do_click(id, 3, 0);
+	while(ContextMenuReady == 0);
+	select_context_menu("Harvest");
+	while(HourGlass == 0);
+	while(HourGlass == 1);
+}
+
 void blocks(int id) {
 	do_click(id, 3, 0);
 	while(ContextMenuReady == 0);
@@ -56,16 +64,13 @@ void blocks(int id) {
 
 void free_hands() {
 	if(DraggingItem == 1) {
-		drop(3);
+		drop(1);
+		while(DraggingItem == 1);
 	}
-	while(DraggingItem == 1);
 }
 
 void restore_stamina(int percent) {
-	while(Stamina < percent) {
-		print(Stamina);
-		sleep(1000);
-	}
+	while(Stamina < percent);
 }
 
 int nearest_tree(int radius) {
@@ -148,10 +153,14 @@ int nearest_log_r(int radius) {
 
 
 void move_to(int x, int y) {
-	map_abs_click(x, y, 1, 0);
-	while(Moving == 0);
-	while(Moving == 1);
+	if((x!=my_coord_x())||(y!=my_coord_y())){
+		map_abs_click(x, y, 1, 0);
+		while(Moving == 0);
+		while(Moving == 1);
+	}
 }
+
+//int tmp;
 
 void main() {
 	print("----------- START");
@@ -159,51 +168,113 @@ void main() {
 	int sx = my_coord_x();
 	int sy = my_coord_y();
 	int R = 20;
-	// int cnt;
 
-	while(1) {
-		int t = nearest_tree(R);
-		int tr;
-		if(t != 0) {
-			tr = nearest_tree_r(R);
-		}
+//	int i=0;
+//	int tmp;
+//	while(i<8){
+//		tmp = find_object_by_name("carrot",2);
+//		if(tmp==0) break;
+//		//check grow=4
+//		harvest(tmp);
+//		move_to(sx, sy);
+//		free_hands();
+//		restore_stamina(80);
+//		i++;
+//	}
 
-		int s = nearest_stump(R);
-		int sr;
-		if(s != 0) {
-			sr = nearest_stump_r(R);
-		}
+//	tmp = find_object_by_name("log",3);
+//	if(tmp==0){
+//		print(tmp);
+//	} else {
+//		print(tmp);
+//	}
+//	exit();
 
-		int l = nearest_log(R);
-		int lr;
-		if(l != 0) {
-			lr = nearest_log_r(R);
-		}
-		if((s != 0) && (t != 0)) {
-			if(sr < tr) {
-				remove(s);
+
+//	while(1) {
+//		int t = nearest_tree(R);
+//		int tr;
+//		if(t != 0) {
+//			tr = nearest_tree_r(R);
+//		}
+//
+//		int s = nearest_stump(R);
+//		int sr;
+//		if(s != 0) {
+//			sr = nearest_stump_r(R);
+//		}
+//
+//		int l = nearest_log(R);
+//		int lr;
+//		if(l != 0) {
+//			lr = nearest_log_r(R);
+//		}
+//		if((s != 0) && (t != 0)) {
+//			if(sr < tr) {
+//				remove(s);
+//			}
+//			if(sr >= tr) {
+//				chop(t);
+//			}
+//		}
+//		if((s != 0) && (t == 0)) {
+//			remove(s);
+//		}
+//		if((s == 0) && (t != 0)) {
+//			chop(t);
+//		}
+//		if((s == 0) && (t == 0)) {
+//			if(l != 0) {
+//				blocks(l);
+//			}
+//			if(l == 0) {
+//				break;
+//			}
+//		}
+//	}
+
+	int radius = 100;
+	int r = 1;
+	int obj;
+
+
+	while(r <= radius) {
+		do {
+			obj = find_object_by_name("stump", r);
+			if(obj != 0) {
+				remove(obj);
+			}else{
+				obj = find_object_by_type("tree", r);
+				if(obj != 0) {
+					chop(obj);
+				}else{
+					//obj = find_object_by_name("bumlings/03", r);
+					//if(obj != 0) {
+					//	send_action("swrk","runestone");
+					//	//while(is_cursor("chi")==0);
+					//	do_click(obj,1,0);
+					//	while(HourGlass == 0);
+					//	while(HourGlass == 1);
+					//}else{
+						obj = find_object_by_name("log", r);
+						if(obj != 0) {
+							blocks(obj);
+						}
+					//}
+				}
 			}
-			if(sr >= tr) {
-				chop(t);
+			if((sx!=my_coord_x())||(sy!=my_coord_y())){
+				map_abs_click(sx, sy, 1, 0);
+				while(Moving == 0);
+				while(Moving == 1);
 			}
-		}
-		if((s != 0) && (t == 0)) {
-			remove(s);
-		}
-		if((s == 0) && (t != 0)) {
-			chop(t);
-		}
-		if((s == 0) && (t == 0)) {
-			if(l != 0) {
-				blocks(l);
+			if(DraggingItem == 1) {
+				drop(1);
+				while(DraggingItem == 1);
 			}
-			if(l == 0) {
-				break;
-			}
-		}
-		move_to(sx, sy);
-		free_hands();
-		restore_stamina(80);
+			while(Stamina < 80);
+		}while(obj!=0);
+		r++;
 	}
 
 	print("----------- STOP");
