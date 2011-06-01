@@ -6,97 +6,210 @@ import pcapy, struct
 # counters = {'tcp':0,'udp':0,'other':0}
 msg = ('SESS','REL','ACK','BEAT','MAPREQ','MAPDATA','OBJDATA','OBJACK','CLOSE')
 sesserr = ('OK','AUTH','BUSY','CONN','PVER','EXPR')
-    # public static final int RMSG_NEWWDG = 0;
-    # public static final int RMSG_WDGMSG = 1;
-    # public static final int RMSG_DSTWDG = 2;
-    # public static final int RMSG_MAPIV = 3;
-    # public static final int RMSG_GLOBLOB = 4;
-    # public static final int RMSG_PAGINAE = 5;
-    # public static final int RMSG_RESID = 6;
-    # public static final int RMSG_PARTY = 7;
-    # public static final int RMSG_SFX = 8;
-    # public static final int RMSG_CATTR = 9;
-    # public static final int RMSG_MUSIC = 10;
-    # public static final int RMSG_TILES = 11;
-    # public static final int RMSG_BUFF = 12;
-rel = ('NEWWDG','WDGMSG','DSTWDG','MAPIV','GLOBLOB','PAGINAE','RESID','PARTY','SFX','CATTR','MUSIC','TILES','BUFF')
+rels = ('NEWWDG','WDGMSG','DSTWDG','MAPIV','GLOBLOB','PAGINAE','RESID','PARTY','SFX','CATTR','MUSIC','TILES','BUFF')
+wdg_list_types = {0:'END',1:'INT',2:'STR',3:'COORD',6:'COLOR'}
+gmsg = ('TIME','ASTRO','LIGHT')
 
-class hnh_pkt:
-	def cut(self,fmt):
-		res = struct.unpack(fmt,self.data[:struct.calcsize(fmt)])
-		self.data = self.data[struct.calcsize(fmt):]
-		return res
-	def u8(self):
-		return self.cut('<B')[0]
-	def u16(self):
-		return self.cut('<H')[0]
-	def str(self):
-		tmp = self.data.index(b'\x00')
-		str = self.data[:tmp].decode()
-		self.data = self.data[tmp+1:]
-		return str
-	def b(self):
-		# print(self.data)
-		return b'...'
-	def bytes(self,count):
-		if count > 0:
-			ret = self.data[:count]
-			self.data = self.data[count:]
-		else:
-			ret = self.data[:]
-			self.data = bytes()
-		return ret
-	def __init__(self,data,server):
+# def cut(data,fmt):
+	# res = struct.unpack(fmt,data[:struct.calcsize(fmt)])
+	# data = data[struct.calcsize(fmt):]
+	# return res
+def cu8(data):
+	ret = data[0]
+	data[0:1] = []
+	return ret
+def cu16(data):
+	ret = data[0]+(data[1]<<8)
+	data[0:2] = []
+	return ret
+def cstr(data):
+	tmp = data.index(b'\x00')
+	str = data[:tmp].decode()
+	data[0:tmp+1] = []
+	return str
+def cb(data,count=0):
+	if count > 0:
+		ret = data[:count]
+		data[0:count] = []
+	else:
+		ret = data[:]
+		data[:] = []
+	return ret
+#FIXME: not work properly
+def cs32(data):
+	ret = data[0]+(data[1]<<8)+(data[2]<<16)+(data[3]<<24)
+	# if ret > 0x7fffffff:
+		# ret = 0x80000000*2-ret;
+	data[0:4] = []
+	return ret
+
+def hnh_parse(data,server):
+	type = cu8(data)
+	if type > 8:
+		print(' UNKNOWN PACKET TYPE '+str(type))
+		return
+	######## SESS #################################
+	if type == 0:
+		print(' SESS',end=' ')
 		if server:
-			self.desc = '   '
+			error = cu8(data)
+			print('error={0}({1})'.format(error,sesserr[error]))
 		else:
-			self.desc = ''
-		self.data = data
-		self.type = self.u8()
-		if self.type > 8:
-			self.desc += 'UNKNOWN PACKET TYPE '+str(self.type)
-			return
-		self.desc += msg[self.type]+': '
-		if self.type == 0: # sess
-			if server:
-				self.error = self.u8()
-				self.desc += 'error={0}({1})'.format(self.error,sesserr[self.error])
+			print(data)
+			cu16(data) # ???
+			proto = cstr(data)
+			ver = cu16(data)
+			user = cstr(data)
+			cookie = cb(data)
+			print('proto={} ver={} user={} cookie={}'.format(proto,ver,user,cookie[:5]))
+	######## REL ##################################
+	elif type == 1:
+		print(' REL')
+		seq = cu16(data)
+		while len(data) > 0:
+			rel_type = cu8(data)
+			if rel_type&0x80 != 0:
+				rel_type &= 0x7f;
+				rel_len = cu16(data);
 			else:
-				self.u16()
-				self.proto = self.str()
-				self.ver = self.u16()
-				self.user = self.str()
-				self.cookie = self.b()
-				self.desc += 'proto={0} ver={1} user={2} cookie={3}'.format(self.proto,self.ver,self.user,self.cookie)
-		elif self.type == 1: # rel
-			self.seq = self.u16()
-			while len(self.data) > 0:
-				self.rel_type = self.u8()
-				if self.rel_type&0x80 != 0:
-					self.rel_type &= 0x7f;
-					self.rel_len = self.u16();
+				rel_len = len(data)
+			rel = cb(data,rel_len)
+			# self.rel = self.bytes(self.rel_len)
+			print('  seq={0} type={1}({2}) len={3}'.format(seq,rel_type,rels[rel_type],rel_len))
+			if rel_type == 0: # NEWWDG
+				wdg_id = cu16(rel)
+				wdg_type = cstr(rel)
+				wdg_coord = [cs32(rel),cs32(rel)]
+				wdg_parent = cu16(rel)
+				print('   id={} type={} parent={}'.format(wdg_id,wdg_type,wdg_parent))
+				while len(rel) > 0:
+					wdg_lt = cu8(rel)
+					print('    {}='.format(wdg_list_types[wdg_lt]),end='')
+					if wdg_lt == 0: # END
+						break
+					elif wdg_lt == 1: # INT
+						print(cs32(rel))
+					elif wdg_lt == 2: # STR
+						print(cstr(rel))
+					elif wdg_lt == 3: # COORD
+						print([cs32(rel),cs32(rel)])
+					elif wdg_lt == 6: # COLOR
+						print([cu8(rel),cu8(rel),cu8(rel),cu8(rel)])
+			elif rel_type == 1: # WDGMSG
+				wdg_id = cu16(rel)
+				wdg_msg_name = cstr(rel)
+				print('   id={} name={}'.format(wdg_id,wdg_msg_name))
+				while len(rel) > 0:
+					wdg_lt = cu8(rel)
+					if wdg_lt not in wdg_list_types:
+						print('    !!! wdg_lt={}'.format(wdg_lt))
+						break
+					print('    {}='.format(wdg_list_types[wdg_lt]),end='')
+					if wdg_lt == 0: # END
+						break
+					elif wdg_lt == 1: # INT
+						print(cs32(rel))
+					elif wdg_lt == 2: # STR
+						print(cstr(rel))
+					elif wdg_lt == 3: # COORD
+						print([cs32(rel),cs32(rel)])
+					elif wdg_lt == 6: # COLOR
+						print([cu8(rel),cu8(rel),cu8(rel),cu8(rel)])
+			elif rel_type == 2: # DSTWDG (destroy widget)
+				dw_id = cu16(rel)
+				print('   id={}'.format(dw_id))
+			elif rel_type == 3: # MAPIV
+				pass
+			elif rel_type == 4: # GLOBLOB
+				while len(rel) > 0:
+					gmsg_type = cu8(rel)
+					print('    {}='.format(gmsg[gmsg_type]),end='')
+					if gmsg_type == 0: # TIME
+						print(cs32(rel))
+					elif gmsg_type == 1: # ASTRO
+						print('dt={} mp={} yt={}'.format(cs32(rel),cs32(rel),cs32(rel)))
+					elif gmsg_type == 2: # LIGHT
+						print([cu8(rel),cu8(rel),cu8(rel),cu8(rel)])
+			elif rel_type == 5: # PAGINAE
+				while len(rel) > 0:
+					print('    act={} name={} ver={}'.format(cu8(rel),cstr(rel),cu16(rel)))
+			elif rel_type == 6: # RESID
+				res_id = cu16(rel)
+				res_name = cstr(rel)
+				res_ver = cu16(rel)
+				print('   id={} name={} ver={}'.format(res_id,res_name,res_ver))
+			elif rel_type == 7: # PARTY
+				while len(rel) > 0:
+					party_type = cu8(rel)
+					if party_type == 0: # LIST
+						print('   LIST')
+						while True:
+							party_id = cs32(rel)
+							if party_id > 0x7fffffff:
+								break
+							print('    id={}'.format(party_id))
+					elif party_type == 1: # LEADER
+						print('   LEADER id={}'.format(cs32(rel)))
+					elif party_type == 2: # MEMBER
+						print('   MEMBER id={} vis={} coord={} color={}'.format(cs32(rel),cu8(rel),[cs32(rel),cs32(rel)],[cu8(rel),cu8(rel),cu8(rel),cu8(rel)]))
+			elif rel_type == 8: # SFX
+				pass
+			elif rel_type == 9: # CATTR
+				while len(rel) > 0:
+					attr_name = cstr(rel)
+					attr_base = cs32(rel)
+					attr_comp = cs32(rel)
+					print('   name={} base={} comp={}'.format(attr_name,attr_base,attr_comp))
+			elif rel_type == 10: # MUSIC
+				music_name = cstr(rel)
+				music_ver = cu16(rel)
+				if len(rel) > 0:
+					music_loop = cu8(rel)
 				else:
-					self.rel_len = 0
-				self.rel = self.bytes(self.rel_len)
-				self.desc += 'seq={0} type={1}({2}) len={3} rel={4}\r\n        '.format(self.seq,self.rel_type,rel[self.rel_type],self.rel_len,self.rel[:10])
-				self.seq += 1
-		elif self.type == 2: # ack
-			self.seq = self.u16()
-			self.desc += str(self.seq)
-		elif self.type == 3: # beat
-			pass
-		elif self.type == 4: # mapreq
-			pass
-		elif self.type == 5: # mapdata
-			pass
-		elif self.type == 6: # objdata
-			pass
-		elif self.type == 7: # objack
-			pass
-		elif self.type == 8: # close
-			pass
-		# if len(self.data) > 0:
-			# self.desc += ' remains='+str(self.data)
+					music_loop = 0
+				print('   name={} ver={} loop={}'.format(music_name,music_ver,music_loop))
+			elif rel_type == 11: # TILES
+				while len(rel) > 0:
+					tile_id = cu8(rel)
+					tile_name = cstr(rel)
+					tile_ver = cu16(rel)
+					print('   id={0} name={1} version={2}'.format(tile_id,tile_name,tile_ver))
+			elif rel_type == 12: # BUFF
+				buff_name = cstr(rel)
+				if buff_name == 'clear':
+					print('   clear buffers')
+				elif buff_name == 'set':
+					print('   set buffers id={} res={} tt={} ameter={} nmeter={} cmeter={} cticks={} major={}'.format(cs32(rel),cu16(rel),cstr(rel),cs32(rel),cs32(rel),cs32(rel),cs32(rel),cu8(rel)))
+				elif buff_name == 'rm':
+					print('   remove buffers id={}'.format(cs32(rel)))
+			if len(rel) > 0:
+				print('rel remains={}'.format(rel))
+			seq += 1
+	######## ACK ##################################
+	elif type == 2:
+		print(' ACK',end=' ')
+		seq = cu16(data)
+		print('seq={0}'.format(seq))
+	######## BEAT #################################
+	elif type == 3:
+		print(' BEAT')
+	######## MAPREQ ###############################
+	elif type == 4:
+		print(' MAPREQ')
+	######## MAPDATA ##############################
+	elif type == 5:
+		print(' MAPDATA')
+	######## OBJDATA ##############################
+	elif type == 6:
+		print(' OBJDATA')
+	######## OBJACK ###############################
+	elif type == 7:
+		print(' OBJACK')
+	######## CLOSE ################################
+	elif type == 8:
+		print(' CLOSE')
+	# if len(self.data) > 0:
+		# self.desc += ' remains='+str(self.data)
 
 def show_info(hdr,data):
 	fmt = '!6s6sH'
@@ -119,11 +232,14 @@ def show_info(hdr,data):
 	data = data[struct.calcsize(fmt):]
 	# print('{0}.{1}.{2}.{3}:{4} -> {5}.{6}.{7}.{8}:{9}'.format(ipsrc[0],ipsrc[1],ipsrc[2],ipsrc[3],portsrc,ipdst[0],ipdst[1],ipdst[2],ipdst[3],portdst))
 	if ipdst == bytes([178,63,100,209]):
-		p = hnh_pkt(data,False)
+		print('CLIENT')
+		hnh_parse(bytearray(data),False)
 	else:
-		p = hnh_pkt(data,True)
-	print(p.desc)
+		print('SERVER')
+		hnh_parse(bytearray(data),True)
 
+for i in range(100):
+	print()
 rdr = pcapy.open_offline('hh.pcap')
-rdr.dispatch(40,show_info)
+rdr.dispatch(-1,show_info)
 # print(counters)
