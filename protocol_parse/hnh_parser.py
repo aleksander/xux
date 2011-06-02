@@ -9,6 +9,25 @@ sesserr = ('OK','AUTH','BUSY','CONN','PVER','EXPR')
 rels = ('NEWWDG','WDGMSG','DSTWDG','MAPIV','GLOBLOB','PAGINAE','RESID','PARTY','SFX','CATTR','MUSIC','TILES','BUFF')
 wdg_list_types = {0:'END',1:'INT',2:'STR',3:'COORD',6:'COLOR'}
 gmsg = ('TIME','ASTRO','LIGHT')
+    # public static final int OD_REM = 0;
+    # public static final int OD_MOVE = 1;
+    # public static final int OD_RES = 2;
+    # public static final int OD_LINBEG = 3;
+    # public static final int OD_LINSTEP = 4;
+    # public static final int OD_SPEECH = 5;
+    # public static final int OD_LAYERS = 6;
+    # public static final int OD_DRAWOFF = 7;
+    # public static final int OD_LUMIN = 8;
+    # public static final int OD_AVATAR = 9;
+    # public static final int OD_FOLLOW = 10;
+    # public static final int OD_HOMING = 11;
+    # public static final int OD_OVERLAY = 12;
+    # /* public static final int OD_AUTH = 13; -- Removed */
+    # public static final int OD_HEALTH = 14;
+    # public static final int OD_BUDDY = 15;
+    # public static final int OD_END = 255;
+objdata_types = {0:'REM',1:'MOVE',2:'RES',3:'LINBEG',4:'LINSTEP',5:'SPEECH',6:'LAYERS',7:'DRAWOFF',8:'LUMIN',
+                 9:'AVATAR',10:'FOLLOW',11:'HOMING',12:'OVERLAY',14:'HEALTH',15:'BUDDY',255:'END'}
 
 # def cut(data,fmt):
 	# res = struct.unpack(fmt,data[:struct.calcsize(fmt)])
@@ -35,11 +54,24 @@ def cb(data,count=0):
 		ret = data[:]
 		data[:] = []
 	return ret
+
+def cu32(data):
+	ret = data[0]+(data[1]<<8)+(data[2]<<16)+(data[3]<<24)
+	data[0:4] = []
+	return ret
+
 #FIXME: not work properly
+    # static int int32d(byte[] buf, int off) {
+	# long u = uint32d(buf, off);
+	# if(u > Integer.MAX_VALUE)
+	    # return((int)((((long)Integer.MIN_VALUE) * 2) - u));
+	# else
+	    # return((int)u);
+    # }
 def cs32(data):
 	ret = data[0]+(data[1]<<8)+(data[2]<<16)+(data[3]<<24)
-	# if ret > 0x7fffffff:
-		# ret = 0x80000000*2-ret;
+	if ret&0x80000000:
+		ret = -(ret&~0x80000000)
 	data[0:4] = []
 	return ret
 
@@ -54,17 +86,17 @@ def hnh_parse(data,server):
 		if type == 0:
 			if server:
 				error = cu8(data)
-				print('error={0}({1})'.format(error,sesserr[error]))
+				print('  error={0}({1})'.format(error,sesserr[error]))
 			else:
-				print(data)
 				cu16(data) # ???
 				proto = cstr(data)
 				ver = cu16(data)
 				user = cstr(data)
 				cookie = cb(data)
-				print('proto={} ver={} user={} cookie={}'.format(proto,ver,user,cookie[:5]))
+				print('  proto={} ver={} user={} cookie={}'.format(proto,ver,user,cookie[:5]))
 		######## REL ##################################
 		elif type == 1:
+			return
 			seq = cu16(data)
 			while len(data) > 0:
 				rel_type = cu8(data)
@@ -150,7 +182,8 @@ def hnh_parse(data,server):
 						if party_type == 0: # LIST
 							print('   LIST')
 							while True:
-								party_id = cs32(rel)
+								# FIXME: replace with cs32
+								party_id = cu32(rel)
 								if party_id > 0x7fffffff:
 									break
 								print('    id={}'.format(party_id))
@@ -206,17 +239,105 @@ def hnh_parse(data,server):
 			pass
 		######## OBJDATA ##############################
 		elif type == 6:
-			pass
+			while len(data) > 0:
+				objdata_fl = cu8(data)
+				objdata_id = cs32(data)
+				objdata_frame = cs32(data)
+				print('  id={} frame={}'.format(objdata_id,objdata_frame))
+				if objdata_fl&1 != 0:
+					print('   remove id={} frame={}'.format(objdata_id,objdata_frame-1))
+				while True:
+					objdata_type = cu8(data)
+					if objdata_type not in objdata_types:
+						print('   UNKNOWN OBJDATA TYPE {}'.format(objdata_type))
+						raise Exception('unknown objdata type', '...')
+					print('   {}'.format(objdata_types[objdata_type]),end=' ')
+					if objdata_type == 0: # REM
+						pass
+					elif objdata_type == 1: # MOVE
+						print('coord={}'.format([cs32(data),cs32(data)]))
+					elif objdata_type == 2: # RES
+						res_id = cu16(data)
+						if res_id&0x8000 != 0:
+							res_id &= ~0x8000
+							print('res_id={} sdt={}'.format(res_id,cb(data,cu8(data))))
+						else:
+							print('res_id={} sdt=[]'.format(res_id))
+					elif objdata_type == 3: # LINBEG
+						print('s={} t={} c={}'.format([cs32(data),cs32(data)],[cs32(data),cs32(data)],cs32(data)))
+					elif objdata_type == 4: # LINSTEP
+						print('l={}'.format(cs32(data)))
+					elif objdata_type == 5: # SPEECH
+						print('off={} text={}'.format([cs32(data),cs32(data)],cstr(data)))
+					elif objdata_type == 6: # LAYERS
+						res = cu16(data)
+						layers = []
+						while True:
+							layer = cu16(data)
+							if layer == 65535:
+								break
+							layers.append(layer)
+						print('res={} layers={}'.format(res,layers))
+					elif objdata_type == 7: # DRAWOFF
+						print('off={}'.format([cs32(data),cs32(data)]))
+					elif objdata_type == 8: # LUMIN
+						print('off={} sz={} str={}'.format([cs32(data),cs32(data)],cu16(data),cu8(data)))
+					elif objdata_type == 9: # AVATAR
+						layers = []
+						while True:
+							layer = cu16(data)
+							if layer == 65535:
+								break
+							layers.append(layer)
+						print('layers={}'.format(layers))
+					elif objdata_type == 10: # FOLLOW
+						oid = cs32(data)
+						# FIXME !!!!!!
+						if oid != -1:
+							print('oid={} off={} szo={}'.format(oid,[cs32(data),cs32(data)],cu8(data)))
+						else:
+							print('oid={} off=[???,???] szo=0'.format(oid))
+					elif objdata_type == 11: # HOMING
+						oid = cs32(data)
+						print('oid={}'.format,end=' ')
+						if oid == -1:
+							print('homostop')
+						elif oid == -2:
+							print('homocoord coord={} v={}'.format([cs32(data),cs32(data)],cu16(data)))
+						else:
+							print('homing coord={} v={}'.format([cs32(data),cs32(data)],cu16(data)))
+					elif objdata_type == 12: # OVERLAY
+						olid = cs32(data)
+						prs = (olid & 1) != 0
+						olid >>= 1
+						resid = cu16()
+						if resid == 65535:
+							sdt = None
+						elif resid&0x8000 != 0:
+							resid &= ~0x8000
+							sdt = cb(data,cu8(data))
+						else:
+							sdt = []
+						print('olid={} prs={} resid={} sdt={}'.format(olid,prs,resid,sdt))
+					elif objdata_type == 14: # HEALTH
+						print('hp={}'.format(cu8(data)))
+					elif objdata_type == 15: # BUDDY
+						print('name={} group={} btype={}'.format(cstr(data),cu8(data),cu8(data)))
+					elif objdata_type == 255: # END
+						print('')
+						break
 		######## OBJACK ###############################
 		elif type == 7:
 			pass
 		######## CLOSE ################################
 		elif type == 8:
 			pass
-		# if len(self.data) > 0:
-			# self.desc += ' remains='+str(self.data)
+		if len(data) > 0:
+			print('data remains={}'.format(data))
 	except:
-		print("Unexpected error:", sys.exc_info()[0])
+		print("Unexpected error: {} {} {}".format(sys.exc_info()[0],sys.exc_info()[1],sys.exc_info()[2]))
+		if len(data) > 0:
+			print('data remains={}'.format(data))
 		# raise
 def show_info(hdr,data):
 	fmt = '!6s6sH'
