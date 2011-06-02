@@ -236,9 +236,14 @@ def hnh_parse(data,server):
 			pass
 		######## MAPDATA ##############################
 		elif type == 5:
-			pass
+			pktid = cs32(data)
+			off = cu16(data)
+			length = cu16(data)
+			buf = cb(data)
+			print('   pktid={} off={} len={} buf={}'.format(pktid,off,length,buf))
 		######## OBJDATA ##############################
 		elif type == 6:
+			return
 			while len(data) > 0:
 				objdata_fl = cu8(data)
 				objdata_id = cs32(data)
@@ -328,7 +333,7 @@ def hnh_parse(data,server):
 						break
 		######## OBJACK ###############################
 		elif type == 7:
-			pass
+			print('   id={} frame={}'.format(cs32(data),cs32(data)))
 		######## CLOSE ################################
 		elif type == 8:
 			pass
@@ -368,6 +373,6 @@ def show_info(hdr,data):
 
 # for i in range(100):
 	# print()
-rdr = pcapy.open_offline('hh.pcap')
+rdr = pcapy.open_offline('hh2.pcap')
 rdr.dispatch(-1,show_info)
 # print(counters)
