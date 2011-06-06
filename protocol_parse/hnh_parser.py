@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+﻿#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
 import pcapy, struct, sys
@@ -93,7 +93,7 @@ def hnh_parse(data,server):
 				ver = cu16(data)
 				user = cstr(data)
 				cookie = cb(data)
-				print('  proto={} ver={} user={} cookie={}'.format(proto,ver,user,cookie[:5]))
+				print('  proto={} ver={} user={} cookie={}'.format(proto,ver,user,cookie))
 		######## REL ##################################
 		elif type == 1:
 			return
