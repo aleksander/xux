@@ -1,7 +1,8 @@
-﻿#!/usr/bin/env python
+﻿#!/usr/bin/python3.2
 # -*- coding: utf-8 -*-
 
-import pcapy, struct, sys
+import pure_pcapy as pcapy
+import struct, sys
 
 # counters = {'tcp':0,'udp':0,'other':0}
 msgs = {0:'SESS',1:'REL',2:'ACK',3:'BEAT',4:'MAPREQ',5:'MAPDATA',6:'OBJDATA',7:'OBJACK',8:'CLOSE'}
@@ -373,6 +374,6 @@ def show_info(hdr,data):
 
 # for i in range(100):
 	# print()
-rdr = pcapy.open_offline('hh2.pcap')
+rdr = pcapy.open_offline('hh.pcap')
 rdr.dispatch(-1,show_info)
 # print(counters)
