@@ -12,7 +12,7 @@ class hnh_server:
 		ctx = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
 		ctx.options |= ssl.OP_NO_SSLv2
 		try:
-			ctx.load_cert_chain(certfile="authsrv.pem")
+			ctx.load_cert_chain(certfile='crt.pem', keyfile='key.pem')
 		except:
 			print("error: {} {}".format(sys.exc_info()[1],sys.exc_info()[2]))
 			return
