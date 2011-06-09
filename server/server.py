@@ -45,9 +45,9 @@ class hnh_server:
 			
 		s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 		s.bind(('', self.udp_port))
-		s.listen(5)
-		data = ss.recv(1024)
-		
+		# s.listen(5)
+		data = s.recv(1024) # SESS
+		s.send()
 
 srv = hnh_server(1871, 1870)
 srv.start()

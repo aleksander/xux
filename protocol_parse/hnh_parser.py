@@ -97,7 +97,6 @@ def hnh_parse(data,server):
 				print('  proto={} ver={} user={} cookie={}'.format(proto,ver,user,cookie))
 		######## REL ##################################
 		elif type == 1:
-			return
 			seq = cu16(data)
 			while len(data) > 0:
 				rel_type = cu8(data)
@@ -244,7 +243,6 @@ def hnh_parse(data,server):
 			print('   pktid={} off={} len={} buf={}'.format(pktid,off,length,buf))
 		######## OBJDATA ##############################
 		elif type == 6:
-			return
 			while len(data) > 0:
 				objdata_fl = cu8(data)
 				objdata_id = cs32(data)
