@@ -12,15 +12,10 @@ class hnh_server:
 		ctx = ssl.SSLContext(ssl.PROTOCOL_TLSv1)
 		ctx = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
 		ctx.options |= ssl.OP_NO_SSLv2
-		try:
-			ctx.load_cert_chain(certfile='crt.pem', keyfile='key.pem')
-		except:
-			print("error: {} {}".format(sys.exc_info()[1],sys.exc_info()[2]))
-			return
+		ctx.load_cert_chain(certfile='crt.pem', keyfile='key.pem')
 		s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		s.bind(('', self.ssl_port))
 		s.listen(5)
-		#while True:
 		
 		newsocket, fromaddr = s.accept()
 		print('connected: ', fromaddr)
@@ -45,9 +40,31 @@ class hnh_server:
 			
 		s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 		s.bind(('', self.udp_port))
-		s.listen(5)
-		data = ss.recv(1024)
-		
+
+		data, rs = s.recvfrom(1024)
+		s.connect(rs)
+		print('connected: ',rs)
+		print(data)
+		s.send(b'\x00\x00')
+		while True:
+			data = s.recv(1024)
+			print(data)
+			if data[0] == 3:
+				break
+		s.send(b'\x01\x00\x00\x00\x01\x00cnt\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x03\x20\x03\x00\x00\x03\x58\x02\x00\x00')
+		#s.recv(1024)
+		print(data)
+		s.send(b'\x01\x01\x00\x00\x02\x00charlist\x00\x0f\x00\x00\x00\x0f\x00\x00\x00\x01\x00\x01\x03\x00\x00\x00')
+		try:
+			while True:
+				data = s.recv(1024)
+				print(data)
+		except:
+			print('interrupted')
+			s.send(b'\x08')
+			s.send(b'\x08')
+			s.send(b'\x08')
+			s.close()
 
 srv = hnh_server(1871, 1870)
 srv.start()
