@@ -69,10 +69,14 @@ def cu32(data):
 	# else
 	    # return((int)u);
     # }
+	
+	# 0000 000E
+	# FFFF FFF1 === -15
+	# 8000 0000
 def cs32(data):
 	ret = data[0]+(data[1]<<8)+(data[2]<<16)+(data[3]<<24)
-	if ret&0x80000000:
-		ret = -(ret&~0x80000000)
+	# if ret&0x80000000:
+		# ret = -(ret&~0x80000000)
 	data[0:4] = []
 	return ret
 
