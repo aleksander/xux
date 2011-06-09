@@ -113,7 +113,7 @@ def hnh_parse(data,server):
 					wdg_type = cstr(rel)
 					wdg_coord = [cs32(rel),cs32(rel)]
 					wdg_parent = cu16(rel)
-					print('   id={} type={} parent={}'.format(wdg_id,wdg_type,wdg_parent))
+					print('   id={} type={} coord={} parent={}'.format(wdg_id,wdg_type,wdg_coord,wdg_parent))
 					while len(rel) > 0:
 						wdg_lt = cu8(rel)
 						print('    {}='.format(wdg_list_types[wdg_lt]),end='')
@@ -372,6 +372,6 @@ def show_info(hdr,data):
 
 # for i in range(100):
 	# print()
-rdr = pcapy.open_offline('hh.pcap')
+rdr = pcapy.open_offline('first.pcap')
 rdr.dispatch(-1,show_info)
 # print(counters)
