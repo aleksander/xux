@@ -61,7 +61,8 @@ def cu32(data):
 	data[0:4] = []
 	return ret
 
-#FIXME: not work properly
+	# public static final int MIN_VALUE = -2147483648;
+	# public static final int MAX_VALUE = 2147483647;
     # static int int32d(byte[] buf, int off) {
 	# long u = uint32d(buf, off);
 	# if(u > Integer.MAX_VALUE)
@@ -70,13 +71,14 @@ def cu32(data):
 	    # return((int)u);
     # }
 	
-	# 0000 000E
-	# FFFF FFF1 === -15
-	# 8000 0000
+	#     0000 000E
+	# v = FFFF FFF1 === -15
+	# s = 8000 0000
+	# 
 def cs32(data):
 	ret = data[0]+(data[1]<<8)+(data[2]<<16)+(data[3]<<24)
-	# if ret&0x80000000:
-		# ret = -(ret&~0x80000000)
+	if ret>2147483647:
+		ret = -((2147483648*2)-ret)
 	data[0:4] = []
 	return ret
 

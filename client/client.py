@@ -1,5 +1,3 @@
-#!/usr/bin/python3
-
 import socket, ssl, hashlib, time, threading
 
 #####################################################################
@@ -41,15 +39,11 @@ class hnhc:
 		s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		ss = ssl.wrap_socket(s)
 		ss.connect((self.host, self.ssl_port))
-
-		# message(bytes(bytearray([1,len(name)])+name.encode('utf8'))).deliver(ss)
 		msg = bytes(bytearray([1,len(name)])+name.encode('utf8'))
-		ss.write(msg)
-		# ss.send(msg)
+		ss.recv(msg)
 		msg = ss.read()
 		if(msg[0] != 0):
 			print('username binding: wrong message type '+msg)
-			#TODO: self.error = 'username response error '+error
 			ss.close()
 			return False
 
@@ -57,8 +51,8 @@ class hnhc:
 		hash.update(password.encode('utf8'))
 		hash = hash.digest()
 		msg = bytes(bytearray([2,len(hash)])+hash)
-		ss.write(msg)
-		msg = ss.read()
+		ss.send(msg)
+		msg = ss.recv()
 		ss.close()
 		if(msg[0] != 0):
 			print('password binding: wrong message type '+msg)
@@ -131,14 +125,14 @@ class hnhc:
 
 ###########################################################################
 
-hh = hnhc('moltke.seatribe.se', 1871, 1870)
-if not hh.authorize('lemings', 'lemings'):
+hnh = hnh_client('moltke.seatribe.se', 1871, 1870)
+if not hnh.authorize('lemings', 'lemings'):
 	print('authorization failed')
 	exit(1)
 print('authorized')
-if not hh.connect(5):
+if not hnh.connect(5):
 	print('connection failed')
 	exit(1)
 print('connected')
-hh.rx.join()
+hnh.rx.join()
 #hh.chose_character()
