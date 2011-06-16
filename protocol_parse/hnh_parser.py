@@ -30,23 +30,27 @@ gmsg = ('TIME','ASTRO','LIGHT')
 objdata_types = {0:'REM',1:'MOVE',2:'RES',3:'LINBEG',4:'LINSTEP',5:'SPEECH',6:'LAYERS',7:'DRAWOFF',8:'LUMIN',
                  9:'AVATAR',10:'FOLLOW',11:'HOMING',12:'OVERLAY',14:'HEALTH',15:'BUDDY',255:'END'}
 
-# def cut(data,fmt):
-	# res = struct.unpack(fmt,data[:struct.calcsize(fmt)])
-	# data = data[struct.calcsize(fmt):]
-	# return res
+#def cut(data,fmt):
+#	res = struct.unpack(fmt,data[:struct.calcsize(fmt)])
+#	data = data[struct.calcsize(fmt):]
+#	return res
+
 def cu8(data):
 	ret = data[0]
 	data[0:1] = []
 	return ret
+
 def cu16(data):
 	ret = data[0]+(data[1]<<8)
 	data[0:2] = []
 	return ret
+
 def cstr(data):
 	tmp = data.index(b'\x00')
 	str = data[:tmp].decode()
 	data[0:tmp+1] = []
 	return str
+
 def cb(data,count=0):
 	if count > 0:
 		ret = data[:count]
@@ -61,20 +65,6 @@ def cu32(data):
 	data[0:4] = []
 	return ret
 
-	# public static final int MIN_VALUE = -2147483648;
-	# public static final int MAX_VALUE = 2147483647;
-    # static int int32d(byte[] buf, int off) {
-	# long u = uint32d(buf, off);
-	# if(u > Integer.MAX_VALUE)
-	    # return((int)((((long)Integer.MIN_VALUE) * 2) - u));
-	# else
-	    # return((int)u);
-    # }
-	
-	#     0000 000E
-	# v = FFFF FFF1 === -15
-	# s = 8000 0000
-	# 
 def cs32(data):
 	ret = data[0]+(data[1]<<8)+(data[2]<<16)+(data[3]<<24)
 	if ret>2147483647:
@@ -189,8 +179,8 @@ def hnh_parse(data,server):
 							print('   LIST')
 							while True:
 								# FIXME: replace with cs32
-								party_id = cu32(rel)
-								if party_id > 0x7fffffff:
+								party_id = cs32(rel)
+								if party_id < 0:
 									break
 								print('    id={}'.format(party_id))
 						elif party_type == 1: # LEADER
