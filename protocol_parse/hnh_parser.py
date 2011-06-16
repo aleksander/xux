@@ -83,6 +83,16 @@ def hnh_parse(data,server):
 		return
 	print(' {} ({})'.format(msgs[type],type))
 	try:
+		
+		# TODO:
+			# msgs - frozen dictionary
+			# msgs = {type:("name", parser), ... }
+			# if type not in msgs:
+				# print(' UNKNOWN PACKET TYPE {}'.format(type))
+			# else:
+				# print(' {} ({})'.format(msgs[type],type))
+				# parsers[type](data)
+		
 		######## SESS #################################
 		if type == 0:
 			if server:
@@ -228,20 +238,27 @@ def hnh_parse(data,server):
 		######## ACK ##################################
 		elif type == 2:
 			seq = cu16(data)
-			print('  seq={0}'.format(seq))
+			print('  seq={}'.format(seq))
 		######## BEAT #################################
 		elif type == 3:
 			pass
 		######## MAPREQ ###############################
 		elif type == 4:
-			pass
+			print('  coord={}'.format([cs32(data),cs32(data)]))
 		######## MAPDATA ##############################
 		elif type == 5:
 			pktid = cs32(data)
 			off = cu16(data)
 			length = cu16(data)
-			buf = cb(data)
-			print('   pktid={} off={} len={} buf={}'.format(pktid,off,length,buf))
+			coord = [cs32(data),cs32(data)]
+			mmname = cstr(data)
+			pfl = []
+			while True:
+				pfl.append(cu8(data))
+				if pfl[-1] == 255:
+					pfl[-1:] = []
+					break
+			print('   pktid={} off={} len={} coord={} mmname={} pfl={}'.format(pktid,off,length,coord,mmname,pfl))
 		######## OBJDATA ##############################
 		elif type == 6:
 			while len(data) > 0:
@@ -338,7 +355,8 @@ def hnh_parse(data,server):
 				
 		######## OBJACK ###############################
 		elif type == 7:
-			print('   id={} frame={}'.format(cs32(data),cs32(data)))
+			while len(data) > 0:
+				print('   id={} frame={}'.format(cs32(data),cs32(data)))
 		######## CLOSE ################################
 		elif type == 8:
 			pass
