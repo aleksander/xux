@@ -13,32 +13,32 @@ class MyApp(ShowBase):
 	def __init__(self):
 		ShowBase.__init__(self)
 		
-		# # Load the environment model.
-		# self.environ = self.loader.loadModel("models/environment")
-		# # Reparent the model to render.
-		# self.environ.reparentTo(self.render)
-		# # Apply scale and position transforms on the model.
-		# self.environ.setScale(0.25, 0.25, 0.25)
-		# self.environ.setPos(-8, 42, 0)
-		# # Add the spinCameraTask procedure to the task manager.
-		# self.taskMgr.add(self.spinCameraTask, "SpinCameraTask")
+		# Load the environment model.
+		self.environ = self.loader.loadModel("models/environment")
+		# Reparent the model to render.
+		self.environ.reparentTo(self.render)
+		# Apply scale and position transforms on the model.
+		self.environ.setScale(0.25, 0.25, 0.25)
+		self.environ.setPos(-8, 42, 0)
+		# Add the spinCameraTask procedure to the task manager.
+		self.taskMgr.add(self.spinCameraTask, "SpinCameraTask")
 
-		# # Load and transform the panda actor.
-		# self.pandaActor = Actor("models/panda-model", {"walk": "models/panda-walk4"})
-		# self.pandaActor.setScale(0.005, 0.005, 0.005)
-		# self.pandaActor.reparentTo(self.render)
-		# # Loop its animation.
-		# self.pandaActor.loop("walk")
+		# Load and transform the panda actor.
+		self.pandaActor = Actor("models/panda-model", {"walk": "models/panda-walk4"})
+		self.pandaActor.setScale(0.005, 0.005, 0.005)
+		self.pandaActor.reparentTo(self.render)
+		# Loop its animation.
+		self.pandaActor.loop("walk")
 
-		# # Create the four lerp intervals needed for the panda to walk back and forth.
-		# pandaPosInterval1 = self.pandaActor.posInterval(13, Point3(0, -10, 0), startPos=Point3(0, 10, 0))
-		# pandaPosInterval2 = self.pandaActor.posInterval(13, Point3(0, 10, 0), startPos=Point3(0, -10, 0))
-		# pandaHprInterval1 = self.pandaActor.hprInterval(3, Point3(180, 0, 0), startHpr=Point3(0, 0, 0))
-		# pandaHprInterval2 = self.pandaActor.hprInterval(3, Point3(0, 0, 0), startHpr=Point3(180, 0, 0))
+		# Create the four lerp intervals needed for the panda to walk back and forth.
+		pandaPosInterval1 = self.pandaActor.posInterval(13, Point3(0, -10, 0), startPos=Point3(0, 10, 0))
+		pandaPosInterval2 = self.pandaActor.posInterval(13, Point3(0, 10, 0), startPos=Point3(0, -10, 0))
+		pandaHprInterval1 = self.pandaActor.hprInterval(3, Point3(180, 0, 0), startHpr=Point3(0, 0, 0))
+		pandaHprInterval2 = self.pandaActor.hprInterval(3, Point3(0, 0, 0), startHpr=Point3(180, 0, 0))
 
-		# # Create and play the sequence that coordinates the intervals.
-		# self.pandaPace = Sequence(pandaPosInterval1, pandaHprInterval1, pandaPosInterval2, pandaHprInterval2, name="pandaPace")
-		# self.pandaPace.loop()
+		# Create and play the sequence that coordinates the intervals.
+		self.pandaPace = Sequence(pandaPosInterval1, pandaHprInterval1, pandaPosInterval2, pandaHprInterval2, name="pandaPace")
+		self.pandaPace.loop()
 		
 		#GUI
 		DirectButton(text="(-.9, .0, .9)", scale=.06, pos=(-.9, .0, .9))
@@ -47,6 +47,11 @@ class MyApp(ShowBase):
 		DirectButton(text="(-.9, .0, -.9)", scale=.06, pos=(-.9, .0, -.9))
 		DirectLabel(text="label...",scale=.06)
 		DirectEntry(scale=.06)
+		DirectLabel(text="User", scale=.06, pos=(-.16, .0, .2))
+		DirectEntry(scale=.06, pos=(.0, .0, .2), rolloverSound=None, clickSound=None)
+		DirectLabel(text="Password", scale=.06, pos=(-.16, .0, .1))
+		DirectEntry(scale=.06, pos=(.0, .0, .1), obscured=True, rolloverSound=None, clickSound=None)
+		DirectButton(text="Authorize", scale=.06, rolloverSound=None, clickSound=None)
 		
 	# Define a procedure to move the camera.
 	def spinCameraTask(self, task):
