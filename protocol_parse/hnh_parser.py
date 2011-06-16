@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import pure_pcapy as pcapy
-import struct, sys
+import struct, sys, zlib
 
 resfile = open('resids.txt','wb')
 
@@ -98,6 +98,8 @@ def hnh_parse(data,server):
 			if server:
 				error = cu8(data)
 				print('  error={0}({1})'.format(error,sesserr[error]))
+				#FIXME
+				data = []
 			else:
 				cu16(data) # ???
 				proto = cstr(data)
@@ -148,6 +150,9 @@ def hnh_parse(data,server):
 							break
 						print('    {}='.format(wdg_list_types[wdg_lt]),end='')
 						if wdg_lt == 0: # END
+							#FIXME
+							print('| server_trash={}',rel)
+							rel = []
 							break
 						elif wdg_lt == 1: # INT
 							print(cs32(rel))
@@ -159,7 +164,9 @@ def hnh_parse(data,server):
 							print([cu8(rel),cu8(rel),cu8(rel),cu8(rel)])
 				elif rel_type == 2: # DSTWDG (destroy widget)
 					dw_id = cu16(rel)
-					print('   id={}'.format(dw_id))
+					#FIXME
+					print('   id={} server_trash={}'.format(dw_id,rel))
+					rel = []
 				elif rel_type == 3: # MAPIV
 					mapiv_type = cu8(rel)
 					if mapiv_type == 0: # ???
@@ -193,7 +200,6 @@ def hnh_parse(data,server):
 						if party_type == 0: # LIST
 							print('   LIST')
 							while True:
-								# FIXME: replace with cs32
 								party_id = cs32(rel)
 								if party_id < 0:
 									break
@@ -203,7 +209,7 @@ def hnh_parse(data,server):
 						elif party_type == 2: # MEMBER
 							print('   MEMBER id={} vis={} coord={} color={}'.format(cs32(rel),cu8(rel),[cs32(rel),cs32(rel)],[cu8(rel),cu8(rel),cu8(rel),cu8(rel)]))
 				elif rel_type == 8: # SFX
-					print('   res={} vol={} spd={}'.format(cu16(),cu16(),cu16()))
+					print('   res={} vol={} spd={}'.format(cu16(rel),cu16(rel),cu16(rel)))
 				elif rel_type == 9: # CATTR
 					while len(rel) > 0:
 						attr_name = cstr(rel)
@@ -239,6 +245,8 @@ def hnh_parse(data,server):
 		elif type == 2:
 			seq = cu16(data)
 			print('  seq={}'.format(seq))
+			#FIXME
+			data = []
 		######## BEAT #################################
 		elif type == 3:
 			pass
@@ -258,7 +266,18 @@ def hnh_parse(data,server):
 				if pfl[-1] == 255:
 					pfl[-1:] = []
 					break
-			print('   pktid={} off={} len={} coord={} mmname={} pfl={}'.format(pktid,off,length,coord,mmname,pfl))
+			data = bytearray(zlib.decompress(data))
+			tiles = cb(data,100*100)
+			pidx = cu8(data)
+			if pidx != 0xff:
+				#TODO
+				pass
+			print('   pktid={} off={} len={} grid_coord={} mmname="{}" pfl={}'.format(pktid,off,length,coord,mmname,pfl))
+			for i in range(0,100):
+				print('   ',end='')
+				for j in range(0,100):
+					print('{:02X}'.format(tiles[i*100+j]), end='')
+				print('')
 		######## OBJDATA ##############################
 		elif type == 6:
 			while len(data) > 0:
@@ -334,7 +353,7 @@ def hnh_parse(data,server):
 						olid = cs32(data)
 						prs = (olid & 1) != 0
 						olid >>= 1
-						resid = cu16()
+						resid = cu16(data)
 						if resid == 65535:
 							sdt = None
 						elif resid&0x8000 != 0:
@@ -359,6 +378,8 @@ def hnh_parse(data,server):
 				print('   id={} frame={}'.format(cs32(data),cs32(data)))
 		######## CLOSE ################################
 		elif type == 8:
+			#FIXME
+			data = []
 			pass
 		if len(data) > 0:
 			print('data remains={}'.format(data))
