@@ -45,8 +45,7 @@ class MyApp(ShowBase):
 		DirectButton(text="(.9, .0, .9)", scale=.06, pos=(.9, .0, .9))
 		DirectButton(text="(.9, .0, -.9)", scale=.06, pos=(.9, .0, -.9))
 		DirectButton(text="(-.9, .0, -.9)", scale=.06, pos=(-.9, .0, -.9))
-		DirectLabel(text="label...",scale=.06)
-		DirectEntry(scale=.06)
+		
 		DirectLabel(text="User", scale=.06, pos=(-.16, .0, .2))
 		DirectEntry(scale=.06, pos=(.0, .0, .2), rolloverSound=None, clickSound=None)
 		DirectLabel(text="Password", scale=.06, pos=(-.16, .0, .1))

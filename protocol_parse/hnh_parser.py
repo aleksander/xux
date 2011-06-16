@@ -4,6 +4,10 @@
 import pure_pcapy as pcapy
 import struct, sys
 
+resfile = open('resids.txt','wb')
+
+objdata = {}
+
 # counters = {'tcp':0,'udp':0,'other':0}
 msgs = {0:'SESS',1:'REL',2:'ACK',3:'BEAT',4:'MAPREQ',5:'MAPDATA',6:'OBJDATA',7:'OBJACK',8:'CLOSE'}
 sesserr = ('OK','AUTH','BUSY','CONN','PVER','EXPR')
@@ -172,6 +176,7 @@ def hnh_parse(data,server):
 					res_name = cstr(rel)
 					res_ver = cu16(rel)
 					print('   id={} name={} ver={}'.format(res_id,res_name,res_ver))
+					resfile.write('{:5} {}\r\n'.format(res_id,res_name).encode())
 				elif rel_type == 7: # PARTY
 					while len(rel) > 0:
 						party_type = cu8(rel)
@@ -246,6 +251,8 @@ def hnh_parse(data,server):
 				print('  id={} frame={}'.format(objdata_id,objdata_frame))
 				if objdata_fl&1 != 0:
 					print('   remove id={} frame={}'.format(objdata_id,objdata_frame-1))
+				objdata_coord = None
+				res_id = None
 				while True:
 					objdata_type = cu8(data)
 					if objdata_type not in objdata_types:
@@ -253,9 +260,10 @@ def hnh_parse(data,server):
 						raise Exception('unknown objdata type', '...')
 					print('   {}'.format(objdata_types[objdata_type]),end=' ')
 					if objdata_type == 0: # REM
-						pass
+						print('remove id={} frame={}'.format(objdata_id,objdata_frame))
 					elif objdata_type == 1: # MOVE
-						print('coord={}'.format([cs32(data),cs32(data)]))
+						objdata_coord = (cs32(data),cs32(data))
+						print('coord={}'.format(objdata_coord))
 					elif objdata_type == 2: # RES
 						res_id = cu16(data)
 						if res_id&0x8000 != 0:
@@ -292,7 +300,6 @@ def hnh_parse(data,server):
 						print('layers={}'.format(layers))
 					elif objdata_type == 10: # FOLLOW
 						oid = cs32(data)
-						# FIXME !!!!!!
 						if oid != -1:
 							print('oid={} off={} szo={}'.format(oid,[cs32(data),cs32(data)],cu8(data)))
 						else:
@@ -326,6 +333,9 @@ def hnh_parse(data,server):
 					elif objdata_type == 255: # END
 						print('')
 						break
+				if objdata_coord != None and res_id != None:
+					objdata[objdata_coord] = res_id
+				
 		######## OBJACK ###############################
 		elif type == 7:
 			print('   id={} frame={}'.format(cs32(data),cs32(data)))
@@ -371,3 +381,9 @@ def show_info(hdr,data):
 rdr = pcapy.open_offline('first.pcap')
 rdr.dispatch(-1,show_info)
 # print(counters)
+resfile.close()
+
+objfile = open('objects.txt','wb')
+for k,v in objdata.items():
+	objfile.write('{:10} {:10} {:10}\r\n'.format(k[0]+8109022,k[1]+1988892,v).encode())
+objfile.close()
