@@ -4,11 +4,11 @@ from direct.interval.IntervalGlobal import *
 from direct.task.Task import Task
 import random
 
-tiles = loader.loadModel("2.egg")
-tile1 = tiles.find('**/grass')
-tile2 = tiles.find('**/Plane')
-tile3 = tiles.find('**/Plane_001')
-tile4 = tiles.find('**/Plane_002')
+tiles = loader.loadModel("models.egg")
+tile1 = tiles.find('**/tile1')
+tile2 = tiles.find('**/tile2')
+tile3 = tiles.find('**/tile3')
+tile4 = tiles.find('**/tile4')
 #tiles.ls()
 tile1.setPos(.0,.0,.0)
 tile2.setPos(.0,.0,.0)
@@ -26,6 +26,8 @@ for x in xrange(-50,50):
 		# tile = tile.copyTo(terrain)
 		# tile.setPos(x*1.1,y*1.1,0)
 		#terrain.flattenStrong()
+
+#TODO add FPS
 
 base.disableMouse()
 camera.setPos(200,200,200)
