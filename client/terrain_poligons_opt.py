@@ -23,9 +23,11 @@ gvd = GeomVertexData('name', GeomVertexFormat.getV3t2(), Geom.UHStatic)
 vertex = GeomVertexWriter(gvd, 'vertex')
 texcoord = GeomVertexWriter(gvd, 'texcoord')
 geom = Geom(gvd)
-for i in dir(geom):
-	print i," - ",type(i)
-size = 10
+prim = GeomTriangles(Geom.UHStatic)
+#for i in dir(geom):
+#	print i," - ",type(i)
+size = 100
+i = 0
 for x in xrange(0,size):
 	for z in xrange(0,size):
 		vertex.addData3f(x, 0, z)
@@ -36,17 +38,15 @@ for x in xrange(0,size):
 		texcoord.addData2f(1, 1)
 		vertex.addData3f(x+1, 0, z)
 		texcoord.addData2f(1, 0)
-		prim = GeomTriangles(Geom.UHStatic)
-		cnt = (x*size+z)*4
-		prim.addVertices(cnt, cnt+2, cnt+1)
-		prim.closePrimitive()
-		prim.addVertices(cnt, cnt+3, cnt+2)
-		prim.closePrimitive()
-		geom.addPrimitive(prim)
+		prim.addVertices(i, i+2, i+1)
+		prim.addVertices(i, i+3, i+2)
+		i += 4
+prim.closePrimitive()
+geom.addPrimitive(prim)
 geomnode = GeomNode('gnode')
 geomnode.addGeom(geom)
 terrain.attachNewNode(geomnode)
-terrain.setPos(-50,200,-50)
+terrain.setPos(-size/2,0,-size/2)
 terrain.setTexture(textures[0])
 terrain.reparentTo(render)
 # print "================================= BEFORE ========"
@@ -56,7 +56,7 @@ terrain.reparentTo(render)
 # render.analyze()
 # terrain.ls()
 
-terrain.setRenderModeWireframe()
+#terrain.setRenderModeWireframe()
 # terrain.ls()
 
 base.setFrameRateMeter(True)
