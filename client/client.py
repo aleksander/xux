@@ -30,7 +30,7 @@ class message:
 
 ############################################################################
 
-class hnhc:
+class hnh_client:
 	def __init__(self, host, ssl_port, udp_port):
 		self.host = host
 		self.ssl_port = ssl_port
@@ -46,7 +46,6 @@ class hnhc:
 			print('username binding: wrong message type '+msg)
 			ss.close()
 			return False
-
 		hash = hashlib.sha256()
 		hash.update(password.encode('utf8'))
 		hash = hash.digest()
@@ -57,7 +56,6 @@ class hnhc:
 		if(msg[0] != 0):
 			print('password binding: wrong message type '+msg)
 			return False
-
 		self.cookie = msg[2:]
 		self.name = name
 		return True
