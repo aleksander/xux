@@ -1,6 +1,8 @@
 import socket, ssl, hashlib, time, threading, struct
 from direct.showbase.ShowBase import ShowBase
 from panda3d.core import *
+from direct.distributed import PyDatagram, PyDatagramIterator
+from direct.task import *
 
 #####################################################################
 
@@ -30,21 +32,32 @@ from panda3d.core import *
 #		s.send(self.body)
 #		return self
 
-############################################################################
+########################################################### CONSTANTS #####################
+
+sess_errors = {0:'OK', 1:'AUTH', 2:'BUSY', 3:'CONN', 4:'PVER', 5:'EXPR'}
+msg_types = {0:'SESS',1:'REL',2:'ACK',3:'BEAT',4:'MAPREQ',5:'MAPDATA',6:'OBJDATA',7:'OBJACK',8:'CLOSE'}
+rel_types = {0:'NEWWDG',1:'WDGMSG',2:'DSTWDG',3:'MAPIV',4:'GLOBLOB',5:'PAGINAE',6:'RESID',
+             7:'PARTY',8:'SFX',9:'CATTR',10:'MUSIC',11:'TILES',12:'BUFF'}
+
+###########################################################################################
 
 def dbg(data):
 	print data
+
+############################################################################
 
 class hnh_client(ShowBase):
 	def __init__(self, host, ssl_port, udp_port):
 		self.host = host
 		self.ssl_port = ssl_port
 		self.udp_port = udp_port
+		self.addr = NetAddress()
+		self.addr.setHost(self.host, self.udp_port)
 	def authorize(self, name, password):
 		try:
 			f = open('cookie', 'rb')
 			self.cookie = f.read()
-			print 'using cached cookie'
+			dbg('using cached cookie')
 		except:
 			#TODO: add tries count
 			s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -54,8 +67,6 @@ class hnh_client(ShowBase):
 			ss.write(msg)
 			msg = ss.read(2)
 			msg_type, length = struct.unpack('!BB', msg)
-			print msg_type
-			print length
 			if length > 0:
 				msg = ss.read(length)
 			if(msg_type != 0):
@@ -69,8 +80,6 @@ class hnh_client(ShowBase):
 			ss.write(msg)
 			msg = ss.read(2)
 			msg_type, length = struct.unpack('!BB', msg)
-			print msg_type
-			print length
 			if length > 0:
 				msg = ss.read(length)
 			ss.close()
@@ -81,109 +90,101 @@ class hnh_client(ShowBase):
 			f = open('cookie','wb')
 			f.write(self.cookie)
 			f.close()
-#			self.name = name
-		print 'cookie: '+self.cookie
+		self.user_name = name
+		dbg('cookie: '+self.cookie)
 		return True
 	def start(self):
 		ShowBase.__init__(self)
 		self.cmanager = QueuedConnectionManager()
 		self.creader = QueuedConnectionReader(self.cmanager, 0)
 		self.cwriter = ConnectionWriter(self.cmanager, 0)
+		self.cwriter.setRawMode(True)
+		self.creader.setRawMode(True)
 		self.conn = self.cmanager.openUDPConnection(self.udp_port)
 		if not self.conn:
 			dbg('failed to create connection')
 			return
-		self.conn.setReuseAddr(True)
+		#self.conn.setReuseAddr(True)
 		self.creader.addConnection(self.conn)
 		taskMgr.add(self.rx,"rx")
 		self.rx_handle = self.rx_handle_sess
 		self.sess()
 		self.run()
 	def sess(self):
-		
+		data = PyDatagram.PyDatagram()
+		data.addUint8(0) # SESS
+		data.addUint16(1) # ???
+		data.addZString(u'Haven') # protocol name
+		data.addUint16(2) # version
+		data.addZString(self.user_name)
+		data.appendData(self.cookie)
+		self.cwriter.send(data, self.conn, self.addr)
 	def rx(self, data):
 		if self.creader.dataAvailable():
-			datagram = NetDatagram()  # catch the incoming data in this instance
-			# Check the return value; if we were threaded, someone else could have
-			# snagged this data before we did
+			datagram = NetDatagram()
 			if self.creader.getData(datagram):
-				self.rx_handle(datagram)
-		#return taskMgr.Task.cont
+				self.rx_handle(PyDatagramIterator.PyDatagramIterator(datagram))
+		return Task.cont
 	def rx_handle_sess(self, data):
-		print 'data!!'
-#	def connect(self, tries):
-#		self.tries = tries
-#		self.s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-#		self.s.settimeout(4.5)
-#		self.s.connect((self.host, self.udp_port))
-
-#		for i in range(1,self.tries):
-#			msg = bytes(bytes([0,1,0])+'Haven'.encode('utf8')+bytes([0,1,0])+self.name.encode('utf8')+bytes([0])+self.cookie)
-#			self.s.send(msg)
-#			try:
-#				msg = self.s.recv(65535)
-#			except socket.timeout:
-#				print('timeout')
-#			except:
-#				print("unexpected recv error:", sys.exc_info()[0])
-#				return False
-#			else:
-#				print(msg)
-#				if msg[:2] == bytes([0,0]):
-#					self.rx = threading.Thread(target=self.receiver, name='receiver')
-#					self.rx.start()
-#					#self.rx.join()
-#					return True
-#		return False
-#	def receiver(self):
-#		while True:
-#			try:
-#				msg = self.s.recv(65535)
-#			except socket.timeout:
-#				self.s.send(bytes([3]))
-#				print('timeout... BEAT sent')
-#			except:
-#				print('unexpected error')
-#				return
-#			# print(msg)
-#			t = msg[0]
-#			if t == 0: # MSG_SESS
-#				print('SES')
-#				continue
-#			elif t == 1: # MSG_REL
-#				print('REL')
-#				seq = int(msg[1]) + (int(msg[2])<<8)
-#				msg = bytes([2])+msg[1:3]
-#				self.s.send(msg)
-#				print('  ack: '+str(msg))
-#				#reltype = msg[3]
-#				#if reltype & 0x80 != 0:
-#				#	reltype &= 0x7f
-#				#	rellen = int(msg[4]) + (int(msg[5])<<8)
-#				#	msg = msg[5:]
-#				#else:
-#				#	rellen = 'do not care'
-#				#print("REL: seq={0} type={1} len={2} buf={3}".format(seq,reltype,rellen,hh.s.recv(rellen)))
-#				#if reltype == 11: # tiles
-#				#	pass
-#			else:
-#				print('OTHER: '+str(msg[:5]))
-
-#	def disconnect(self):
-#		self.s.close()
-#	#def chose_character(self):
+		msg_type = data.getUint8()
+		if msg_type != 0:
+			dbg('wrong packet type: '+str(msg_type))
+			return
+		error = data.getUint8()
+		if error == 0:
+			self.rx_handle = self.rx_handle_gaming
+		else:
+			if error in sess_errors:
+				error = sess_errors[error]
+			else:
+				error = str(error)+' (unknown)'
+			dbg('session error '+error)
+	def rx_handle_gaming(self, data):
+		msg_type = data.getUint8()
+		if msg_type not in msg_types:
+			dbg('UNKNOWN PACKET TYPE {}'.format(msg_type))
+			return
+		dbg(str(msg_type)+' ('+msg_types[msg_type]+')')
+		# TODO: replace with msg_types[msg_type][handler](data)
+		if msg_type == 0: # 'SESS'
+			pass
+		elif msg_type == 1: # 'REL'
+			seq = data.getUint16()
+			while data.getRemainingSize():
+				rel_type = data.getUint8()
+				if rel_type&0x80 != 0:
+					rel_type &= 0x7f;
+					rel_len = data.getUint16()
+				else:
+					rel_len = data.getRemainingSize()
+				data.skipBytes(rel_len)
+				# TODO: if rel_type not in rel_types: ...
+				dbg('seq='+str(seq)+' rel='+rel_types[rel_type]+' len='+str(rel_len))
+				seq = seq+1
+			data = PyDatagram.PyDatagram()
+			data.addUint8(2) # ACK
+			data.addUint16(seq)
+			self.cwriter.send(data, self.conn, self.addr)
+		elif msg_type == 2: # 'ACK'
+			pass
+		elif msg_type == 3: # 'BEAT'
+			pass
+		elif msg_type == 4: # 'MAPREQ'
+			pass
+		elif msg_type == 5: # 'MAPDATA'
+			pass
+		elif msg_type == 6: # 'OBJDATA'
+			pass
+		elif msg_type == 7: # 'OBJACK'
+			pass
+		elif msg_type == 8: # 'CLOSE'
+			pass
 
 ###########################################################################
 
 hnh = hnh_client('moltke.seatribe.se', 1871, 1870)
-while not hnh.authorize('lemings', 'lemings'):
+while not hnh.authorize(u'lemings', u'lemings'):
 	dbg('authorization failed')
 	#TODO add delay
 dbg('authorized')
 hnh.start()
-#if not hnh.connect(5):
-#	dbg('connection failed')
-#	exit(1)
-#dbg('connected')
-#hnh.rx.join()
-#hh.chose_character()

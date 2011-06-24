@@ -97,29 +97,29 @@ def hnh_parse(data,server):
 		if type == 0:
 			if server:
 				error = cu8(data)
-				print('  error={0}({1})'.format(error,sesserr[error]))
+				print('  error={}({})'.format(error,sesserr[error]))
 				#FIXME
 				data = []
 			else:
-				cu16(data) # ???
+				unknown = cu16(data) # ???
 				proto = cstr(data)
 				ver = cu16(data)
 				user = cstr(data)
 				cookie = cb(data)
-				print('  proto={} ver={} user={} cookie={}'.format(proto,ver,user,cookie))
+				print('  unknown={} proto={} ver={} user={} cookie={}'.format(unknown, proto,ver,user,cookie))
 		######## REL ##################################
 		elif type == 1:
 			seq = cu16(data)
 			while len(data) > 0:
 				rel_type = cu8(data)
 				if rel_type&0x80 != 0:
-					rel_type &= 0x7f;
-					rel_len = cu16(data);
+					rel_type &= 0x7f
+					rel_len = cu16(data)
 				else:
 					rel_len = len(data)
 				rel = cb(data,rel_len)
 				# self.rel = self.bytes(self.rel_len)
-				print('  seq={0} type={1}({2}) len={3}'.format(seq,rel_type,rels[rel_type],rel_len))
+				print('  seq={} type={}({}) len={}'.format(seq,rel_type,rels[rel_type],rel_len))
 				if rel_type == 0: # NEWWDG
 					wdg_id = cu16(rel)
 					wdg_type = cstr(rel)
