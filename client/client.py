@@ -32,13 +32,6 @@ from direct.task import *
 #		s.send(self.body)
 #		return self
 
-########################################################### CONSTANTS #####################
-
-sess_errors = {0:'OK', 1:'AUTH', 2:'BUSY', 3:'CONN', 4:'PVER', 5:'EXPR'}
-msg_types = {0:'SESS',1:'REL',2:'ACK',3:'BEAT',4:'MAPREQ',5:'MAPDATA',6:'OBJDATA',7:'OBJACK',8:'CLOSE'}
-rel_types = {0:'NEWWDG',1:'WDGMSG',2:'DSTWDG',3:'MAPIV',4:'GLOBLOB',5:'PAGINAE',6:'RESID',
-             7:'PARTY',8:'SFX',9:'CATTR',10:'MUSIC',11:'TILES',12:'BUFF'}
-
 ###########################################################################################
 
 def dbg(data):
@@ -47,6 +40,20 @@ def dbg(data):
 ############################################################################
 
 class hnh_client(ShowBase):
+	sess_errors = {0:'OK', 1:'AUTH', 2:'BUSY', 3:'CONN', 4:'PVER', 5:'EXPR'}
+	self.msg_types = {
+		0:('SESS',self.rx_sess),
+		1:('REL',self.rx_rel),
+		2:('ACK',self.rx_ack),
+		3:('BEAT',self.rx_beat),
+		4:('MAPREQ',self.rx_mapreq),
+		5:('MAPDATA',self.rx_mapdata),
+		6:('OBJDATA',self.rx_objdata),
+		7:('OBJACK',self.rx_objack),
+		8:('CLOSE'self.rx_close)
+	}
+	rel_types = {0:'NEWWDG',1:'WDGMSG',2:'DSTWDG',3:'MAPIV',4:'GLOBLOB',5:'PAGINAE',6:'RESID',
+                 7:'PARTY',8:'SFX',9:'CATTR',10:'MUSIC',11:'TILES',12:'BUFF'}
 	def __init__(self, host, ssl_port, udp_port):
 		self.host = host
 		self.ssl_port = ssl_port
@@ -54,42 +61,41 @@ class hnh_client(ShowBase):
 		self.addr = NetAddress()
 		self.addr.setHost(self.host, self.udp_port)
 	def authorize(self, name, password):
-		try:
-			f = open('cookie', 'rb')
-			self.cookie = f.read()
-			dbg('using cached cookie')
-		except:
-			#TODO: add tries count
-			s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-			ss = ssl.wrap_socket(s)
-			ss.connect((self.host, self.ssl_port))
-			msg = bytes(bytearray([1,len(name)])+name.encode('utf8'))
-			ss.write(msg)
-			msg = ss.read(2)
-			msg_type, length = struct.unpack('!BB', msg)
-			if length > 0:
-				msg = ss.read(length)
-			if(msg_type != 0):
-				dbg('username binding: wrong message type "'+str(msg_type)+'" '+msg)
-				ss.close()
-				return False
-			hash = hashlib.sha256()
-			hash.update(password.encode('utf8'))
-			hash = hash.digest()
-			msg = bytes(bytearray([2,len(hash)])+hash)
-			ss.write(msg)
-			msg = ss.read(2)
-			msg_type, length = struct.unpack('!BB', msg)
-			if length > 0:
-				msg = ss.read(length)
+		# try:
+			# f = open('cookie', 'rb')
+			# self.cookie = f.read()
+			# dbg('using cached cookie')
+		# except:
+		s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+		ss = ssl.wrap_socket(s)
+		ss.connect((self.host, self.ssl_port))
+		msg = bytes(bytearray([1,len(name)])+name.encode('utf8'))
+		ss.write(msg)
+		msg = ss.read(2)
+		msg_type, length = struct.unpack('!BB', msg)
+		if length > 0:
+			msg = ss.read(length)
+		if(msg_type != 0):
+			dbg('username binding: wrong message type "'+str(msg_type)+'" '+msg)
 			ss.close()
-			if(msg_type != 0):
-				dbg('password binding: wrong message type "'+str(msg_type)+'" '+msg)
-				return False
-			self.cookie = msg
-			f = open('cookie','wb')
-			f.write(self.cookie)
-			f.close()
+			return False
+		hash = hashlib.sha256()
+		hash.update(password.encode('utf8'))
+		hash = hash.digest()
+		msg = bytes(bytearray([2,len(hash)])+hash)
+		ss.write(msg)
+		msg = ss.read(2)
+		msg_type, length = struct.unpack('!BB', msg)
+		if length > 0:
+			msg = ss.read(length)
+		ss.close()
+		if(msg_type != 0):
+			dbg('password binding: wrong message type "'+str(msg_type)+'" '+msg)
+			return False
+		self.cookie = msg
+		# f = open('cookie','wb')
+		# f.write(self.cookie)
+		# f.close()
 		self.user_name = name
 		dbg('cookie: '+self.cookie)
 		return True
@@ -104,7 +110,7 @@ class hnh_client(ShowBase):
 		if not self.conn:
 			dbg('failed to create connection')
 			return
-		#self.conn.setReuseAddr(True)
+		self.conn.setReuseAddr(True)
 		self.creader.addConnection(self.conn)
 		taskMgr.add(self.rx,"rx")
 		self.rx_handle = self.rx_handle_sess
@@ -118,6 +124,11 @@ class hnh_client(ShowBase):
 		data.addUint16(2) # version
 		data.addZString(self.user_name)
 		data.appendData(self.cookie)
+		self.cwriter.send(data, self.conn, self.addr)
+	def ask(self, seq):
+		data = PyDatagram.PyDatagram()
+		data.addUint8(2) # ACK
+		data.addUint16(seq)
 		self.cwriter.send(data, self.conn, self.addr)
 	def rx(self, data):
 		if self.creader.dataAvailable():
@@ -157,14 +168,38 @@ class hnh_client(ShowBase):
 					rel_len = data.getUint16()
 				else:
 					rel_len = data.getRemainingSize()
+				# TODO: replace with rel_types[rel_type][handler](data)
+				if rel_type == 0: # 'NEWWDG'
+					pass
+				elif rel_type == 1: # 'WDGMSG'
+					pass
+				elif rel_type == 2: # 'DSTWDG'
+					pass
+				elif rel_type == 3: # 'MAPIV'
+					pass
+				elif rel_type == 4: # 'GLOBLOB'
+					pass
+				elif rel_type == 5: # 'PAGINAE'
+					pass
+				elif rel_type == 6: # 'RESID'
+					pass
+				elif rel_type == 7: # 'PARTY'
+					pass
+				elif rel_type == 8: # 'SFX'
+					pass
+				elif rel_type == 9: # 'CATTR'
+					pass
+				elif rel_type == 10: # 'MUSIC'
+					pass
+				elif rel_type == 11: # 'TILES'
+					pass
+				elif rel_type == 12: # 'BUFF'
+					pass
 				data.skipBytes(rel_len)
 				# TODO: if rel_type not in rel_types: ...
 				dbg('seq='+str(seq)+' rel='+rel_types[rel_type]+' len='+str(rel_len))
 				seq = seq+1
-			data = PyDatagram.PyDatagram()
-			data.addUint8(2) # ACK
-			data.addUint16(seq)
-			self.cwriter.send(data, self.conn, self.addr)
+			self.ask(seq)
 		elif msg_type == 2: # 'ACK'
 			pass
 		elif msg_type == 3: # 'BEAT'
