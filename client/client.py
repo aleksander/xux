@@ -40,26 +40,47 @@ def dbg(data):
 ############################################################################
 
 class hnh_client(ShowBase):
-	sess_errors = {0:'OK', 1:'AUTH', 2:'BUSY', 3:'CONN', 4:'PVER', 5:'EXPR'}
-	self.msg_types = {
-		0:('SESS',self.rx_sess),
-		1:('REL',self.rx_rel),
-		2:('ACK',self.rx_ack),
-		3:('BEAT',self.rx_beat),
-		4:('MAPREQ',self.rx_mapreq),
-		5:('MAPDATA',self.rx_mapdata),
-		6:('OBJDATA',self.rx_objdata),
-		7:('OBJACK',self.rx_objack),
-		8:('CLOSE'self.rx_close)
-	}
-	rel_types = {0:'NEWWDG',1:'WDGMSG',2:'DSTWDG',3:'MAPIV',4:'GLOBLOB',5:'PAGINAE',6:'RESID',
-                 7:'PARTY',8:'SFX',9:'CATTR',10:'MUSIC',11:'TILES',12:'BUFF'}
 	def __init__(self, host, ssl_port, udp_port):
 		self.host = host
 		self.ssl_port = ssl_port
 		self.udp_port = udp_port
 		self.addr = NetAddress()
 		self.addr.setHost(self.host, self.udp_port)
+		self.sess_errors = {
+			0:'OK',
+			1:'AUTH',
+			2:'BUSY',
+			3:'CONN',
+			4:'PVER',
+			5:'EXPR'
+		}
+		self.msg_types = {
+			0:('SESS', self.rx_sess),
+			1:('REL', self.rx_rel),
+			2:('ACK', self.rx_ack),
+			3:('BEAT', self.rx_beat),
+			4:('MAPREQ', self.rx_mapreq),
+			5:('MAPDATA', self.rx_mapdata),
+			6:('OBJDATA', self.rx_objdata),
+			7:('OBJACK', self.rx_objack),
+			8:('CLOSE', self.rx_close)
+		}
+		self.rel_types = {
+			0:('NEWWDG', self.rx_rel_newwdg),
+			1:('WDGMSG', self.rx_rel_wdgmsg),
+			2:('DSTWDG', self.rx_rel_dstwdg),
+			3:('MAPIV', self.rx_rel_mapiv),
+			4:('GLOBLOB', self.rx_rel_globlob),
+			5:('PAGINAE', self.rx_rel_paginae),
+			6:('RESID', self.rx_rel_resid),
+			7:('PARTY', self.rx_rel_party),
+			8:('SFX', self.rx_rel_sfx),
+			9:('CATTR', self.rx_rel_cattr),
+			10:('MUSIC', self.rx_rel_music),
+			11:('TILES', self.rx_rel_tiles),
+			12:('BUFF', self.rx_rel_buff)
+		}
+
 	def authorize(self, name, password):
 		# try:
 			# f = open('cookie', 'rb')
@@ -99,6 +120,7 @@ class hnh_client(ShowBase):
 		self.user_name = name
 		dbg('cookie: '+self.cookie)
 		return True
+
 	def start(self):
 		ShowBase.__init__(self)
 		self.cmanager = QueuedConnectionManager()
@@ -114,9 +136,10 @@ class hnh_client(ShowBase):
 		self.creader.addConnection(self.conn)
 		taskMgr.add(self.rx,"rx")
 		self.rx_handle = self.rx_handle_sess
-		self.sess()
+		self.tx_sess()
 		self.run()
-	def sess(self):
+
+	def tx_sess(self):
 		data = PyDatagram.PyDatagram()
 		data.addUint8(0) # SESS
 		data.addUint16(1) # ???
@@ -125,17 +148,20 @@ class hnh_client(ShowBase):
 		data.addZString(self.user_name)
 		data.appendData(self.cookie)
 		self.cwriter.send(data, self.conn, self.addr)
-	def ask(self, seq):
+
+	def tx_ask(self, seq):
 		data = PyDatagram.PyDatagram()
 		data.addUint8(2) # ACK
 		data.addUint16(seq)
 		self.cwriter.send(data, self.conn, self.addr)
+
 	def rx(self, data):
 		if self.creader.dataAvailable():
 			datagram = NetDatagram()
 			if self.creader.getData(datagram):
 				self.rx_handle(PyDatagramIterator.PyDatagramIterator(datagram))
 		return Task.cont
+
 	def rx_handle_sess(self, data):
 		msg_type = data.getUint8()
 		if msg_type != 0:
@@ -150,70 +176,102 @@ class hnh_client(ShowBase):
 			else:
 				error = str(error)+' (unknown)'
 			dbg('session error '+error)
+
 	def rx_handle_gaming(self, data):
 		msg_type = data.getUint8()
-		if msg_type not in msg_types:
-			dbg('UNKNOWN PACKET TYPE {}'.format(msg_type))
+		if msg_type not in self.msg_types:
+			dbg('UNKNOWN PACKET TYPE '+str(msg_type))
 			return
-		dbg(str(msg_type)+' ('+msg_types[msg_type]+')')
-		# TODO: replace with msg_types[msg_type][handler](data)
-		if msg_type == 0: # 'SESS'
-			pass
-		elif msg_type == 1: # 'REL'
-			seq = data.getUint16()
-			while data.getRemainingSize():
-				rel_type = data.getUint8()
-				if rel_type&0x80 != 0:
-					rel_type &= 0x7f;
-					rel_len = data.getUint16()
-				else:
-					rel_len = data.getRemainingSize()
-				# TODO: replace with rel_types[rel_type][handler](data)
-				if rel_type == 0: # 'NEWWDG'
-					pass
-				elif rel_type == 1: # 'WDGMSG'
-					pass
-				elif rel_type == 2: # 'DSTWDG'
-					pass
-				elif rel_type == 3: # 'MAPIV'
-					pass
-				elif rel_type == 4: # 'GLOBLOB'
-					pass
-				elif rel_type == 5: # 'PAGINAE'
-					pass
-				elif rel_type == 6: # 'RESID'
-					pass
-				elif rel_type == 7: # 'PARTY'
-					pass
-				elif rel_type == 8: # 'SFX'
-					pass
-				elif rel_type == 9: # 'CATTR'
-					pass
-				elif rel_type == 10: # 'MUSIC'
-					pass
-				elif rel_type == 11: # 'TILES'
-					pass
-				elif rel_type == 12: # 'BUFF'
-					pass
+		dbg(self.msg_types[msg_type][0])
+		self.msg_types[msg_type][1](data)
+
+	def rx_sess(self, data):
+		pass
+
+	def rx_rel(self, data):
+		seq = data.getUint16()
+		while data.getRemainingSize():
+			rel_type = data.getUint8()
+			if rel_type&0x80 != 0:
+				rel_type &= 0x7f;
+				rel_len = data.getUint16()
+			else:
+				rel_len = data.getRemainingSize()
+			if rel_type not in self.rel_types:
+				dbg('seq='+str(seq)+' rel=UNKNOWN ('+str(rel_type)+') len='+str(rel_len))
 				data.skipBytes(rel_len)
-				# TODO: if rel_type not in rel_types: ...
-				dbg('seq='+str(seq)+' rel='+rel_types[rel_type]+' len='+str(rel_len))
-				seq = seq+1
-			self.ask(seq)
-		elif msg_type == 2: # 'ACK'
-			pass
-		elif msg_type == 3: # 'BEAT'
-			pass
-		elif msg_type == 4: # 'MAPREQ'
-			pass
-		elif msg_type == 5: # 'MAPDATA'
-			pass
-		elif msg_type == 6: # 'OBJDATA'
-			pass
-		elif msg_type == 7: # 'OBJACK'
-			pass
-		elif msg_type == 8: # 'CLOSE'
-			pass
+			else:
+				dbg('seq='+str(seq)+' rel='+self.rel_types[rel_type][0]+' len='+str(rel_len))
+				rel = data.extractBytes(rel_len)
+				dg = Datagram(rel)
+				pdi = PyDatagramIterator.PyDatagramIterator(dg)
+				self.rel_types[rel_type][1](pdi)
+			seq = seq+1
+		self.tx_ask(seq)
+
+	def rx_rel_newwdg(self, data):
+		pass
+
+	def rx_rel_wdgmsg(self, data):
+		pass
+
+	def rx_rel_dstwdg(self, data):
+		pass
+
+	def rx_rel_mapiv(self, data):
+		pass
+
+	def rx_rel_globlob(self, data):
+		pass
+
+	def rx_rel_paginae(self, data):
+		pass
+
+	def rx_rel_resid(self, data):
+		pass
+
+	def rx_rel_party(self, data):
+		pass
+
+	def rx_rel_sfx(self, data):
+		pass
+
+	def rx_rel_cattr(self, data):
+		pass
+
+	def rx_rel_music(self, data):
+		pass
+
+	def rx_rel_tiles(self, data):
+		while data.getRemainingSize():
+			tile_id = data.getUint8()
+			tile_name = data.getZString()
+			tile_ver = data.getUint16()
+			dbg('   id={0} name={1} version={2}'.format(tile_id,tile_name,tile_ver))
+
+	def rx_rel_buff(self, data):
+		pass
+
+	def rx_ack(self, data):
+		pass
+
+	def rx_beat(self, data):
+		pass
+
+	def rx_mapreq(self, data):
+		pass
+
+	def rx_mapdata(self, data):
+		pass
+
+	def rx_objdata(self, data):
+		pass
+
+	def rx_objack(self, data):
+		pass
+
+	def rx_close(self, data):
+		pass
 
 ###########################################################################
 
