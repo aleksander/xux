@@ -53,46 +53,47 @@ class hnh_client(ShowBase):
 		self.udp_port = udp_port
 		self.addr = NetAddress()
 		self.addr.setHost(self.host, self.udp_port)
+
 	def authorize(self, name, password):
-		try:
-			f = open('cookie', 'rb')
-			self.cookie = f.read()
-			dbg('using cached cookie')
-		except:
-			#TODO: add tries count
-			s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-			ss = ssl.wrap_socket(s)
-			ss.connect((self.host, self.ssl_port))
-			msg = bytes(bytearray([1,len(name)])+name.encode('utf8'))
-			ss.write(msg)
-			msg = ss.read(2)
-			msg_type, length = struct.unpack('!BB', msg)
-			if length > 0:
-				msg = ss.read(length)
-			if(msg_type != 0):
-				dbg('username binding: wrong message type "'+str(msg_type)+'" '+msg)
-				ss.close()
-				return False
-			hash = hashlib.sha256()
-			hash.update(password.encode('utf8'))
-			hash = hash.digest()
-			msg = bytes(bytearray([2,len(hash)])+hash)
-			ss.write(msg)
-			msg = ss.read(2)
-			msg_type, length = struct.unpack('!BB', msg)
-			if length > 0:
-				msg = ss.read(length)
+#		try:
+#			f = open('cookie', 'rb')
+#			self.cookie = f.read()
+#			dbg('using cached cookie')
+#		except:
+		s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+		ss = ssl.wrap_socket(s)
+		ss.connect((self.host, self.ssl_port))
+		msg = bytes(bytearray([1,len(name)])+name.encode('utf8'))
+		ss.write(msg)
+		msg = ss.read(2)
+		msg_type, length = struct.unpack('!BB', msg)
+		if length > 0:
+			msg = ss.read(length)
+		if(msg_type != 0):
+			dbg('username binding: wrong message type "'+str(msg_type)+'" '+msg)
 			ss.close()
-			if(msg_type != 0):
-				dbg('password binding: wrong message type "'+str(msg_type)+'" '+msg)
-				return False
-			self.cookie = msg
-			f = open('cookie','wb')
-			f.write(self.cookie)
-			f.close()
+			return False
+		hash = hashlib.sha256()
+		hash.update(password.encode('utf8'))
+		hash = hash.digest()
+		msg = bytes(bytearray([2,len(hash)])+hash)
+		ss.write(msg)
+		msg = ss.read(2)
+		msg_type, length = struct.unpack('!BB', msg)
+		if length > 0:
+			msg = ss.read(length)
+		ss.close()
+		if(msg_type != 0):
+			dbg('password binding: wrong message type "'+str(msg_type)+'" '+msg)
+			return False
+		self.cookie = msg
+#		f = open('cookie','wb')
+#		f.write(self.cookie)
+#		f.close()
 		self.user_name = name
 		dbg('cookie: '+self.cookie)
 		return True
+
 	def start(self):
 		ShowBase.__init__(self)
 		self.cmanager = QueuedConnectionManager()
@@ -108,23 +109,16 @@ class hnh_client(ShowBase):
 		self.creader.addConnection(self.conn)
 		taskMgr.add(self.rx,"rx")
 		self.rx_handle = self.rx_handle_sess
-		self.sess()
+		self.tx_sess()
 		self.run()
-	def sess(self):
-		data = PyDatagram.PyDatagram()
-		data.addUint8(0) # SESS
-		data.addUint16(1) # ???
-		data.addZString(u'Haven') # protocol name
-		data.addUint16(2) # version
-		data.addZString(self.user_name)
-		data.appendData(self.cookie)
-		self.cwriter.send(data, self.conn, self.addr)
+
 	def rx(self, data):
 		if self.creader.dataAvailable():
 			datagram = NetDatagram()
 			if self.creader.getData(datagram):
 				self.rx_handle(PyDatagramIterator.PyDatagramIterator(datagram))
 		return Task.cont
+
 	def rx_handle_sess(self, data):
 		msg_type = data.getUint8()
 		if msg_type != 0:
@@ -139,10 +133,11 @@ class hnh_client(ShowBase):
 			else:
 				error = str(error)+' (unknown)'
 			dbg('session error '+error)
+
 	def rx_handle_gaming(self, data):
 		msg_type = data.getUint8()
 		if msg_type not in msg_types:
-			dbg('UNKNOWN PACKET TYPE {}'.format(msg_type))
+			dbg('UNKNOWN PACKET TYPE '+str(msg_type))
 			return
 		dbg(str(msg_type)+' ('+msg_types[msg_type]+')')
 		# TODO: replace with msg_types[msg_type][handler](data)
@@ -158,13 +153,12 @@ class hnh_client(ShowBase):
 				else:
 					rel_len = data.getRemainingSize()
 				data.skipBytes(rel_len)
-				# TODO: if rel_type not in rel_types: ...
+				if rel_type not in rel_types:
+					dbg('UNKNOWN REL TYPE '+str(rel_type))
+					continue
 				dbg('seq='+str(seq)+' rel='+rel_types[rel_type]+' len='+str(rel_len))
 				seq = seq+1
-			data = PyDatagram.PyDatagram()
-			data.addUint8(2) # ACK
-			data.addUint16(seq)
-			self.cwriter.send(data, self.conn, self.addr)
+			self.tx_ack(seq)
 		elif msg_type == 2: # 'ACK'
 			pass
 		elif msg_type == 3: # 'BEAT'
@@ -179,6 +173,22 @@ class hnh_client(ShowBase):
 			pass
 		elif msg_type == 8: # 'CLOSE'
 			pass
+
+	def tx_ack(self, seq):
+		data = PyDatagram.PyDatagram()
+		data.addUint8(2) # ACK
+		data.addUint16(seq)
+		self.cwriter.send(data, self.conn, self.addr)
+
+	def tx_sess(self):
+		data = PyDatagram.PyDatagram()
+		data.addUint8(0) # SESS
+		data.addUint16(1) # ???
+		data.addZString(u'Haven') # protocol name
+		data.addUint16(2) # version
+		data.addZString(self.user_name)
+		data.appendData(self.cookie)
+		self.cwriter.send(data, self.conn, self.addr)
 
 ###########################################################################
 
