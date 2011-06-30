@@ -139,22 +139,6 @@ class hnh_client(ShowBase):
 		self.tx_sess()
 		self.run()
 
-	def tx_sess(self):
-		data = PyDatagram.PyDatagram()
-		data.addUint8(0) # SESS
-		data.addUint16(1) # ???
-		data.addZString(u'Haven') # protocol name
-		data.addUint16(2) # version
-		data.addZString(self.user_name)
-		data.appendData(self.cookie)
-		self.cwriter.send(data, self.conn, self.addr)
-
-	def tx_ask(self, seq):
-		data = PyDatagram.PyDatagram()
-		data.addUint8(2) # ACK
-		data.addUint16(seq)
-		self.cwriter.send(data, self.conn, self.addr)
-
 	def rx(self, data):
 		if self.creader.dataAvailable():
 			datagram = NetDatagram()
@@ -272,6 +256,22 @@ class hnh_client(ShowBase):
 
 	def rx_close(self, data):
 		pass
+
+	def tx_sess(self):
+		data = PyDatagram.PyDatagram()
+		data.addUint8(0) # SESS
+		data.addUint16(1) # ???
+		data.addZString(u'Haven') # protocol name
+		data.addUint16(2) # version
+		data.addZString(self.user_name)
+		data.appendData(self.cookie)
+		self.cwriter.send(data, self.conn, self.addr)
+
+	def tx_ask(self, seq):
+		data = PyDatagram.PyDatagram()
+		data.addUint8(2) # ACK
+		data.addUint16(seq)
+		self.cwriter.send(data, self.conn, self.addr)
 
 ###########################################################################
 
