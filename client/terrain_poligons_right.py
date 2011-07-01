@@ -12,43 +12,58 @@ from pandac.PandaModules import *
 import direct.directbase.DirectStart
 from random import randint
 
-node = GeomNode('gnode')
-geoms = []
-for i in xrange(3):
-	gvd = GeomVertexData('gvd', GeomVertexFormat.getV3t2(), Geom.UHStatic)
-	geom = Geom(gvd)
-	prim = GeomTriangles(Geom.UHStatic)
-	vertex = GeomVertexWriter(gvd, 'vertex')
-	texcoord = GeomVertexWriter(gvd, 'texcoord')
-	tex = loader.loadTexture('tile%i.png' % (i+1))
-	tex.setMagfilter(Texture.FTLinearMipmapLinear)
-	tex.setMinfilter(Texture.FTLinearMipmapLinear)
-	geoms.append({'geom':geom,'prim':prim,'vertex':vertex,'texcoord':texcoord,'index':0,'gvd':gvd,'texture':tex})
+class tilemap(NodePath):
+	def __init__(self, name='tilemap'):
+		NodePath.__init__(self, name)
+		self.terrain_node = GeomNode(name)
+		self.attachNewNode(self.terrain_node)
+		self.geoms = []
+	def add_tile_type(self, tex_file):
+		gvd = GeomVertexData('gvd', GeomVertexFormat.getV3t2(), Geom.UHStatic)
+		geom = Geom(gvd)
+		prim = GeomTriangles(Geom.UHStatic)
+		vertex = GeomVertexWriter(gvd, 'vertex')
+		texcoord = GeomVertexWriter(gvd, 'texcoord')
+		tex = loader.loadTexture(tex_file)
+		tex.setMagfilter(Texture.FTLinearMipmapLinear)
+		tex.setMinfilter(Texture.FTLinearMipmapLinear)
+		rs = RenderState.make(TextureAttrib.make(tex))
+		self.terrain_node.addGeom(geom, rs)
+		#self.setGeomState(i, self.getGeomState(i).addAttrib(TextureAttrib.make(geoms[i]['texture'])))
+		self.geoms.append({'geom':geom,'prim':prim,'vertex':vertex,'texcoord':texcoord,'index':0,'gvd':gvd,'texture':tex})
+	def add_tile(self, x, z, tile_type):
+		i = self.geoms[tile_type]['index']
+		v = self.geoms[tile_type]['vertex']
+		t = self.geoms[tile_type]['texcoord']
+		p = self.geoms[tile_type]['prim']
+		v.addData3f(x, 0, z)
+		t.addData2f(0, 0)
+		v.addData3f(x, 0, z+1)
+		t.addData2f(0, 1)
+		v.addData3f(x+1, 0, z+1)
+		t.addData2f(1, 1)
+		v.addData3f(x+1, 0, z)
+		t.addData2f(1, 0)
+		p.addVertices(i*4, i*4 + 2, i*4 + 1)
+		p.addVertices(i*4, i*4 + 3, i*4 + 2)
+		self.geoms[tile_type]['index'] += 1
+	def bake(self):
+		for i in xrange(0, len(self.geoms)):
+			self.geoms[i]['prim'].closePrimitive()
+			self.geoms[i]['geom'].addPrimitive(self.geoms[i]['prim'])
+
+terrain = tilemap()
+
+for i in xrange(0,3):
+	terrain.add_tile_type('tile%i.png' % (i+1))
 
 size = 100
 for x in xrange(0,size):
 	for z in xrange(0,size):
-		t_img = random.randint(0,2)
-		i = geoms[t_img]['index']
-		geoms[t_img]['vertex'].addData3f(x, 0, z)
-		geoms[t_img]['texcoord'].addData2f(0, 0)
-		geoms[t_img]['vertex'].addData3f(x, 0, z+1)
-		geoms[t_img]['texcoord'].addData2f(0, 1)
-		geoms[t_img]['vertex'].addData3f(x+1, 0, z+1)
-		geoms[t_img]['texcoord'].addData2f(1, 1)
-		geoms[t_img]['vertex'].addData3f(x+1, 0, z)
-		geoms[t_img]['texcoord'].addData2f(1, 0)
-		geoms[t_img]['prim'].addVertices(i*4, i*4 + 2, i*4 + 1)
-		geoms[t_img]['prim'].addVertices(i*4, i*4 + 3, i*4 + 2)
-		geoms[t_img]['index'] += 1
+		terrain.add_tile(x, z, random.randint(0,2))
 
-for i in xrange(3):
-	geoms[i]['prim'].closePrimitive()
-	geoms[i]['geom'].addPrimitive(geoms[i]['prim'])
-	node.addGeom(geoms[i]['geom'])
-	node.setGeomState(i, node.getGeomState(i).addAttrib(TextureAttrib.make(geoms[i]['texture'])))
-
-terrain = render.attachNewNode(node)
+terrain.bake()
+terrain.reparentTo(render)
 terrain.setPos(-size/2,0,-size/2)
 #terrain.setRenderModeWireframe()
 terrain.analyze()
