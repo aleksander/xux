@@ -5,35 +5,7 @@ from direct.distributed import PyDatagram, PyDatagramIterator
 from direct.task import *
 from direct.interval.IntervalGlobal import *
 
-#####################################################################
-
-#def show_bytes(s, msg):
-#	print(s, end='')
-#	for b in msg:
-#		print('{0:02X} '.format(b),end='')
-#	print('')
-
 ############################################################################
-
-#class message:
-#	def __init__(self, b):
-#		self.type = b[0]
-#		self.len = b[1]
-#		self.body = b[2:]
-#	def recv(self, s):
-#		self.type = s.recv(1)
-#		self.len = s.recv(1)
-#		self.body = s.recv(self.len)
-#		return self
-#	def send(self, s):
-#		return self
-#	def deliver(self, s):
-#		s.send(self.type)
-#		s.send(self.len)
-#		s.send(self.body)
-#		return self
-
-###########################################################################################
 
 def dbg(data):
 	print data
@@ -80,6 +52,13 @@ class hnh_client(ShowBase):
 			10:('MUSIC', self.rx_rel_music),
 			11:('TILES', self.rx_rel_tiles),
 			12:('BUFF', self.rx_rel_buff)
+		}
+		self.wdg_list_types = {
+			0:'END',
+			1:'INT',
+			2:'STR',
+			3:'COORD',
+			6:'COLOR'
 		}
 
 	def authorize(self, name, password):
@@ -136,8 +115,8 @@ class hnh_client(ShowBase):
 		self.conn.setReuseAddr(True)
 		self.creader.addConnection(self.conn)
 		self.rx_handle = self.rx_handle_sess
-		taskMgr.add(self.rx,"rx")
-		self.sess_task_handler = taskMgr.doMethodLater(0, self.sess_task, 'sess_task')
+		taskMgr.add(self.rx_task,"rx_task")
+		self.sess_task_handler = taskMgr.add(self.sess_task, 'sess_task')
 		self.run()
 
 	def sess_task(self, task):
@@ -145,12 +124,27 @@ class hnh_client(ShowBase):
 		task.delayTime = .2
 		return task.again
 
-	def rx(self, task):
+	def rx_task(self, task):
 		if self.creader.dataAvailable():
 			datagram = NetDatagram()
 			if self.creader.getData(datagram):
 				self.rx_handle(PyDatagramIterator.PyDatagramIterator(datagram))
 		return task.cont
+
+	# CLIENT
+	 # REL (1)
+	  # seq=0 type=1(WDGMSG) len=13
+	   # id=0 name=focus
+		# INT=1
+
+	# CLIENT
+	 # REL (1)
+	  # seq=1 type=1(WDGMSG) len=17
+	   # id=4 name=play
+		# STR=Sallvian
+	def tx_task(self, task):
+		# choice a character
+		pass
 
 	def rx_handle_sess(self, data):
 		msg_type = data.getUint8()
@@ -161,6 +155,7 @@ class hnh_client(ShowBase):
 		if error == 0:
 			self.sess_task_handler.remove()
 			self.rx_handle = self.rx_handle_gaming
+			taskMgr.add(self.tx_task, 'tx_task')
 		else:
 			if error in sess_errors:
 				error = sess_errors[error]
@@ -189,10 +184,10 @@ class hnh_client(ShowBase):
 			else:
 				rel_len = data.getRemainingSize()
 			if rel_type not in self.rel_types:
-				dbg('seq='+str(seq)+' rel=UNKNOWN ('+str(rel_type)+') len='+str(rel_len))
+				dbg('  seq='+str(seq)+' rel=UNKNOWN ('+str(rel_type)+') len='+str(rel_len))
 				data.skipBytes(rel_len)
 			else:
-				dbg('seq='+str(seq)+' rel='+self.rel_types[rel_type][0]+' len='+str(rel_len))
+				dbg('  seq='+str(seq)+' rel='+self.rel_types[rel_type][0]+' len='+str(rel_len))
 				rel = data.extractBytes(rel_len)
 				dg = Datagram(rel)
 				pdi = PyDatagramIterator.PyDatagramIterator(dg)
@@ -201,10 +196,46 @@ class hnh_client(ShowBase):
 		self.tx_ask(seq)
 
 	def rx_rel_newwdg(self, data):
-		pass
+		wdg_id = data.getUint16()
+		wdg_type = data.getZString()
+		wdg_coord = [data.getInt32(),data.getInt32()]
+		wdg_parent = data.getUint16()
+		dbg('    id={0} type={1} coord={2} parent={3}'.format(wdg_id,wdg_type,wdg_coord,wdg_parent))
+		while data.getRemainingSize():
+			wdg_lt = data.getUint8()
+			if wdg_lt not in self.wdg_list_types:
+				dbg('     UNKNOWN LIST TYPE')
+				break
+			if wdg_lt == 0: # END
+				dbg('      END')
+			elif wdg_lt == 1: # INT
+				dbg('      {0}={1}'.format(self.wdg_list_types[wdg_lt], data.getInt32()))
+			elif wdg_lt == 2: # STR
+				dbg('      {0}={1}'.format(self.wdg_list_types[wdg_lt], data.getZString()))
+			elif wdg_lt == 3: # COORD
+				dbg('      {0}={1}'.format(self.wdg_list_types[wdg_lt], [data.getInt32(),data.getInt32()]))
+			elif wdg_lt == 6: # COLOR
+				dbg('      {0}={1}'.format(self.wdg_list_types[wdg_lt], [data.getUint8(),data.getUint8(),data.getUint8(),data.getUint8()]))
 
 	def rx_rel_wdgmsg(self, data):
-		pass
+		wdg_id = data.getUint16()
+		wdg_msg_name = data.getZString()
+		dbg('    id={0} name={1}'.format(wdg_id, wdg_msg_name))
+		while data.getRemainingSize():
+			wdg_lt = data.getUint8()
+			if wdg_lt not in self.wdg_list_types:
+				dbg('     UNKNOWN LIST TYPE')
+				break
+			if wdg_lt == 0: # END
+				dbg('      END')
+			elif wdg_lt == 1: # INT
+				dbg('      {0}={1}'.format(self.wdg_list_types[wdg_lt], data.getInt32()))
+			elif wdg_lt == 2: # STR
+				dbg('      {0}={1}'.format(self.wdg_list_types[wdg_lt], data.getZString()))
+			elif wdg_lt == 3: # COORD
+				dbg('      {0}={1}'.format(self.wdg_list_types[wdg_lt], [data.getInt32(),data.getInt32()]))
+			elif wdg_lt == 6: # COLOR
+				dbg('      {0}={1}'.format(self.wdg_list_types[wdg_lt], [data.getUint8(),data.getUint8(),data.getUint8(),data.getUint8()]))
 
 	def rx_rel_dstwdg(self, data):
 		pass
@@ -238,7 +269,7 @@ class hnh_client(ShowBase):
 			tile_id = data.getUint8()
 			tile_name = data.getZString()
 			tile_ver = data.getUint16()
-			dbg('   id={0} name={1} version={2}'.format(tile_id,tile_name,tile_ver))
+			dbg('    id={0} name={1} version={2}'.format(tile_id,tile_name,tile_ver))
 
 	def rx_rel_buff(self, data):
 		pass
