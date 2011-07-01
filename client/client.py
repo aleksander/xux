@@ -3,6 +3,7 @@ from direct.showbase.ShowBase import ShowBase
 from panda3d.core import *
 from direct.distributed import PyDatagram, PyDatagramIterator
 from direct.task import *
+from direct.interval.IntervalGlobal import *
 
 #####################################################################
 
@@ -114,11 +115,11 @@ class hnh_client(ShowBase):
 			dbg('password binding: wrong message type "'+str(msg_type)+'" '+msg)
 			return False
 		self.cookie = msg
-		# f = open('cookie','wb')
-		# f.write(self.cookie)
-		# f.close()
+#		f = open('cookie','wb')
+#		f.write(self.cookie)
+#		f.close()
 		self.user_name = name
-		dbg('cookie: '+self.cookie)
+#		dbg('cookie: '+self.cookie)
 		return True
 
 	def start(self):
@@ -134,17 +135,22 @@ class hnh_client(ShowBase):
 			return
 		self.conn.setReuseAddr(True)
 		self.creader.addConnection(self.conn)
-		taskMgr.add(self.rx,"rx")
 		self.rx_handle = self.rx_handle_sess
-		self.tx_sess()
+		taskMgr.add(self.rx,"rx")
+		self.sess_task_handler = taskMgr.doMethodLater(0, self.sess_task, 'sess_task')
 		self.run()
 
-	def rx(self, data):
+	def sess_task(self, task):
+		self.tx_sess()
+		task.delayTime = .2
+		return task.again
+
+	def rx(self, task):
 		if self.creader.dataAvailable():
 			datagram = NetDatagram()
 			if self.creader.getData(datagram):
 				self.rx_handle(PyDatagramIterator.PyDatagramIterator(datagram))
-		return Task.cont
+		return task.cont
 
 	def rx_handle_sess(self, data):
 		msg_type = data.getUint8()
@@ -153,6 +159,7 @@ class hnh_client(ShowBase):
 			return
 		error = data.getUint8()
 		if error == 0:
+			self.sess_task_handler.remove()
 			self.rx_handle = self.rx_handle_gaming
 		else:
 			if error in sess_errors:
@@ -267,6 +274,12 @@ class hnh_client(ShowBase):
 		data.appendData(self.cookie)
 		self.cwriter.send(data, self.conn, self.addr)
 
+#	def tx_rel_wdgmsg(self, seq):
+#		data = PyDatagram.PyDatagram()
+#		data.addUint8(1) # REL
+#		data.addUint16(seq)
+#		self.cwriter.send(data, self.conn, self.addr)
+		
 	def tx_ask(self, seq):
 		data = PyDatagram.PyDatagram()
 		data.addUint8(2) # ACK
@@ -279,5 +292,5 @@ hnh = hnh_client('moltke.seatribe.se', 1871, 1870)
 while not hnh.authorize(u'lemings', u'lemings'):
 	dbg('authorization failed')
 	#TODO add delay
-dbg('authorized')
+#dbg('authorized')
 hnh.start()

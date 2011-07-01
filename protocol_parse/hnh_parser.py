@@ -417,7 +417,7 @@ def show_info(hdr,data):
 
 # for i in range(100):
 	# print()
-rdr = pcapy.open_offline('first.pcap')
+rdr = pcapy.open_offline('second.pcap')
 rdr.dispatch(-1,show_info)
 # print(counters)
 resfile.close()
