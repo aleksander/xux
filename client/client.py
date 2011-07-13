@@ -7,6 +7,10 @@ from direct.interval.IntervalGlobal import *
 
 ############################################################################
 
+TEST CHANGES
+
+############################################################################
+
 def dbg(data):
 	print data
 
@@ -19,6 +23,9 @@ class hnh_client(ShowBase):
 		self.udp_port = udp_port
 		self.addr = NetAddress()
 		self.addr.setHost(self.host, self.udp_port)
+		self.tiles = []
+		for i in range(0,256):
+			self.tiles.append('')
 		self.sess_errors = {
 			0:'OK',
 			1:'AUTH',
