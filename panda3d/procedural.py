@@ -1,17 +1,8 @@
 import direct.directbase.DirectStart
 from pandac.PandaModules import *
-from direct.interval.IntervalGlobal import *
-from direct.task.Task import Task
-from direct.showbase.DirectObject import DirectObject
-from pandac.PandaModules import Vec3
-from direct.gui.OnscreenImage import OnscreenImage
-import random
-from pandac.PandaModules import *
-import direct.directbase.DirectStart
-from random import randint
-from math import sqrt
+from math import sqrt, pi
 
-def IcoSphere(radius, subdivs):
+def IcoSphere(radius, subdivisions):
 	ico_path = NodePath('ico_path')
 	ico_node = GeomNode('ico_node')
 	ico_path.attachNewNode(ico_node)
@@ -20,11 +11,9 @@ def IcoSphere(radius, subdivs):
 	geom = Geom(gvd)
 	gvw = GeomVertexWriter(gvd, 'vertex')
 	ico_node.addGeom(geom)
-	# prim = GeomTriangles(Geom.UHStatic)
-	prim = GeomLines(Geom.UHStatic)
+	prim = GeomTriangles(Geom.UHStatic)
 	
 	verts = []
-	# faces = []
 	
 	phi = .5*(1.+sqrt(5.))
 	invnorm = 1/sqrt(phi*phi+1)
@@ -42,7 +31,7 @@ def IcoSphere(radius, subdivs):
 	verts.append(Vec3(-1,  -phi,0) * invnorm)   #10
 	verts.append(Vec3( 1,  -phi,0) * invnorm)   #11
 
-	firstFaces = [
+	faces = [
 		0,1,2,
 		0,3,1,
 		0,4,5,
@@ -67,46 +56,49 @@ def IcoSphere(radius, subdivs):
 
 	size = 60
 
-	# # Step 2 : tessellate
-	# for subdiv in range(0,subdivs):
-		# size*=4;
-		# newFaces = []
-		# for i in range(0,size/12):
-			# i1 = firstFaces[i*3]
-			# i2 = firstFaces[i*3+1]
-			# i3 = firstFaces[i*3+2]
-			# i12 = len(verts)
-			# i23 = i12+1
-			# i13 = i12+2
-			# v1 = Vec3(verts[i1])
-			# v2 = Vec3(verts[i2])
-			# v3 = Vec3(verts[i3])
-			# # make 1 vertice at the center of each edge and project it onto the sphere
-			# verts.append((v1+v2).normalize())
-			# verts.append((v2+v3).normalize())
-			# verts.append((v1+v3).normalize())
-			# # now recreate indices
-			# newFaces.append(i1)
-			# newFaces.append(i12)
-			# newFaces.append(i13)
-			# newFaces.append(i2)
-			# newFaces.append(i23)
-			# newFaces.append(i12)
-			# newFaces.append(i3)
-			# newFaces.append(i13)
-			# newFaces.append(i23)
-			# newFaces.append(i12)
-			# newFaces.append(i23)
-			# newFaces.append(i13)
-		# # faces.swap(newFaces);
-		# tmp = firstFaces
-		# firstFaces = newFaces
-		# newFaces = tmp
+	# Step 2 : tessellate
+	for subdivision in range(0,subdivisions):
+		size*=4;
+		newFaces = []
+		for i in range(0,size/12):
+			i1 = faces[i*3]
+			i2 = faces[i*3+1]
+			i3 = faces[i*3+2]
+			i12 = len(verts)
+			i23 = i12+1
+			i13 = i12+2
+			v1 = verts[i1]
+			v2 = verts[i2]
+			v3 = verts[i3]
+			# make 1 vertice at the center of each edge and project it onto the sphere
+			vt = v1+v2
+			vt.normalize()
+			verts.append(vt)
+			vt = v2+v3
+			vt.normalize()
+			verts.append(vt)
+			vt = v1+v3
+			vt.normalize()
+			verts.append(vt)
+			# now recreate indices
+			newFaces.append(i1)
+			newFaces.append(i12)
+			newFaces.append(i13)
+			newFaces.append(i2)
+			newFaces.append(i23)
+			newFaces.append(i12)
+			newFaces.append(i3)
+			newFaces.append(i13)
+			newFaces.append(i23)
+			newFaces.append(i12)
+			newFaces.append(i23)
+			newFaces.append(i13)
+		faces = newFaces
 	
 	for i in range(0,len(verts)):
 		gvw.addData3f(VBase3(verts[i]))
-	for i in range(0, len(firstFaces)/3):
-		prim.addVertices(firstFaces[i*3],firstFaces[i*3+1],firstFaces[i*3+2],firstFaces[i*3])
+	for i in range(0, len(faces)/3):
+		prim.addVertices(faces[i*3],faces[i*3+1],faces[i*3+2])
 
 	prim.closePrimitive()
 	geom.addPrimitive(prim)
@@ -115,12 +107,48 @@ def IcoSphere(radius, subdivs):
 
 ########################################################################
 
-ico = IcoSphere(1,2)
+def TorusKnot(mNumSegCircle, mP, mRadius, mQ, mNumSegSection):
+	offset = 0
 
+	for i in range(0, mNumSegCircle * mP):
+	# for i in range(0, segments*mP+1):
+		phi = pi*2 * i / mNumSegCircle
+		x0 = mRadius * (2 + cos(mQ * phi / mP)) * cos(phi) / 3.
+		y0 = mRadius * sin(mQ * phi / mP) / 3.
+		z0 = mRadius * (2 + cos(mQ * phi / mP)) * sin(phi) / 3.
+
+		phi1 = pi*2 * (i + 1) / mNumSegCircle
+		x1 = mRadius * (2 + cos(mQ * phi1 / mP)) * cos(phi1) / 3.
+		y1 = mRadius * sin(mQ * phi1 / mP) / 3.
+		z1 = mRadius * (2 + cos(mQ * phi1 / mP)) * sin(phi1) / 3.
+
+		v0 = Vec3(x0,y0,z0)
+		v1 = Vec3(x1,y1,z1)
+		direction = v1-v0
+		direction.normalize()
+
+		q = Quat(0, direction)
+
+		# for j in range(0, mNumSegSection+1)
+		for j in range(0, mNumSegSection)
+			alpha = pi*2 * j / mNumSegSection
+			vp = mSectionRadius*(q * Vector3(cos(alpha), sin(alpha),0));
+			addPoint(buffer, v0+vp, vp.normalisedCopy(), Vector2(i/(Real)mNumSegCircle, j/(Real)mNumSegSection));
+
+			if (i != mNumSegCircle * mP)
+					buffer.index(offset + mNumSegSection + 1);
+					buffer.index(offset + mNumSegSection);
+					buffer.index(offset);
+					buffer.index(offset + mNumSegSection + 1);
+					buffer.index(offset);
+					buffer.index(offset + 1);
+			offset ++;
+
+########################################################################
+
+ico = IcoSphere(1,1)
 ico.reparentTo(render)
-#terrain.setPos(-size/2,0,-size/2)
 ico.setRenderModeWireframe()
 ico.analyze()
 base.setFrameRateMeter(True)
-
 run()

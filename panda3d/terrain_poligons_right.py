@@ -7,32 +7,24 @@ from pandac.PandaModules import Vec3
 from direct.gui.OnscreenImage import OnscreenImage
 import random
 
-from pandac.PandaModules import *
-#loadPrcFileData("editor-startup", "show-frame-rate-meter #t")
-import direct.directbase.DirectStart
-from random import randint
-
 class tilemap(NodePath):
 	def __init__(self, name='tilemap'):
 		NodePath.__init__(self, name)
 		self.terrain_node = GeomNode(name)
 		self.attachNewNode(self.terrain_node)
 		self.geoms = []
-		self.verts = {}
-		self.verts_count = 0
 	def add_tile_type(self, tex_file):
 		gvd = GeomVertexData('gvd', GeomVertexFormat.getV3t2(), Geom.UHStatic)
 		geom = Geom(gvd)
 		prim = GeomTriangles(Geom.UHStatic)
-		vertex = GeomVertexWriter(gvd, 'vertex')
-		texcoord = GeomVertexWriter(gvd, 'texcoord')
+		gvwv = GeomVertexWriter(gvd, 'vertex')
+		gvwt = GeomVertexWriter(gvd, 'texcoord')
 		tex = loader.loadTexture(tex_file)
 		#tex.setMagfilter(Texture.FTLinearMipmapLinear)
 		#tex.setMinfilter(Texture.FTLinearMipmapLinear)
 		rs = RenderState.make(TextureAttrib.make(tex))
 		self.terrain_node.addGeom(geom, rs)
-		#self.setGeomState(i, self.getGeomState(i).addAttrib(TextureAttrib.make(geoms[i]['texture'])))
-		self.geoms.append({'geom':geom,'prim':prim,'vertex':vertex,'texcoord':texcoord,'index':0,'gvd':gvd,'texture':tex})
+		self.geoms.append({'geom':geom,'prim':prim,'vertex':vertex,'texcoord':texcoord,'index':0})
 	def add_tile(self, x, z, tile_type):
 		# i = self.geoms[tile_type]['index']
 		v = self.geoms[tile_type]['vertex']
