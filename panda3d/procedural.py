@@ -20,7 +20,8 @@ def IcoSphere(radius, subdivs):
 	geom = Geom(gvd)
 	gvw = GeomVertexWriter(gvd, 'vertex')
 	ico_node.addGeom(geom)
-	prim = GeomTriangles(Geom.UHStatic)
+	# prim = GeomTriangles(Geom.UHStatic)
+	prim = GeomLines(Geom.UHStatic)
 	
 	verts = []
 	# faces = []
@@ -64,54 +65,57 @@ def IcoSphere(radius, subdivs):
 		10,11,9
 	]
 
-	int size = 60;
+	size = 60
 
-	# Step 2 : tessellate
-	for subdiv in subdivs:
-		size*=4;
-		newFaces = []
-		for i in size/12:
-			i1 = firstFaces[i*3]
-			i2 = firstFaces[i*3+1]
-			i3 = firstFaces[i*3+2]
-			i12 = len(verts)
-			i23 = i12+1
-			i13 = i12+2
-			v1 = Vec3(verts[i1])
-			v2 = Vec3(verts[i2])
-			v3 = Vec3(verts[i3])
-			# make 1 vertice at the center of each edge and project it onto the sphere
-			vertices.push_back((v1+v2).normalisedCopy());
-			vertices.push_back((v2+v3).normalisedCopy());
-			vertices.push_back((v1+v3).normalisedCopy());
-			# now recreate indices
-			newFaces.push_back(i1);
-			newFaces.push_back(i12);
-			newFaces.push_back(i13);
-			newFaces.push_back(i2);
-			newFaces.push_back(i23);
-			newFaces.push_back(i12);
-			newFaces.push_back(i3);
-			newFaces.push_back(i13);
-			newFaces.push_back(i23);
-			newFaces.push_back(i12);
-			newFaces.push_back(i23);
-			newFaces.push_back(i13);
-		faces.swap(newFaces);
+	# # Step 2 : tessellate
+	# for subdiv in range(0,subdivs):
+		# size*=4;
+		# newFaces = []
+		# for i in range(0,size/12):
+			# i1 = firstFaces[i*3]
+			# i2 = firstFaces[i*3+1]
+			# i3 = firstFaces[i*3+2]
+			# i12 = len(verts)
+			# i23 = i12+1
+			# i13 = i12+2
+			# v1 = Vec3(verts[i1])
+			# v2 = Vec3(verts[i2])
+			# v3 = Vec3(verts[i3])
+			# # make 1 vertice at the center of each edge and project it onto the sphere
+			# verts.append((v1+v2).normalize())
+			# verts.append((v2+v3).normalize())
+			# verts.append((v1+v3).normalize())
+			# # now recreate indices
+			# newFaces.append(i1)
+			# newFaces.append(i12)
+			# newFaces.append(i13)
+			# newFaces.append(i2)
+			# newFaces.append(i23)
+			# newFaces.append(i12)
+			# newFaces.append(i3)
+			# newFaces.append(i13)
+			# newFaces.append(i23)
+			# newFaces.append(i12)
+			# newFaces.append(i23)
+			# newFaces.append(i13)
+		# # faces.swap(newFaces);
+		# tmp = firstFaces
+		# firstFaces = newFaces
+		# newFaces = tmp
 	
-	# for i in range(0,len(verts)):
-		# gvw.addData3f(VBase3(verts[i]))
-	# for i in range(0, len(firstFaces)/3):
-		# prim.addVertices(firstFaces[i*3],firstFaces[i*3+1],firstFaces[i*3+2])
+	for i in range(0,len(verts)):
+		gvw.addData3f(VBase3(verts[i]))
+	for i in range(0, len(firstFaces)/3):
+		prim.addVertices(firstFaces[i*3],firstFaces[i*3+1],firstFaces[i*3+2],firstFaces[i*3])
 
-	# prim.closePrimitive()
-	# geom.addPrimitive(prim)
+	prim.closePrimitive()
+	geom.addPrimitive(prim)
 	
 	return ico_path
 
 ########################################################################
 
-ico = IcoSphere(1,1)
+ico = IcoSphere(1,2)
 
 ico.reparentTo(render)
 #terrain.setPos(-size/2,0,-size/2)
