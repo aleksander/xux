@@ -145,7 +145,8 @@ def TorusKnot(mNumSegCircle, mP, mRadius, mQ, mNumSegSection, mSectionRadius):
 		for j in range(0, mNumSegSection):
 			alpha = pi*2 * j / mNumSegSection
 			vp = Vec3(cos(alpha), sin(alpha), 0)
-			vp = mSectionRadius * (q * vp)
+			vp = q * vp
+			vp = vp * mSectionRadius
 #			addPoint(buffer, v0+vp, vp.normalisedCopy(), Vector2(i/(Real)mNumSegCircle, j/(Real)mNumSegSection));
 			gvw.addData3f(v0+vp, vp.normalize())
 			prim.addVertices(i/mNumSegCircle, j/mNumSegSection)
@@ -168,15 +169,17 @@ def TorusKnot(mNumSegCircle, mP, mRadius, mQ, mNumSegSection, mSectionRadius):
 
 ########################################################################
 
-ico = IcoSphere(1,6)
+ico = IcoSphere(1,5)
 ico.reparentTo(render)
 ico.setRenderModeWireframe()
 ico.setPos(0,4,0)
+ico.setAntialias(2)
 ico.analyze()
 #tk = TorusKnot(5,5,5,5,5,5)
 #tk.reparentTo(render)
 #tk.setRenderModeWireframe()
 #tk.analyze()
+
 base.setFrameRateMeter(True)
 
 #base.disableMouse()
