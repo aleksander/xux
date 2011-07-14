@@ -19,6 +19,10 @@ class hnh_client(ShowBase):
 		self.udp_port = udp_port
 		self.addr = NetAddress()
 		self.addr.setHost(self.host, self.udp_port)
+		self.tiles = []
+		self.widgets = []
+		for i in range(0,256):
+			self.tiles.append('')
 		self.sess_errors = {
 			0:'OK',
 			1:'AUTH',
@@ -144,7 +148,14 @@ class hnh_client(ShowBase):
 		# STR=Sallvian
 	def tx_task(self, task):
 		# choice a character
-		pass
+		if self.phase == PHASE_CHAR_CHOICE:
+			for w in self.widgets:
+				if w[0] == 4:
+					self.tx_que.append(self.seq, datagram)
+					self.seq += 1
+		# choice a place
+		# gaming
+		return task.cont
 
 	def rx_handle_sess(self, data):
 		msg_type = data.getUint8()
@@ -201,6 +212,7 @@ class hnh_client(ShowBase):
 		wdg_coord = [data.getInt32(),data.getInt32()]
 		wdg_parent = data.getUint16()
 		dbg('    id={0} type={1} coord={2} parent={3}'.format(wdg_id,wdg_type,wdg_coord,wdg_parent))
+		self.widgets.append([wdg_id, wdg_type, wdg_parent])
 		while data.getRemainingSize():
 			wdg_lt = data.getUint8()
 			if wdg_lt not in self.wdg_list_types:
