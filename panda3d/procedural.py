@@ -1,7 +1,5 @@
-import direct.directbase.DirectStart
 from pandac.PandaModules import *
-from math import * #sqrt, pi
-from camera import CamFree
+from math import *
 
 def IcoSphere(radius, subdivisions):
 	ico_path = NodePath('ico_path')
@@ -108,7 +106,7 @@ def IcoSphere(radius, subdivisions):
 
 ########################################################################
 
-def TorusKnot(mNumSegCircle, mP, mRadius, mQ, mNumSegSection, mSectionRadius):
+def TorusKnot(mRadius=1., mSectionRadius=.2, mP=2, mQ=3, mNumSegSection=8, mNumSegCircle=16):
 	tk_path = NodePath('tk_path')
 	tk_node = GeomNode('tk_node')
 	tk_path.attachNewNode(tk_node)
@@ -122,8 +120,8 @@ def TorusKnot(mNumSegCircle, mP, mRadius, mQ, mNumSegSection, mSectionRadius):
 
 	offset = 0
 
-	for i in range(0, mNumSegCircle * mP):
-	# for i in range(0, segments*mP+1):
+	# for i in range(0, mNumSegCircle * mP):
+	for i in range(0, mNumSegCircle*mP+1):
 		phi = pi*2 * i / mNumSegCircle
 		x0 = mRadius * (2 + cos(mQ * phi / mP)) * cos(phi) / 3.
 		y0 = mRadius * sin(mQ * phi / mP) / 3.
@@ -139,7 +137,62 @@ def TorusKnot(mNumSegCircle, mP, mRadius, mQ, mNumSegSection, mSectionRadius):
 		direction = v1-v0
 		direction.normalize()
 
-		q = Quat(0, direction)
+		gvw.addData3f(x0,y0,z0)
+		gvw.addData3f(x1,y1,z1)
+		prim.addVertices(i*2, i*2+1)
+
+		# Quaternion getRotationTo(const Vector3& dest, const Vector3& fallbackAxis = Vector3::ZERO) const
+		def getRotationTo(src, dest, fallbackAxis = Vec3(0,0,0)):
+			# Based on Stan Melax's article in Game Programming Gems
+			q = Quat()
+			# Copy, since cannot modify local
+			v0 = Vec3(src)
+			v1 = Vec3(dest)
+			v0.normalize()
+			v1.normalize()
+
+			d = v0.dot(v1) #dotProduct(v1);
+			# If dot == 1, vectors are the same
+			if d >= 1.0:
+				return Quat(1,0,0,0) #Quaternion::IDENTITY;
+			if d < (1e-6 - 1.):
+				if fallbackAxis != Vec3(0,0,0):
+					# rotate 180 degrees about the fallback axis
+					q.setFromAxisAngle(pi, fallbackAxis)
+				else:
+					# Generate an axis
+					axis = Vec3(1,0,0).crossProduct(src)
+					if axis.almostEqual(Vec3.zero()): # pick another if colinear
+						axis = Vec3(0,1,0).crossProduct(src)
+					axis.normalize()
+					q.setFromAxisAngle(pi, axis)
+			else:
+				s = sqrt((1 + d) * 2)
+				invs = 1 / s
+
+				c = v0.cross(v1)
+
+				# q.x = c.x * invs
+				# q.y = c.y * invs
+				# q.z = c.z * invs
+				# q.w = s * .5
+				q.setI(c.x * invs)
+				q.setJ(c.y * invs)
+				q.setK(c.z * invs)
+				q.setR(s * .5)
+				q.normalize()
+			return q
+
+		def computeQuaternion(direction):
+			# Quaternion quat = Vector3::UNIT_Z.getRotationTo(direction);
+			quat = getRotationTo(Vec3(0,0,1), direction)
+			projectedY = Vec3(0,1,0) - direction * Vec3(0,1,0).dot(direction)
+			tY = quat * Vec3(0,1,0)
+			quat2 = getRotationTo(tY, projectedY)
+			q = quat2 * quat
+			return q
+
+		q = computeQuaternion(direction)
 
 		# for j in range(0, mNumSegSection+1)
 		for j in range(0, mNumSegSection):
@@ -147,48 +200,20 @@ def TorusKnot(mNumSegCircle, mP, mRadius, mQ, mNumSegSection, mSectionRadius):
 			vp = Vec3(cos(alpha), sin(alpha), 0)
 			vp = q * vp
 			vp = vp * mSectionRadius
-#			addPoint(buffer, v0+vp, vp.normalisedCopy(), Vector2(i/(Real)mNumSegCircle, j/(Real)mNumSegSection));
-			gvw.addData3f(v0+vp, vp.normalize())
-			prim.addVertices(i/mNumSegCircle, j/mNumSegSection)
+			gvw.addData3f(v0+vp)
 
-#			if i != mNumSegCircle * mP:
-#					buffer.index(offset + mNumSegSection + 1);
-#					buffer.index(offset + mNumSegSection);
-#					buffer.index(offset);
-#					buffer.index(offset + mNumSegSection + 1);
-#					buffer.index(offset);
-#					buffer.index(offset + 1);
+			if i != mNumSegCircle * mP:
+				prim.addVertices(offset+mNumSegSection+1,offset+mNumSegSection,offset)
+				prim.addVertices(offset+mNumSegSection+1,offset,offset+1)
+				# buffer.index(offset + mNumSegSection + 1);
+				# buffer.index(offset + mNumSegSection);
+				# buffer.index(offset);
+				# buffer.index(offset + mNumSegSection + 1);
+				# buffer.index(offset);
+				# buffer.index(offset + 1);
 			offset += 1
 
 	prim.closePrimitive()
 	geom.addPrimitive(prim)
 	
 	return tk_path
-
-
-
-########################################################################
-
-ico = IcoSphere(1,5)
-ico.reparentTo(render)
-ico.setRenderModeWireframe()
-ico.setPos(0,4,0)
-ico.setAntialias(2)
-ico.analyze()
-#tk = TorusKnot(5,5,5,5,5,5)
-#tk.reparentTo(render)
-#tk.setRenderModeWireframe()
-#tk.analyze()
-
-base.setFrameRateMeter(True)
-
-#base.disableMouse()
-#base.oobe()
-#camera.setPos(0,-2,0)
-#camera.lookAt(terrain)
-base.camLens.setNear(.01)
-# #base.enableMouse()
-
-CamFree()
-
-run()
