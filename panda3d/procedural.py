@@ -106,7 +106,21 @@ def IcoSphere(radius, subdivisions):
 
 ########################################################################
 
-def TorusKnot(mRadius=1., mSectionRadius=.2, mP=2, mQ=3, mNumSegSection=8, mNumSegCircle=16):
+#// rotation of a vector by a quaternion
+#Vector3 Quaternion::operator* (const Vector3& v) const
+#{
+#	// nVidia SDK implementation
+#	Vector3 uv, uuv;
+#	Vector3 qvec(x, y, z);
+#	uv = qvec.crossProduct(v);
+#	uuv = qvec.crossProduct(uv);
+#	uv *= (2.0f * w);
+#	uuv *= 2.0f;
+#	return v + uv + uuv;
+#}
+
+
+def TorusKnot(mRadius=1., mSectionRadius=.2, mP=2, mQ=3, mNumSegSection=64, mNumSegCircle=64):
 	tk_path = NodePath('tk_path')
 	tk_node = GeomNode('tk_node')
 	tk_path.attachNewNode(tk_node)
@@ -115,8 +129,8 @@ def TorusKnot(mRadius=1., mSectionRadius=.2, mP=2, mQ=3, mNumSegSection=8, mNumS
 	geom = Geom(gvd)
 	gvw = GeomVertexWriter(gvd, 'vertex')
 	tk_node.addGeom(geom)
-#	prim = GeomTriangles(Geom.UHStatic)
-	prim = GeomLines(Geom.UHStatic)
+	prim = GeomTriangles(Geom.UHStatic)
+#	prim = GeomLines(Geom.UHStatic)
 
 	offset = 0
 
@@ -137,9 +151,9 @@ def TorusKnot(mRadius=1., mSectionRadius=.2, mP=2, mQ=3, mNumSegSection=8, mNumS
 		direction = v1-v0
 		direction.normalize()
 
-		gvw.addData3f(x0,y0,z0)
-		gvw.addData3f(x1,y1,z1)
-		prim.addVertices(i*2, i*2+1)
+#		gvw.addData3f(x0,y0,z0)
+#		gvw.addData3f(x1,y1,z1)
+#		prim.addVertices(i*2, i*2+1)
 
 		# Quaternion getRotationTo(const Vector3& dest, const Vector3& fallbackAxis = Vector3::ZERO) const
 		def getRotationTo(src, dest, fallbackAxis = Vec3(0,0,0)):
@@ -183,23 +197,31 @@ def TorusKnot(mRadius=1., mSectionRadius=.2, mP=2, mQ=3, mNumSegSection=8, mNumS
 				q.normalize()
 			return q
 
+		def rot(q, v):
+			uv = Vec3()
+			uuv = Vec3()
+			qvec = Vec3(q.getI(), q.getJ(), q.getK())
+			uv = qvec.cross(v)
+			uuv = qvec.cross(uv)
+			uv *= (2.0 * q.getR())
+			uuv *= 2.0
+			return v + uv + uuv
+
 		def computeQuaternion(direction):
 			# Quaternion quat = Vector3::UNIT_Z.getRotationTo(direction);
 			quat = getRotationTo(Vec3(0,0,1), direction)
 			projectedY = Vec3(0,1,0) - direction * Vec3(0,1,0).dot(direction)
-			tY = quat * Vec3(0,1,0)
+			tY = rot(quat, Vec3(0,1,0))
 			quat2 = getRotationTo(tY, projectedY)
 			q = quat2 * quat
 			return q
 
 		q = computeQuaternion(direction)
 
-		# for j in range(0, mNumSegSection+1)
-		for j in range(0, mNumSegSection):
+		for j in range(0, mNumSegSection+1):
+#		for j in range(0, mNumSegSection):
 			alpha = pi*2 * j / mNumSegSection
-			vp = Vec3(cos(alpha), sin(alpha), 0)
-			vp = q * vp
-			vp = vp * mSectionRadius
+			vp = rot(q, Vec3(cos(alpha), sin(alpha), 0)) * mSectionRadius
 			gvw.addData3f(v0+vp)
 
 			if i != mNumSegCircle * mP:
