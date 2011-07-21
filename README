@@ -25,6 +25,17 @@ http://en.wikipedia.org/wiki/Fuller_projection
 http://code.google.com/p/ogre-procedural
 http://libnoise.sourceforge.net
 
+quats:
+ http://www.amazon.com/Visualizing-Quaternions-Kaufmann-Interactive-Technology/dp/0120884003
+ http://mathworld.wolfram.com/Quaternion.html
+
+python:
+ pylint
+ pypy
+ psyco
+ shed skin
+ cython
+ gccpy
 
 
 1  Анализ существующих систем сборки дустрибутива

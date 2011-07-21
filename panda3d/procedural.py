@@ -1,17 +1,21 @@
 from pandac.PandaModules import *
 from math import *
 
-def IcoSphere(radius, subdivisions):
-	ico_path = NodePath('ico_path')
-	ico_node = GeomNode('ico_node')
-	ico_path.attachNewNode(ico_node)
+def empty(prefix):
+	path = NodePath(prefix + '_path')
+	node = GeomNode(prefix + '_node')
+	path.attachNewNode(node)
 
 	gvd = GeomVertexData('gvd', GeomVertexFormat.getV3(), Geom.UHStatic)
 	geom = Geom(gvd)
 	gvw = GeomVertexWriter(gvd, 'vertex')
-	ico_node.addGeom(geom)
+	node.addGeom(geom)
 	prim = GeomTriangles(Geom.UHStatic)
-	
+	return (gvw, prim, geom, path)
+
+def IcoSphere(radius, subdivisions):
+	(gvw, prim, geom, path) = empty('ico')
+
 	verts = []
 	
 	phi = .5*(1.+sqrt(5.))
@@ -102,25 +106,98 @@ def IcoSphere(radius, subdivisions):
 	prim.closePrimitive()
 	geom.addPrimitive(prim)
 	
-	return ico_path
+	return path
+	
+########################################################################
+
+Vec3_ZERO = Vec3(0,0,0)
+
+def getRotationTo(src, dest, fallbackAxis = Vec3_ZERO):
+	# Quaternion q;
+	# Vector3 v0 = *this;
+	# Vector3 v1 = dest;
+	# v0.normalise();
+	# v1.normalise();
+	q = Quat()
+	v0 = Vec3(src)
+	v1 = Vec3(dest)
+	v0.normalize()
+	v1.normalize()
+
+	# Real d = v0.dotProduct(v1);
+	d = v0.dot(v1)
+
+	# if (d >= 1.0f)
+	# {
+		# return Quaternion::IDENTITY;
+	# }
+	if d >= 1.0:
+		return Quat(1,0,0,0)
+
+	# if (d < (1e-6f - 1.0f))
+	if d < (1.0e-6 - 1.0):
+		# if (fallbackAxis != Vector3::ZERO)
+		# {
+			# // rotate 180 degrees about the fallback axis
+			# q.FromAngleAxis(Radian(Math::PI), fallbackAxis);
+		# }
+		if fallbackAxis != Vec3_ZERO:
+			q.setFromAxisAngleRad(pi, fallbackAxis)
+		# else
+		# {
+			# // Generate an axis
+			# Vector3 axis = Vector3::UNIT_X.crossProduct(*this);
+			# if (axis.isZeroLength()) // pick another if colinear
+				# axis = Vector3::UNIT_Y.crossProduct(*this);
+			# axis.normalise();
+			# q.FromAngleAxis(Radian(Math::PI), axis);
+		# }
+		else:
+			axis = Vec3(1,0,0).cross(src)
+			if axis.almostEqual(Vec3.zero()):
+				axis = Vec3(0,1,0).cross(src)
+			axis.normalize()
+			q.setFromAxisAngleRad(pi, axis)
+	# else
+	# {
+		# Real s = Math::Sqrt( (1+d)*2 );
+		# Real invs = 1 / s;
+
+		# Vector3 c = v0.crossProduct(v1);
+
+		# q.x = c.x * invs;
+		# q.y = c.y * invs;
+		# q.z = c.z * invs;
+		# q.w = s * 0.5f;
+		# q.normalise();
+	# }
+	else:
+		s = sqrt((1 + d) * 2)
+		invs = 1 / s
+		c = v0.cross(v1)
+		q.setI(c.x * invs)
+		q.setJ(c.y * invs)
+		q.setK(c.z * invs)
+		q.setR(s * .5)
+		q.normalize()
+	return q
+
+def computeQuaternion(direction):
+	# Quaternion quat = Vector3::UNIT_Z.getRotationTo(direction);
+	quat = getRotationTo(Vec3(0,0,1), direction)
+	projectedY = Vec3(0,1,0) - direction * Vec3(0,1,0).dot(direction)
+	tY = quat.xform(Vec3(0,1,0))
+	quat2 = getRotationTo(tY, projectedY)
+	q = quat2 * quat
+	return q
 
 ########################################################################
 
-def TorusKnot(mRadius=1., mSectionRadius=.2, mP=2, mQ=3, mNumSegSection=8, mNumSegCircle=32):
-	tk_path = NodePath('tk_path')
-	tk_node = GeomNode('tk_node')
-	tk_path.attachNewNode(tk_node)
-
-	gvd = GeomVertexData('gvd', GeomVertexFormat.getV3(), Geom.UHStatic)
-	geom = Geom(gvd)
-	gvw = GeomVertexWriter(gvd, 'vertex')
-	tk_node.addGeom(geom)
-#	prim = GeomTriangles(Geom.UHStatic)
-	prim = GeomLines(Geom.UHStatic)
+def TorusKnot(mRadius=1., mSectionRadius=.2, mP=2, mQ=3, mNumSegSection=64, mNumSegCircle=64):
+	(gvw, prim, geom, path) = empty('tk')
 
 	offset = 0
 
-	# for i in range(0, mNumSegCircle * mP):
 	for i in range(0, mNumSegCircle*mP+1):
 		phi = pi*2 * i / mNumSegCircle
 		x0 = mRadius * (2 + cos(mQ * phi / mP)) * cos(phi) / 3.
@@ -137,127 +214,43 @@ def TorusKnot(mRadius=1., mSectionRadius=.2, mP=2, mQ=3, mNumSegSection=8, mNumS
 		direction = v1-v0
 		direction.normalize()
 
-		gvw.addData3f(x0,y0,z0)
-		gvw.addData3f(x1,y1,z1)
-		prim.addVertices(i*2, i*2+1)
-
-		# Quaternion getRotationTo(const Vector3& dest, const Vector3& fallbackAxis = Vector3::ZERO) const
-		def getRotationTo(src, dest, fallbackAxis = Vec3(0,0,0)):
-			# Based on Stan Melax's article in Game Programming Gems
-			q = Quat()
-			# Copy, since cannot modify local
-			v0 = Vec3(src)
-			v1 = Vec3(dest)
-			v0.normalize()
-			v1.normalize()
-
-			d = v0.dot(v1) #dotProduct(v1);
-			# If dot == 1, vectors are the same
-			if d >= 1.0:
-				return Quat(1,0,0,0) #Quaternion::IDENTITY;
-			if d < (1e-6 - 1.):
-				if fallbackAxis != Vec3(0,0,0):
-					# rotate 180 degrees about the fallback axis
-					q.setFromAxisAngle(pi, fallbackAxis)
-				else:
-					# Generate an axis
-					axis = Vec3(1,0,0).crossProduct(src)
-					if axis.almostEqual(Vec3.zero()): # pick another if colinear
-						axis = Vec3(0,1,0).crossProduct(src)
-					axis.normalize()
-					q.setFromAxisAngle(pi, axis)
-			else:
-				s = sqrt((1 + d) * 2)
-				invs = 1 / s
-
-				c = v0.cross(v1)
-
-				# q.x = c.x * invs
-				# q.y = c.y * invs
-				# q.z = c.z * invs
-				# q.w = s * .5
-				q.setI(c.x * invs)
-				q.setJ(c.y * invs)
-				q.setK(c.z * invs)
-				q.setR(s * .5)
-				q.normalize()
-			return q
-
-		def computeQuaternion(direction):
-			# Quaternion quat = Vector3::UNIT_Z.getRotationTo(direction);
-			quat = getRotationTo(Vec3(0,0,1), direction)
-			projectedY = Vec3(0,1,0) - direction * Vec3(0,1,0).dot(direction)
-			tY = quat * Vec3(0,1,0)
-			quat2 = getRotationTo(tY, projectedY)
-			q = quat2 * quat
-			return q
-
 		q = computeQuaternion(direction)
 
-		# for j in range(0, mNumSegSection+1)
-		for j in range(0, mNumSegSection):
+		for j in range(0, mNumSegSection+1):
 			alpha = pi*2 * j / mNumSegSection
-			vp = Vec3(cos(alpha), sin(alpha), 0)
-			vp = q * vp
-			vp = vp * mSectionRadius
+			vp = q.xform(Vec3(cos(alpha), sin(alpha), 0)) * mSectionRadius
 			gvw.addData3f(v0+vp)
 
 			if i != mNumSegCircle * mP:
 				prim.addVertices(offset+mNumSegSection+1,offset+mNumSegSection,offset)
 				prim.addVertices(offset+mNumSegSection+1,offset,offset+1)
-				# buffer.index(offset + mNumSegSection + 1);
-				# buffer.index(offset + mNumSegSection);
-				# buffer.index(offset);
-				# buffer.index(offset + mNumSegSection + 1);
-				# buffer.index(offset);
-				# buffer.index(offset + 1);
 			offset += 1
 
 	prim.closePrimitive()
 	geom.addPrimitive(prim)
 	
-	return tk_path
+	return path
 
 ########################################################################
 
-def Torus(mNumSegSection=32, mNumSegCircle=32, mRadius=1.0, mSectionRadius=0.2):
-	ico_path = NodePath('ico_path')
-	ico_node = GeomNode('ico_node')
-	ico_path.attachNewNode(ico_node)
-
-	gvd = GeomVertexData('gvd', GeomVertexFormat.getV3(), Geom.UHStatic)
-	geom = Geom(gvd)
-	gvw = GeomVertexWriter(gvd, 'vertex')
-	ico_node.addGeom(geom)
-	# prim = GeomTriangles(Geom.UHStatic)
-	prim = GeomLines(Geom.UHStatic)
-
-	# buffer.estimateVertexCount((mNumSegCircle+1)*(mNumSegSection+1));
-	# buffer.estimateIndexCount((mNumSegCircle)*(mNumSegSection+1)*6);
+def Torus(mNumSegSection=64, mNumSegCircle=64, mRadius=1.0, mSectionRadius=0.2):
+	(gvw, prim, geom, path) = empty('t')
 
 	deltaSection = (pi*2 / mNumSegSection)
 	deltaCircle = (pi*2 / mNumSegCircle)
+
 	offset = 0
 
 	for i in range(0, mNumSegCircle+1):
 		for j in range(0, mNumSegSection+1):
-			c0 = Vec3(mRadius, 0.0, 0.0)
 			v0 = Vec3(mRadius + mSectionRadius * cos(j * deltaSection), mSectionRadius * sin(j * deltaSection), 0.0)
 			q = Quat()
-			q.setFromAxisAngle(i*deltaCircle, Vec3(0,1,0))
+			q.setFromAxisAngleRad(i*deltaCircle, Vec3(0,1,0))
+			v = q.xform(v0)
 			
-			v = q * Quat(0,v0)
-			# c = Vec3(q * c0)
-			# addPoint(buffer, v, (v-c).normalisedCopy(), Vector2(i/(Real)mNumSegCircle, j/(Real)mNumSegSection))
-			gvw.addData3f(v.getAxis())
+			gvw.addData3f(v)
 
 			if i != mNumSegCircle:
-				# buffer.index(offset + mNumSegSection + 1);
-				# buffer.index(offset);
-				# buffer.index(offset + mNumSegSection);
-				# buffer.index(offset + mNumSegSection + 1);
-				# buffer.index(offset + 1);
-				# buffer.index(offset);
 				prim.addVertices(offset + mNumSegSection + 1,offset,offset + mNumSegSection)
 				prim.addVertices(offset + mNumSegSection + 1,offset + 1,offset)
 			offset += 1
@@ -265,4 +258,4 @@ def Torus(mNumSegSection=32, mNumSegCircle=32, mRadius=1.0, mSectionRadius=0.2):
 	prim.closePrimitive()
 	geom.addPrimitive(prim)
 
-	return ico_path
+	return path
