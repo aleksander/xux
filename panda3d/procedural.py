@@ -106,7 +106,7 @@ def IcoSphere(radius, subdivisions):
 
 ########################################################################
 
-def TorusKnot(mRadius=1., mSectionRadius=.2, mP=2, mQ=3, mNumSegSection=8, mNumSegCircle=16):
+def TorusKnot(mRadius=1., mSectionRadius=.2, mP=2, mQ=3, mNumSegSection=8, mNumSegCircle=32):
 	tk_path = NodePath('tk_path')
 	tk_node = GeomNode('tk_node')
 	tk_path.attachNewNode(tk_node)
@@ -217,3 +217,52 @@ def TorusKnot(mRadius=1., mSectionRadius=.2, mP=2, mQ=3, mNumSegSection=8, mNumS
 	geom.addPrimitive(prim)
 	
 	return tk_path
+
+########################################################################
+
+def Torus(mNumSegSection=32, mNumSegCircle=32, mRadius=1.0, mSectionRadius=0.2):
+	ico_path = NodePath('ico_path')
+	ico_node = GeomNode('ico_node')
+	ico_path.attachNewNode(ico_node)
+
+	gvd = GeomVertexData('gvd', GeomVertexFormat.getV3(), Geom.UHStatic)
+	geom = Geom(gvd)
+	gvw = GeomVertexWriter(gvd, 'vertex')
+	ico_node.addGeom(geom)
+	# prim = GeomTriangles(Geom.UHStatic)
+	prim = GeomLines(Geom.UHStatic)
+
+	# buffer.estimateVertexCount((mNumSegCircle+1)*(mNumSegSection+1));
+	# buffer.estimateIndexCount((mNumSegCircle)*(mNumSegSection+1)*6);
+
+	deltaSection = (pi*2 / mNumSegSection)
+	deltaCircle = (pi*2 / mNumSegCircle)
+	offset = 0
+
+	for i in range(0, mNumSegCircle+1):
+		for j in range(0, mNumSegSection+1):
+			c0 = Vec3(mRadius, 0.0, 0.0)
+			v0 = Vec3(mRadius + mSectionRadius * cos(j * deltaSection), mSectionRadius * sin(j * deltaSection), 0.0)
+			q = Quat()
+			q.setFromAxisAngle(i*deltaCircle, Vec3(0,1,0))
+			
+			v = q * Quat(0,v0)
+			# c = Vec3(q * c0)
+			# addPoint(buffer, v, (v-c).normalisedCopy(), Vector2(i/(Real)mNumSegCircle, j/(Real)mNumSegSection))
+			gvw.addData3f(v.getAxis())
+
+			if i != mNumSegCircle:
+				# buffer.index(offset + mNumSegSection + 1);
+				# buffer.index(offset);
+				# buffer.index(offset + mNumSegSection);
+				# buffer.index(offset + mNumSegSection + 1);
+				# buffer.index(offset + 1);
+				# buffer.index(offset);
+				prim.addVertices(offset + mNumSegSection + 1,offset,offset + mNumSegSection)
+				prim.addVertices(offset + mNumSegSection + 1,offset + 1,offset)
+			offset += 1
+
+	prim.closePrimitive()
+	geom.addPrimitive(prim)
+
+	return ico_path
