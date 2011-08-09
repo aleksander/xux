@@ -8,27 +8,6 @@ TODOs
 * use github markup
 * convert all *.py to linux utf-8 without BOM
 
-
-
-'___'
-(O.o)
-/),,)
- " " 
-
-
-
-http://www.gamedev.net/topic/600022-spherical-terrain-algorithm/
-http://en.wikipedia.org/wiki/Icosphere
-http://en.wikipedia.org/wiki/Geodesic_grid
-http://www.pyxisinnovation.com
-http://en.wikipedia.org/wiki/Fuller_projection
-http://code.google.com/p/ogre-procedural
-http://libnoise.sourceforge.net
-
-quats:
- http://www.amazon.com/Visualizing-Quaternions-Kaufmann-Interactive-Technology/dp/0120884003
- http://mathworld.wolfram.com/Quaternion.html
-
 python:
  pylint
  pypy
@@ -36,12 +15,3 @@ python:
  shed skin
  cython
  gccpy
-
-
-1  Анализ существующих систем сборки дустрибутива
-   Сборка базовой системы
-2  Конфигурация системы и установка основных компонентов
-   Установка пакетов и зависимостей необходимых для работы ПО разрабатываемого в рамках проекта Героизм-ИНС
-3  Сборка, тестирование, доработка драйверов для аппаратной части системы Героизм-ИНС
-4  Разработка системы создания пакетов из исходных текстов и интергрирование в систему сборки дистрибутива
-5  Отладка, оптимизация, доработка существующей системы

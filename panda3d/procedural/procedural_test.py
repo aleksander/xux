@@ -1,17 +1,18 @@
 import direct.directbase.DirectStart
 import procedural
 
-# ico = procedural.IcoSphere(1,6)
-# ico.reparentTo(render)
-# ico.setRenderModeWireframe()
+# model = procedural.IcoSphere(1,6)
+# model = procedural.TorusKnot()
+# model = procedural.Torus()
+# model = procedural.Tetrahedron()
+# model = procedural.Octahedron()
+# model = procedural.Dodecahedron()
+model = procedural.LimpetTorus()
+# model = procedural.TwistedPseudosphere()
 
-tk = procedural.TorusKnot()
-tk.reparentTo(render)
-tk.setRenderModeWireframe()
+model.reparentTo(render)
+model.setRenderModeWireframe()
 
-# t = procedural.Torus()
-# t.reparentTo(render)
-# t.setRenderModeWireframe()
-
+#base.camLens.setFov(7.)
 base.setFrameRateMeter(True)
 run()

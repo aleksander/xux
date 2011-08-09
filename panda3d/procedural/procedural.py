@@ -259,3 +259,311 @@ def Torus(mNumSegSection=64, mNumSegCircle=64, mRadius=1.0, mSectionRadius=0.2):
 	geom.addPrimitive(prim)
 
 	return path
+
+########################################################################
+
+#  1  1  1 (0)   -1  1 -1 (1)    1 -1 -1 (2)
+# -1  1 -1 (1)   -1 -1  1 (3)    1 -1 -1 (2)
+#  1  1  1 (0)    1 -1 -1 (2)   -1 -1  1 (3)
+#  1  1  1 (0)   -1 -1  1 (3)   -1  1 -1 (1)
+
+def Tetrahedron():
+	(gvw, prim, geom, path) = empty('tetra')
+
+	verts = [(1.,1.,1.),(-1.,1.,-1.),(1.,-1.,-1.),(-1.,-1.,1.)]
+	faces = [(0,1,2),(1,3,2),(0,2,3),(0,3,1)]
+	
+	for i in range(0,len(verts)):
+		gvw.addData3f(VBase3(verts[i][0],verts[i][1],verts[i][2]))
+	for i in range(0, len(faces)):
+		prim.addVertices(faces[i][0],faces[i][1],faces[i][2])
+	
+	prim.closePrimitive()
+	geom.addPrimitive(prim)
+
+	return path
+
+########################################################################
+
+# -a  0  a (0)   -a  0 -a (1)    0  b  0 (2)
+# -a  0 -a (1)    a  0 -a (3)    0  b  0 (2)
+#  a  0 -a (3)    a  0  a (4)    0  b  0 (2)
+#  a  0  a (4)   -a  0  a (0)    0  b  0 (2)
+#  a  0 -a (3)   -a  0 -a (1)    0 -b  0 (5)
+# -a  0 -a (1)   -a  0  a (0)    0 -b  0 (5)
+#  a  0  a (4)    a  0 -a (3)    0 -b  0 (5)
+# -a  0  a (0)    a  0  a (4)    0 -b  0 (5)
+
+def Octahedron():
+	(gvw, prim, geom, path) = empty('octa')
+
+	a = 1. / (2. * sqrt(2.))
+	b = 1. / 2.
+	
+	verts = [(-a,0.,a),(-a,0.,-a),(0.,b,0.),(a,0.,-a),(a,0.,a),(0.,-b,0.)]
+	faces = [(0,1,2),(1,3,2),(3,4,2),(4,0,2),(3,1,5),(1,0,5),(4,3,5),(0,4,5)]
+	
+	for i in range(0,len(verts)):
+		gvw.addData3f(VBase3(verts[i][0],verts[i][1],verts[i][2]))
+	for i in range(0, len(faces)):
+		prim.addVertices(faces[i][0],faces[i][1],faces[i][2])
+	
+	prim.closePrimitive()
+	geom.addPrimitive(prim)
+
+	return path
+
+########################################################################
+
+# Hexahedron (cube)
+# -1 -1 -1    1 -1 -1    1 -1  1   -1 -1  1
+# -1 -1 -1   -1 -1  1   -1  1  1   -1  1 -1
+# -1 -1  1    1 -1  1    1  1  1   -1  1  1
+# -1  1 -1   -1  1  1    1  1  1    1  1 -1
+#  1 -1 -1    1  1 -1    1  1  1    1 -1  1
+# -1 -1 -1   -1  1 -1    1  1 -1    1 -1 -1
+
+# Divide each vertex by 2
+
+########################################################################
+
+# Icosahedron
+#  0  b -a    b  a  0   -b  a  0
+#  0  b  a   -b  a  0    b  a  0
+#  0  b  a    0 -b  a   -a  0  b
+#  0  b  a    a  0  b    0 -b  a
+#  0  b -a    0 -b -a    a  0 -b
+#  0  b -a   -a  0 -b    0 -b -a
+#  0 -b  a    b -a  0   -b -a  0
+#  0 -b -a   -b -a  0    b -a  0
+# -b  a  0   -a  0  b   -a  0 -b
+# -b -a  0   -a  0 -b   -a  0  b
+#  b  a  0    a  0 -b    a  0  b
+#  b -a  0    a  0  b    a  0 -b
+#  0  b  a   -a  0  b   -b  a  0
+#  0  b  a    b  a  0    a  0  b
+#  0  b -a   -b  a  0   -a  0 -b
+#  0  b -a    a  0 -b    b  a  0
+#  0 -b -a   -a  0 -b   -b -a  0
+#  0 -b -a    b -a  0    a  0 -b
+#  0 -b  a   -b -a  0   -a  0  b
+#  0 -b  a    a  0  b    b -a  0
+
+# a = 1 / 2
+# b = 1 / (2 * phi)
+# phi = (1 + sqrt(5)) / 2
+
+#v1       0  b -a
+#v2       b  a  0
+#v3      -b  a  0
+#v4       0  b  a
+#v5       0 -b  a
+#v6      -a  0  b
+#v7       0 -b -a
+#v8       a  0 -b
+#v9       a  0  b
+#v10     -a  0 -b
+#v11      b -a  0
+#v12     -b -a  0
+
+#f1       v1    v2    v3
+#f2       v4    v3    v2
+#f3       v4    v5    v6
+#f4       v4    v9    v5
+#f5       v1    v7    v8
+#f6       v1    v10   v7
+#f7       v5    v11   v12
+#f8       v7    v12   v11
+#f9       v3    v6    v10
+#f10      v12   v10   v6
+#f11      v2    v8    v9
+#f12      v11   v9    v8
+#f13      v4    v6    v3
+#f14      v4    v2    v9
+#f15      v1    v3    v10
+#f16      v1    v8    v2
+#f17      v7    v10   v12
+#f18      v7    v11   v8
+#f19      v5    v12   v6
+#f20      v5    v9    v11
+
+########################################################################
+
+# Dodecahedron
+
+#  c  0  1 (0)   -c  0  1 (1)   -b  b  b (12)    0  1  c (5)    b  b  b (16)
+# -c  0  1 (1)    c  0  1 (0)    b -b  b (13)    0 -1  c (7)   -b -b  b (18)
+#  c  0 -1 (2)   -c  0 -1 (3)   -b -b -b (14)    0 -1 -c (6)    b -b -b (19)
+# -c  0 -1 (3)    c  0 -1 (2)    b  b -b (15)    0  1 -c (4)   -b  b -b (17)
+#  0  1 -c (4)    0  1  c (5)    b  b  b (16)    1  c  0 (8)    b  b -b (15)
+#  0  1  c (5)    0  1 -c (4)   -b  b -b (17)   -1  c  0 (10)  -b  b  b (12)
+#  0 -1 -c (6)    0 -1  c (7)   -b -b  b (18)   -1 -c  0 (11)  -b -b -b (14)
+#  0 -1  c (7)    0 -1 -c (6)    b -b -b (19)    1 -c  0 (9)    b -b  b (13)
+#  1  c  0 (8)    1 -c  0 (9)    b -b  b (13)    c  0  1 (0)    b  b  b (16)
+#  1 -c  0 (9)    1  c  0 (8)    b  b -b (15)    c  0 -1 (2)    b -b -b (19)
+# -1  c  0 (10)  -1 -c  0 (11)  -b -b -b (14)   -c  0 -1 (3)   -b  b -b (17)
+# -1 -c  0 (11)  -1  c  0 (10)  -b  b  b (12)   -c  0  1 (1)   -b -b  b (18)
+
+# b = 1 / phi 
+# c = 2 - phi
+
+# Divide each coordinate by 2
+
+def Dodecahedron():
+	(gvw, prim, geom, path) = empty('dodeca')
+	
+	phi = (1. + sqrt(5.)) / 2.
+	b = 1. / phi
+	c = 2. - phi
+
+	verts = [
+	( c,  0,  1),
+	(-c,  0,  1),
+	( c,  0, -1),
+	(-c,  0, -1),
+	( 0,  1, -c),
+	( 0,  1,  c),
+	( 0, -1, -c),
+	( 0, -1,  c),
+	( 1,  c,  0),
+	( 1, -c,  0),
+	(-1,  c,  0),
+	(-1, -c,  0),
+	(-b,  b,  b),
+	( b, -b,  b),
+	(-b, -b, -b),
+	( b,  b, -b),
+	( b,  b,  b),
+	(-b,  b, -b),
+	(-b, -b,  b),
+	( b, -b, -b),
+	( b, -b,  b),
+	( b,  b, -b),
+	(-b, -b, -b),
+	(-b,  b,  b)]
+	
+	faces = [
+	(16, 5, 12, 1, 0),
+	(18, 7, 13, 0, 1),
+	(19, 6, 14, 3, 2),
+	(17, 4, 15, 2, 3),
+	(4, 5, 16, 8, 15),
+	(5, 4, 17, 10, 12),
+	(6, 7, 18, 11, 14),
+	(7, 6, 19, 9, 13),
+	(16, 0, 13, 9, 8),
+	(19, 2, 15, 8, 9),
+	(17, 3, 14, 11, 10),
+	(18, 1, 12, 10, 11)]
+	
+	for i in range(0,len(verts)):
+		gvw.addData3f(VBase3(verts[i][0],verts[i][1],verts[i][2]))
+	for i in range(0, len(faces)):
+		prim.addVertices(faces[i][0],faces[i][1],faces[i][2])
+		prim.addVertices(faces[i][0],faces[i][2],faces[i][4])
+		prim.addVertices(faces[i][4],faces[i][2],faces[i][3])
+	
+	prim.closePrimitive()
+	geom.addPrimitive(prim)
+
+	return path
+
+########################################################################
+
+# Limpet Torus
+
+# x = cos(u) / [sqrt(2) + sin(v)]
+# y = sin(u) / [sqrt(2) + sin(v)]
+# z = 1 / [sqrt(2) + cos(v)]
+
+def LimpetTorus(u = 32, v = 64):
+	prefix = 'lt'
+	path = NodePath(prefix + '_path')
+	node = GeomNode(prefix + '_node')
+	path.attachNewNode(node)
+
+	gvd = GeomVertexData('gvd', GeomVertexFormat.getV3(), Geom.UHStatic)
+	geom = Geom(gvd)
+	gvw = GeomVertexWriter(gvd, 'vertex')
+	node.addGeom(geom)
+	prim = GeomLines(Geom.UHStatic)
+
+	du = 2.*pi/u
+	dv = 8./v
+	ui = 0.
+	k=0
+	for i in range(0,u):
+		vi = -4.
+		for j in range(0,v):
+			x = cos(ui) / (sqrt(2.) + sin(vi))
+			y = sin(ui) / (sqrt(2.) + sin(vi))
+			z = 1 / (sqrt(2.) + cos(vi))
+			
+			gvw.addData3f(VBase3(x,y,z))
+			gvw.addData3f(VBase3(x,y+.001,z))
+			gvw.addData3f(VBase3(x,y,z+.001))
+			prim.addVertices(k, k+1, k+2)
+			k+=3
+			
+			vi += dv
+		ui += du
+
+	prim.closePrimitive()
+	geom.addPrimitive(prim)
+
+	return path
+
+########################################################################
+
+# Dini's Surface or Twisted Pseudosphere
+
+# x = a cos(u) sin(v)
+# y = a sin(u) sin(v)
+# z = a (cos(v) + log(tan(v/2))) + b u
+# 0 <= u, 0 < v
+
+# def TwistedPseudosphere():
+	# prefix = 'tp'
+	# path = NodePath(prefix + '_path')
+	# node = GeomNode(prefix + '_node')
+	# path.attachNewNode(node)
+
+	# gvd = GeomVertexData('gvd', GeomVertexFormat.getV3(), Geom.UHStatic)
+	# geom = Geom(gvd)
+	# gvw = GeomVertexWriter(gvd, 'vertex')
+	# node.addGeom(geom)
+	# prim = GeomLines(Geom.UHStatic)
+
+	# i = 0
+	# for u in range(0,628,5):
+		# for v in range(1,400,5):
+			# a = 1.
+			# b = 1.
+			# x = a * cos(u/100.)*sin(v/100.)
+			# y = a * sin(u/100.)*sin(v/100.)
+			# z = a * (cos(v/100.) + log(tan((v/2.)/100.))) + b * u
+			
+			# gvw.addData3f(VBase3(x,y,z))
+			# gvw.addData3f(VBase3(x,y+.001,z))
+			# gvw.addData3f(VBase3(x,y,z+.001))
+			# prim.addVertices(i, i+1, i+2)
+			# i += 3
+
+	# prim.closePrimitive()
+	# geom.addPrimitive(prim)
+
+	# return path
+
+########################################################################
+
+# Elliptic Torus
+
+# x = (c + cos(v)) cos(u)
+# y = (c + cos(v)) sin(u)
+# z = sin(v) + cos(v)
+
+# -pi <= u,v <= pi 
+# cool with c > 1
+
+########################################################################
+
