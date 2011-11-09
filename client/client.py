@@ -12,6 +12,11 @@ def dbg(data):
 
 ############################################################################
 
+class tx_queue:
+	def __init__():
+	def ack():
+	def add(seq, packet):
+
 class hnh_client(ShowBase):
 	def __init__(self, host, ssl_port, udp_port):
 		self.host = host
@@ -122,6 +127,9 @@ class hnh_client(ShowBase):
 		self.creader.addConnection(self.conn)
 		self.rx_handle = self.rx_handle_sess
 		taskMgr.add(self.rx_task,"rx_task")
+		#TODO: replace with self.tx_que.add(SESS)
+		#		def tx_que:
+		#			send_current_request() until not current_datagram_acked()
 		self.sess_task_handler = taskMgr.add(self.sess_task, 'sess_task')
 		self.run()
 
@@ -149,16 +157,15 @@ class hnh_client(ShowBase):
 	   # id=4 name=play
 		# STR=Sallvian
 	def tx_task(self, task):
-		# choice a character
+		self.tx_que.serve()
 		'''
-		if self.phase == PHASE_CHAR_CHOICE:
-			for w in self.widgets:
-				if w[0] == 4:
-					self.tx_que.append(self.seq, datagram)
-					self.seq += 1
+		if current_request not acked():
+			if curren_time() - last_send_time > 0.1:
+				send(current_request)
+				last_send_time = current_time()
+		if curren_time() - last_send_time > 1.:
+			send(BEAT)
 		'''
-		# choice a place
-		# gaming
 		return task.cont
 
 	def rx_handle_sess(self, data):
@@ -294,7 +301,7 @@ class hnh_client(ShowBase):
 		pass
 
 	def rx_ack(self, data):
-		pass
+		self.tx_que.ack(seq)
 
 	def rx_beat(self, data):
 		pass
@@ -337,7 +344,8 @@ class hnh_client(ShowBase):
 		self.cwriter.send(data, self.conn, self.addr)
 
 	def new_widget(self, wdg_id, wdg_type, parent, args = []):
-		self.widgets[wdg_id] = (wdg_type, parent)
+		# self.widgets[wdg_id] = (wdg_type, parent)
+		pass
 
 	def destroy_widget(self, wdg_id):
 		#TODO
@@ -349,7 +357,7 @@ hnh = hnh_client('moltke.seatribe.se', 1871, 1870)
 while not hnh.authorize(u'lemings', u'lemings'):
 	dbg('authorization failed')
 	#TODO add delay
-#dbg('authorized')
+dbg('authorized')
 hnh.start()
 #TODO
 #	hnh.start() { wait for all 5 widgets of the first screen }
