@@ -1,4 +1,4 @@
-import socket, ssl, hashlib, time, threading, struct
+import socket, ssl, hashlib, time, threading, struct, sys
 from direct.showbase.ShowBase import ShowBase
 from panda3d.core import *
 from direct.distributed import PyDatagram, PyDatagramIterator
@@ -19,10 +19,10 @@ class hnh_client(ShowBase):
 		self.udp_port = udp_port
 		self.addr = NetAddress()
 		self.addr.setHost(self.host, self.udp_port)
-		self.tiles = []
+		self.tiles = {}
 		self.widgets = []
-		for i in range(0,256):
-			self.tiles.append('')
+		#for i in range(0,256):
+		#	self.tiles.append('')
 		self.sess_errors = {
 			0:'OK',
 			1:'AUTH',
@@ -107,6 +107,8 @@ class hnh_client(ShowBase):
 
 	def start(self):
 		ShowBase.__init__(self)
+		self.setFrameRateMeter(True)
+		self.accept("escape", sys.exit)
 		self.cmanager = QueuedConnectionManager()
 		self.creader = QueuedConnectionReader(self.cmanager, 0)
 		self.cwriter = ConnectionWriter(self.cmanager, 0)
@@ -148,11 +150,13 @@ class hnh_client(ShowBase):
 		# STR=Sallvian
 	def tx_task(self, task):
 		# choice a character
+		'''
 		if self.phase == PHASE_CHAR_CHOICE:
 			for w in self.widgets:
 				if w[0] == 4:
 					self.tx_que.append(self.seq, datagram)
 					self.seq += 1
+		'''
 		# choice a place
 		# gaming
 		return task.cont
@@ -211,8 +215,8 @@ class hnh_client(ShowBase):
 		wdg_type = data.getZString()
 		wdg_coord = [data.getInt32(),data.getInt32()]
 		wdg_parent = data.getUint16()
+		self.new_widget(wdg_id, wdg_type, wdg_parent)
 		dbg('    id={0} type={1} coord={2} parent={3}'.format(wdg_id,wdg_type,wdg_coord,wdg_parent))
-		self.widgets.append([wdg_id, wdg_type, wdg_parent])
 		while data.getRemainingSize():
 			wdg_lt = data.getUint8()
 			if wdg_lt not in self.wdg_list_types:
@@ -250,7 +254,9 @@ class hnh_client(ShowBase):
 				dbg('      {0}={1}'.format(self.wdg_list_types[wdg_lt], [data.getUint8(),data.getUint8(),data.getUint8(),data.getUint8()]))
 
 	def rx_rel_dstwdg(self, data):
-		pass
+		wdg_id = data.getUint16()
+		self.destroy_widget(wdg_id)
+		dbg('    id={0}'.format(wdg_id))
 
 	def rx_rel_mapiv(self, data):
 		pass
@@ -281,6 +287,7 @@ class hnh_client(ShowBase):
 			tile_id = data.getUint8()
 			tile_name = data.getZString()
 			tile_ver = data.getUint16()
+			self.tiles[tile_id] = (tile_name, tile_ver)
 			dbg('    id={0} name={1} version={2}'.format(tile_id,tile_name,tile_ver))
 
 	def rx_rel_buff(self, data):
@@ -329,6 +336,13 @@ class hnh_client(ShowBase):
 		data.addUint16(seq)
 		self.cwriter.send(data, self.conn, self.addr)
 
+	def new_widget(self, wdg_id, wdg_type, parent, args = []):
+		self.widgets[wdg_id] = (wdg_type, parent)
+
+	def destroy_widget(self, wdg_id):
+		#TODO
+		pass
+	
 ###########################################################################
 
 hnh = hnh_client('moltke.seatribe.se', 1871, 1870)
@@ -337,3 +351,12 @@ while not hnh.authorize(u'lemings', u'lemings'):
 	#TODO add delay
 #dbg('authorized')
 hnh.start()
+#TODO
+#	hnh.start() { wait for all 5 widgets of the first screen }
+#	if hnh.chars.length() == 0:
+#		hnh.create_new_char('lemingX')
+#	hnh.choice_char(0)
+#	if not hnh.enter_game_there_logoff():
+#		hnh.enter_game_on_hf()
+
+
