@@ -12,10 +12,63 @@ def dbg(data):
 
 ############################################################################
 
-class tx_queue:
-	def __init__():
-	def ack():
-	def add(seq, packet):
+class txQueue:
+	def __init__(self, conn, cwriter, addr):
+		self.conn = conn
+		self.cwriter = cwriter
+		self.addr = addr
+		self.que = [] # (seq, type, packet)
+		self.last_tx_time = -10.
+		
+	#def ack(self):
+	#	pass
+
+	def add_sess(self, user, cookie):
+		data = self.make_sess(user, cookie)
+		self.que.append((0, 0, data))
+
+	def remove_sess(self):
+		dbg("remove sess")
+		self.que = [i for i in self.que if i[1] != 0]
+		if len(self.que) > 0:
+			self.last_tx_time = -10
+		
+	#def add(self, seq, packet):
+	#	pass
+
+	def make_sess(self, user, cookie):
+		data = PyDatagram.PyDatagram()
+		data.addUint8(0) # SESS
+		data.addUint16(1) # ???
+		data.addZString(u'Haven') # protocol name
+		data.addUint16(2) # version
+		data.addZString(user)
+		data.appendData(cookie)
+		return data
+
+	def send_ask(self, seq):
+		data = PyDatagram.PyDatagram()
+		data.addUint8(2) # ACK
+		data.addUint16(seq)
+		self.cwriter.send(data, self.conn, self.addr)
+
+	def serve(self, time):
+		delta = time - self.last_tx_time
+		if delta > 1.0: #TODO - hardcoding
+			if len(self.que) > 0:
+				self.cwriter.send(self.que[0][2], self.conn, self.addr)
+				dbg("sent. delta={0}".format(delta))
+			else:
+				#TODO send BEAT
+				pass
+			self.last_tx_time = time
+		# send_current_request() until not current_datagram_acked()
+		#if current_request not acked():
+		#	if curren_time() - last_send_time > 0.1:
+		#		send(current_request)
+		#		last_send_time = current_time()
+		#if curren_time() - last_send_time > 1.:
+		#	send(BEAT)
 
 class hnh_client(ShowBase):
 	def __init__(self, host, ssl_port, udp_port):
@@ -103,11 +156,11 @@ class hnh_client(ShowBase):
 			dbg('password binding: wrong message type "'+str(msg_type)+'" '+msg)
 			return False
 		self.cookie = msg
-#		f = open('cookie','wb')
-#		f.write(self.cookie)
-#		f.close()
+		#f = open('cookie','wb')
+		#f.write(self.cookie)
+		#f.close()
 		self.user_name = name
-#		dbg('cookie: '+self.cookie)
+		#dbg('cookie: '+self.cookie)
 		return True
 
 	def start(self):
@@ -116,85 +169,46 @@ class hnh_client(ShowBase):
 		self.accept("escape", sys.exit)
 		self.cmanager = QueuedConnectionManager()
 		self.creader = QueuedConnectionReader(self.cmanager, 0)
+		self.creader.setRawMode(True)
 		self.cwriter = ConnectionWriter(self.cmanager, 0)
 		self.cwriter.setRawMode(True)
-		self.creader.setRawMode(True)
 		self.conn = self.cmanager.openUDPConnection(self.udp_port)
 		if not self.conn:
-			dbg('failed to create connection')
+			dbg("failed to create connection")
 			return
 		self.conn.setReuseAddr(True)
 		self.creader.addConnection(self.conn)
-		self.rx_handle = self.rx_handle_sess
-		taskMgr.add(self.rx_task,"rx_task")
-		#TODO: replace with self.tx_que.add(SESS)
-		#		def tx_que:
-		#			send_current_request() until not current_datagram_acked()
-		self.sess_task_handler = taskMgr.add(self.sess_task, 'sess_task')
+		taskMgr.add(self.rx_task, "rx_task")
+		taskMgr.add(self.tx_task, "tx_task")
+		self.tx_que = txQueue(self.conn, self.cwriter, self.addr)
+		self.tx_que.add_sess(self.user_name, self.cookie)
 		self.run()
-
-	def sess_task(self, task):
-		self.tx_sess()
-		task.delayTime = .2
-		return task.again
 
 	def rx_task(self, task):
 		if self.creader.dataAvailable():
 			datagram = NetDatagram()
 			if self.creader.getData(datagram):
-				self.rx_handle(PyDatagramIterator.PyDatagramIterator(datagram))
+				data = PyDatagramIterator.PyDatagramIterator(datagram)
+				msg_type = data.getUint8()
+				if msg_type not in self.msg_types:
+					dbg("UNKNOWN PACKET TYPE "+str(msg_type))
+				else:
+					dbg(self.msg_types[msg_type][0])
+					self.msg_types[msg_type][1](data)
 		return task.cont
 
-	# CLIENT
-	 # REL (1)
-	  # seq=0 type=1(WDGMSG) len=13
-	   # id=0 name=focus
-		# INT=1
-
-	# CLIENT
-	 # REL (1)
-	  # seq=1 type=1(WDGMSG) len=17
-	   # id=4 name=play
-		# STR=Sallvian
 	def tx_task(self, task):
-		self.tx_que.serve()
-		'''
-		if current_request not acked():
-			if curren_time() - last_send_time > 0.1:
-				send(current_request)
-				last_send_time = current_time()
-		if curren_time() - last_send_time > 1.:
-			send(BEAT)
-		'''
+		self.tx_que.serve(task.time)
 		return task.cont
-
-	def rx_handle_sess(self, data):
-		msg_type = data.getUint8()
-		if msg_type != 0:
-			dbg('wrong packet type: '+str(msg_type))
-			return
-		error = data.getUint8()
-		if error == 0:
-			self.sess_task_handler.remove()
-			self.rx_handle = self.rx_handle_gaming
-			taskMgr.add(self.tx_task, 'tx_task')
-		else:
-			if error in sess_errors:
-				error = sess_errors[error]
-			else:
-				error = str(error)+' (unknown)'
-			dbg('session error '+error)
-
-	def rx_handle_gaming(self, data):
-		msg_type = data.getUint8()
-		if msg_type not in self.msg_types:
-			dbg('UNKNOWN PACKET TYPE '+str(msg_type))
-			return
-		dbg(self.msg_types[msg_type][0])
-		self.msg_types[msg_type][1](data)
 
 	def rx_sess(self, data):
-		pass
+		error = data.getUint8()
+		if error == 0:
+			self.tx_que.remove_sess()
+		if error in sess_errors:
+			dbg('  error={0} ({1})'.format(error, sess_errors[error]))
+		else:
+			dbg('  error={0} (unknown)'.format(error))
 
 	def rx_rel(self, data):
 		seq = data.getUint16()
@@ -206,16 +220,16 @@ class hnh_client(ShowBase):
 			else:
 				rel_len = data.getRemainingSize()
 			if rel_type not in self.rel_types:
-				dbg('  seq='+str(seq)+' rel=UNKNOWN ('+str(rel_type)+') len='+str(rel_len))
+				dbg('  seq={0} rel=UNKNOWN ({1}) len={2}'.format(seq, rel_type, rel_len))
 				data.skipBytes(rel_len)
 			else:
-				dbg('  seq='+str(seq)+' rel='+self.rel_types[rel_type][0]+' len='+str(rel_len))
+				dbg('  seq={0} rel={0} len={2}'.format(seq, self.rel_types[rel_type][0], rel_len))
 				rel = data.extractBytes(rel_len)
 				dg = Datagram(rel)
 				pdi = PyDatagramIterator.PyDatagramIterator(dg)
 				self.rel_types[rel_type][1](pdi)
-			seq = seq+1
-		self.tx_ask(seq)
+			seq += 1
+		self.tx_que.send_ask(seq)
 
 	def rx_rel_newwdg(self, data):
 		wdg_id = data.getUint16()
@@ -321,28 +335,12 @@ class hnh_client(ShowBase):
 	def rx_close(self, data):
 		pass
 
-	def tx_sess(self):
-		data = PyDatagram.PyDatagram()
-		data.addUint8(0) # SESS
-		data.addUint16(1) # ???
-		data.addZString(u'Haven') # protocol name
-		data.addUint16(2) # version
-		data.addZString(self.user_name)
-		data.appendData(self.cookie)
-		self.cwriter.send(data, self.conn, self.addr)
-
 #	def tx_rel_wdgmsg(self, seq):
 #		data = PyDatagram.PyDatagram()
 #		data.addUint8(1) # REL
 #		data.addUint16(seq)
 #		self.cwriter.send(data, self.conn, self.addr)
 		
-	def tx_ask(self, seq):
-		data = PyDatagram.PyDatagram()
-		data.addUint8(2) # ACK
-		data.addUint16(seq)
-		self.cwriter.send(data, self.conn, self.addr)
-
 	def new_widget(self, wdg_id, wdg_type, parent, args = []):
 		# self.widgets[wdg_id] = (wdg_type, parent)
 		pass
