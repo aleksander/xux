@@ -5,6 +5,8 @@ from direct.distributed import PyDatagram, PyDatagramIterator
 from direct.task import *
 from direct.interval.IntervalGlobal import *
 import logging
+from pandac.PandaModules import loadPrcFileData
+from direct.gui.DirectGui import *
 
 
 def dbg(data):
@@ -19,7 +21,7 @@ class hnh_client(ShowBase):
 		self.addr = NetAddress()
 		self.addr.setHost(self.host, self.udp_port)
 		self.tiles = {}
-		self.widgets = []
+		self.widgets = {}
 		self.resources = {}
 		logging.basicConfig(filename='client.log', filemode="w", level=logging.INFO)
 		
@@ -106,6 +108,18 @@ class hnh_client(ShowBase):
 		return True
 
 	def start(self):
+		loadPrcFileData("", "window-title HNH")
+		loadPrcFileData("", "fullscreen 0")
+		loadPrcFileData("", "win-size 900 900")
+		loadPrcFileData("", "win-origin 40 50")
+		# FOR REALTIME win props changing:
+		# wp = WindowProperties() 
+		# base.win.requestProperties(wp)
+		# wp.clearSize()
+		# wp.setSize(100, 100)
+		# wp.setTitle('Test')
+		# for fullscreen see http://www.panda3d.org/forums/viewtopic.php?t=2848
+		# for fullscreen see http://www.panda3d.org/forums/viewtopic.php?t=6105
 		ShowBase.__init__(self)
 		self.setFrameRateMeter(True)
 		self.accept("escape", sys.exit)
@@ -312,8 +326,12 @@ class hnh_client(ShowBase):
 		dbg("---> BEAT")
 
 	def new_widget(self, wdg_id, wdg_type, wdg_coord, wdg_parent, wdg_args):
-		# self.widgets[wdg_id] = (wdg_type, parent)
 		dbg('    id={0} type={1} coord={2} parent={3}'.format(wdg_id, wdg_type, wdg_coord, wdg_parent))
+		if wdg_type == 'cnt':
+			wdg = DirectFrame(frameColor=(0, 0, 0, .5), frameSize=(-1, 1, -1, 1), pos=(1, -1, -1))
+		else:
+			wdg = None
+		self.widgets[wdg_id] = (wdg_type, wdg_parent, wdg)
 		for arg in wdg_args:
 			dbg('      {0}={1}'.format(self.wdg_list_types[arg[0]], arg[1]))
 
