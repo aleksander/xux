@@ -9,8 +9,11 @@ from pandac.PandaModules import loadPrcFileData
 from direct.gui.DirectGui import *
 
 
+#def dbg(data):
+#	logging.info(data)
+
 def dbg(data):
-	logging.info(data)
+	print data
 
 
 class hnh_client(ShowBase):
@@ -155,6 +158,24 @@ class hnh_client(ShowBase):
 		return task.cont
 
 	def tx_task(self, task):
+		#TODO tx queue concept:
+		#		que = [(timeout, last_sent, type, seq, datagram) ... ()]
+		#		que.add_to_front() - maybe
+		#		que.add_to_back() - maybe
+		#		maybe use priorities mechanics?
+		#			BEAT - has lowest priority
+		#		BEAT - is always the last unremovable (because of unACKable) item on que
+		#
+		#	class tx_que:
+		#		def add_req(timeout, last_sent, type, seq, datagram):
+		#			self.que[0:0] = tx_req(timeout, last_sent, type, seq, datagram)
+		#
+		#	class tx_req:
+		#		...
+		#
+		#	delta = task.time - que[0].last_sent
+		#	if delta > que[0].timeout:
+		#		que[0].last_sent = task.time
 		delta = task.time - self.last_tx_time
 		if self.current_request != None:
 			if delta > 1.0: #TODO - hardcoding
