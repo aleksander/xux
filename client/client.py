@@ -425,7 +425,13 @@ class hnh_client(ShowBase):
 	
 	def choice_char(self, char):
 		dbg('SELECT "{0}"'.format(char.name))
-		# self.tx_que.add(...)
+		self.tx_add_
+		CLIENT
+ REL (1)
+  seq=1 type=1(WDGMSG) len=14
+   id=4 name=play
+    STR=first
+
 		pass
 ###########################################################################
 
