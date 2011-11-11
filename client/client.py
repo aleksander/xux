@@ -9,11 +9,70 @@ from pandac.PandaModules import loadPrcFileData
 from direct.gui.DirectGui import *
 
 
-#def dbg(data):
-#	logging.info(data)
-
-def dbg(data):
+import os
+def dbg_posix(data):
 	print data
+def dbg_log(data):
+	logging.info(data)
+if os.name == 'posix':
+	dbg = dbg_posix
+else:
+	dbg = dbg_log
+
+# def dbg(data):
+	# print data
+
+
+class Struct:
+	def __init__(self, **kwds):
+		self.__dict__.update(kwds)
+
+
+msg_type = Struct(SESS=0, REL=1, ACK=2, BEAT=3, MAPREQ=4, MAPDATA=5, OBJDATA=6, OBJACK=7, CLOSE=8)
+#TODO: config = Struct(beat_interval=???, ...)
+
+#TODO tx queue concept:
+#		que = [(timeout, last_sent, type, seq, datagram) ... ()]
+#		que.add_to_front() - maybe
+#		que.add_to_back() - maybe
+#		maybe use priorities mechanics?
+#			BEAT - has lowest priority
+#		BEAT - is always the last unremovable (because of unACKable) item on que
+#
+#	class tx_que:
+#		def add_req(timeout, last_sent, type, seq, datagram):
+#			self.que[0:0] = tx_req(timeout, last_sent, type, seq, datagram)
+#
+#	class tx_req:
+#		...
+#
+#	delta = task.time - que[0].last_sent
+#	if delta > que[0].timeout:
+#		que[0].last_sent = task.time
+
+# class txQueue():
+	# def __init__(self):
+		# self.ack_que = []
+		# self.que = []
+
+	# def add(self):
+		# request = Struct(timeout, last_sent, type, seq, datagram)
+		# self.que[???] = 
+
+	# def add_sess(self):
+		# dbg('---> add SESS')
+		# self.add(10., msg_type.BEAT, 0, self.make_beat())
+
+	# def add_beat(self):
+		# dbg('---> add BEAT')
+		# self.add(10., msg_type.BEAT, 0, self.make_beat())
+
+	# def add_ack(self):
+		# self.ack_que.append(...)
+
+	# def remove_sess(self):
+		# dbg('---> remove all SESS')
+		# self.que = [i for i in self.que if i.type != msg_type.SESS]
 
 
 class hnh_client(ShowBase):
@@ -26,8 +85,10 @@ class hnh_client(ShowBase):
 		self.tiles = {}
 		self.widgets = {}
 		self.resources = {}
+		self.chars = {}
+		self.tx_que = []
 		logging.basicConfig(filename='client.log', filemode="w", level=logging.INFO)
-		
+		self.new_widget(0, 'ui_root', (0,0), None, [])
 		self.sess_errors = {
 			0:'OK',
 			1:'AUTH',
@@ -113,7 +174,7 @@ class hnh_client(ShowBase):
 	def start(self):
 		loadPrcFileData("", "window-title HNH")
 		loadPrcFileData("", "fullscreen 0")
-		loadPrcFileData("", "win-size 900 900")
+		loadPrcFileData("", "win-size 300 300")
 		loadPrcFileData("", "win-origin 40 50")
 		# FOR REALTIME win props changing:
 		# wp = WindowProperties() 
@@ -139,10 +200,12 @@ class hnh_client(ShowBase):
 		self.creader.addConnection(self.conn)
 		taskMgr.add(self.rx_task, "rx_task")
 		taskMgr.add(self.tx_task, "tx_task")
-		self.current_request = self.tx_sess
+		self.tx_add_sess()
 		#TODO fsm.enter(sess)
-		self.last_tx_time = -10.
+		self.last_sent = -10.
 		self.run()
+
+	######################################################  RX  #####################################
 
 	def rx_task(self, task):
 		if self.creader.dataAvailable():
@@ -157,40 +220,10 @@ class hnh_client(ShowBase):
 					self.msg_types[msg_type][1](data)
 		return task.cont
 
-	def tx_task(self, task):
-		#TODO tx queue concept:
-		#		que = [(timeout, last_sent, type, seq, datagram) ... ()]
-		#		que.add_to_front() - maybe
-		#		que.add_to_back() - maybe
-		#		maybe use priorities mechanics?
-		#			BEAT - has lowest priority
-		#		BEAT - is always the last unremovable (because of unACKable) item on que
-		#
-		#	class tx_que:
-		#		def add_req(timeout, last_sent, type, seq, datagram):
-		#			self.que[0:0] = tx_req(timeout, last_sent, type, seq, datagram)
-		#
-		#	class tx_req:
-		#		...
-		#
-		#	delta = task.time - que[0].last_sent
-		#	if delta > que[0].timeout:
-		#		que[0].last_sent = task.time
-		delta = task.time - self.last_tx_time
-		if self.current_request != None:
-			if delta > 1.0: #TODO - hardcoding
-				self.current_request()
-				self.last_tx_time = task.time
-		else:
-			if delta > 5.0:
-				self.tx_beat()
-				self.last_tx_time = task.time
-		return task.cont
-
 	def rx_sess(self, data):
 		error = data.getUint8()
 		if error == 0:
-			self.current_request = None
+			self.tx_remove_sess()
 		if error in self.sess_errors:
 			dbg('  error={0} ({1})'.format(error, self.sess_errors[error]))
 		else:
@@ -226,13 +259,13 @@ class hnh_client(ShowBase):
 				if data.getRemainingSize():
 					dbg('      DATA REMAINS')
 			elif arg_type == 1: # INT
-				args.append((arg_type, data.getInt32()))
+				args.append(Struct(type=arg_type, value=data.getInt32()))
 			elif arg_type == 2: # STR
-				args.append((arg_type, data.getZString()))
+				args.append(Struct(type=arg_type, value=data.getZString()))
 			elif arg_type == 3: # COORD
-				args.append((arg_type, (data.getInt32(), data.getInt32())))
+				args.append(Struct(type=arg_type, value=(data.getInt32(), data.getInt32())))
 			elif arg_type == 6: # COLOR
-				args.append((arg_type, (data.getUint8(), data.getUint8(), data.getUint8(), data.getUint8())))
+				args.append(Struct(type=arg_type, value=(data.getUint8(), data.getUint8(), data.getUint8(), data.getUint8())))
 			else: # UNKNOWN LIST TYPE
 				break
 		return args
@@ -240,7 +273,7 @@ class hnh_client(ShowBase):
 	def rx_rel_newwdg(self, data):
 		wdg_id = data.getUint16()
 		wdg_type = data.getZString()
-		wdg_coord = [data.getInt32(),data.getInt32()]
+		wdg_coord = (data.getInt32(),data.getInt32())
 		wdg_parent = data.getUint16()
 		wdg_args = self.rx_rel_parse_args(data)
 		self.new_widget(wdg_id, wdg_type, wdg_coord, wdg_parent, wdg_args)
@@ -269,7 +302,7 @@ class hnh_client(ShowBase):
 		res_id = data.getUint16()
 		res_name = data.getZString()
 		res_ver = data.getUint16()
-		self.resources[res_id] = (res_name, res_ver)
+		self.resources[res_id] = Struct(name=res_name, version=res_ver)
 		# dbg('    id={0} name={1} ver={2}'.format(res_id, res_name, res_ver))
 
 	def rx_rel_party(self, data):
@@ -316,7 +349,25 @@ class hnh_client(ShowBase):
 	def rx_close(self, data):
 		pass
 
-	def tx_sess(self):
+	######################################################  TX  #####################################
+
+	def tx_task(self, task):
+		# for req in self.tx_que.ack_que:
+			# self.cwriter.send(req.data, self.conn, self.addr)
+		# self.tx_que.ack_que = []
+		#TODO calculate the delta taking into account time counter overflow
+		delta = task.time - self.last_sent
+		if len(self.tx_que) > 0:
+			req = self.tx_que[0]
+		else:
+			req = self.tx_make_beat()
+		if delta > req.timeout:
+			self.cwriter.send(req.data, self.conn, self.addr)
+			dbg('---> {0}'.format(self.msg_types[req.type][0]))
+			self.last_sent = task.time
+		return task.cont
+
+	def tx_add_sess(self):
 		data = PyDatagram.PyDatagram()
 		data.addUint8(0) # SESS
 		data.addUint16(1) # ???
@@ -324,8 +375,12 @@ class hnh_client(ShowBase):
 		data.addUint16(2) # version
 		data.addZString(self.user)
 		data.appendData(self.cookie)
-		self.cwriter.send(data, self.conn, self.addr)
-		dbg("---> SESS")
+		# self.cwriter.send(data, self.conn, self.addr)
+		self.tx_que.append(Struct(timeout=1, type=msg_type.SESS, seq=0, data=data))
+
+	def tx_remove_sess(self):
+		self.tx_que = [i for i in self.tx_que if i.type != msg_type.SESS]
+		dbg('---> all SESS removed')
 
 #	def tx_rel_wdgmsg(self, seq):
 #		data = PyDatagram.PyDatagram()
@@ -340,34 +395,38 @@ class hnh_client(ShowBase):
 		self.cwriter.send(data, self.conn, self.addr)
 		dbg("---> ACK seq={0}".format(seq))
 
-	def tx_beat(self):
+	def tx_make_beat(self):
 		data = PyDatagram.PyDatagram()
-		data.addUint8(3) # BEAT
-		self.cwriter.send(data, self.conn, self.addr)
-		dbg("---> BEAT")
+		data.addUint8(msg_type.BEAT)
+		return Struct(timeout=10, type=msg_type.BEAT, seq=0, data=data)
 
 	def new_widget(self, wdg_id, wdg_type, wdg_coord, wdg_parent, wdg_args):
 		dbg('    id={0} type={1} coord={2} parent={3}'.format(wdg_id, wdg_type, wdg_coord, wdg_parent))
-		if wdg_type == 'cnt':
-			wdg = DirectFrame(frameColor=(0, 0, 0, .5), frameSize=(-1, 1, -1, 1), pos=(1, -1, -1))
-		else:
-			wdg = None
-		self.widgets[wdg_id] = (wdg_type, wdg_parent, wdg)
+		self.widgets[wdg_id] = Struct(type=wdg_type, coord=wdg_coord, parent=wdg_parent, args=wdg_args)
 		for arg in wdg_args:
-			dbg('      {0}={1}'.format(self.wdg_list_types[arg[0]], arg[1]))
+			dbg('      {0}={1}'.format(self.wdg_list_types[arg.type], arg.value))
 
 	def widget_message(self, wdg_id, wdg_msg_name, wdg_args):
 		dbg('    id={0} name={1}'.format(wdg_id, wdg_msg_name))
-		for arg in wdg_args:
-			if wdg_msg_name == "add" and arg[0] == 1: # INT
-				dbg('      {0}={1} ({2})'.format(self.wdg_list_types[arg[0]], self.resources[arg[1]][0], self.resources[arg[1]][1]))
+		if (self.widgets[wdg_id].type == 'charlist') and (wdg_msg_name == 'add'):
+			if wdg_args[0].value not in self.chars:
+				char = Struct(name=wdg_args[0].value, equip=[arg.value for arg in wdg_args[1:]])
+				self.chars[char.name] = char
+				b = DirectButton(text = (char.name), scale=.05, pos=(-.9,0,.9), command=self.choice_char, extraArgs=[char])
+				dbg('      add character: name={0} equipment:'.format(char.name))
+				for equip in char.equip:
+					dbg('                    {0} ver={1}'.format(self.resources[equip].name, self.resources[equip].version))
 			else:
-				dbg('      {0}={1}'.format(self.wdg_list_types[arg[0]], arg[1]))
+				dbg('      character "{0}" is already added'.format(wdg_args[0].value))
 
 	def destroy_widget(self, wdg_id):
 		#TODO
 		pass
 	
+	def choice_char(self, char):
+		dbg('SELECT "{0}"'.format(char.name))
+		# self.tx_que.add(...)
+		pass
 ###########################################################################
 
 hnh = hnh_client('moltke.seatribe.se', 1871, 1870)
