@@ -29,6 +29,9 @@ class Struct:
 
 
 msg_type = Struct(SESS=0, REL=1, ACK=2, BEAT=3, MAPREQ=4, MAPDATA=5, OBJDATA=6, OBJACK=7, CLOSE=8)
+arg_type = Struct(END=0, INT=1, STR=2, COORD=3, COLOR=6)
+rel_type = Struct(NEWWDG=0, WDGMSG=1, DSTWDG=2, MAPIV=3, GLOBLOB=4, PAGINAE=5, RESID=6, PARTY=7, SFX=8, CATTR=9, MUSIC=10, TILES=11, BUFF=12)
+
 #TODO: config = Struct(beat_interval=???, ...)
 
 #TODO tx queue concept:
@@ -87,6 +90,7 @@ class hnh_client(ShowBase):
 		self.resources = {}
 		self.chars = {}
 		self.tx_que = []
+		self.tx_seq = 0
 		logging.basicConfig(filename='client.log', filemode="w", level=logging.INFO)
 		self.new_widget(0, 'ui_root', (0,0), None, [])
 		self.sess_errors = {
@@ -382,15 +386,41 @@ class hnh_client(ShowBase):
 		self.tx_que = [i for i in self.tx_que if i.type != msg_type.SESS]
 		dbg('---> all SESS removed')
 
-#	def tx_rel_wdgmsg(self, seq):
-#		data = PyDatagram.PyDatagram()
-#		data.addUint8(1) # REL
-#		data.addUint16(seq)
-#		self.cwriter.send(data, self.conn, self.addr)
+	def tx_add_rel_wdgmsg(self, seq, wdg_id, msg_name, args):
+		data = PyDatagram.PyDatagram()
+		data.addUint8(msg_type.REL)
+		data.addUint16(seq)
+		data.addUint8(rel_type.WDGMSG)
+		data.addUint16(wdg_id)
+		data.addZString(msg_name)
+		for arg in args:
+			if arg.type == arg_type.END:
+				data.addUint8(arg.type)
+			elif arg.type == arg_type.INT:
+				data.addUint8(arg.type)
+				data.addInt32(arg.value)
+			elif arg.type == arg_type.STR:
+				data.addUint8(arg.type)
+				data.addZString(arg.value)
+			elif arg.type == arg_type.COORD:
+				data.addUint8(arg.type)
+				data.addInt32(arg.value[0])
+				data.addInt32(arg.value[1])
+			elif arg.type == arg_type.COLOR:
+				data.addUint8(arg.type)
+				data.addUint8(arg.value[0])
+				data.addUint8(arg.value[1])
+				data.addUint8(arg.value[2])
+				data.addUint8(arg.value[3])
+			else:
+				DBG('!!! UNKNOWN arg type {0}'.format(arg.type))
+				return
+		self.tx_que.append(Struct(timeout=.1, type=msg_type.REL, seq=seq, data=data))
+		self.tx_seq += 1
 
 	def tx_ask(self, seq):
 		data = PyDatagram.PyDatagram()
-		data.addUint8(2) # ACK
+		data.addUint8(msg_type.ACK)
 		data.addUint16(seq)
 		self.cwriter.send(data, self.conn, self.addr)
 		dbg("---> ACK seq={0}".format(seq))
@@ -425,14 +455,13 @@ class hnh_client(ShowBase):
 	
 	def choice_char(self, char):
 		dbg('SELECT "{0}"'.format(char.name))
-		self.tx_add_
-		CLIENT
- REL (1)
-  seq=1 type=1(WDGMSG) len=14
-   id=4 name=play
-    STR=first
+		self.tx_add_rel_wdgmsg(seq=self.tx_seq, wdg_id=4, msg_name='play', args=[Struct(type=arg_type.STR, value='first')])
+		# CLIENT
+		 # REL (1)
+		  # seq=1 type=1(WDGMSG) len=14
+		   # id=4 name=play
+			# STR=first
 
-		pass
 ###########################################################################
 
 hnh = hnh_client('moltke.seatribe.se', 1871, 1870)
