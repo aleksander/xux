@@ -1,1 +1,0 @@
-C:\Python31\python.exe mapmerger.py > mapmerger.txt

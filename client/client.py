@@ -7,20 +7,11 @@ from direct.interval.IntervalGlobal import *
 import logging
 from pandac.PandaModules import loadPrcFileData
 from direct.gui.DirectGui import *
-
-
 import os
-def dbg_posix(data):
-	print data
-def dbg_log(data):
-	logging.info(data)
-if os.name == 'posix':
-	dbg = dbg_posix
-else:
-	dbg = dbg_log
 
-# def dbg(data):
-	# print data
+
+def dbg(data):
+	logging.info(data)
 
 
 class Struct:
@@ -91,7 +82,10 @@ class hnh_client(ShowBase):
 		self.chars = {}
 		self.tx_que = []
 		self.tx_seq = 0
-		logging.basicConfig(filename='client.log', filemode="w", level=logging.INFO)
+		if os.name == 'posix':
+			logging.basicConfig(format='%(asctime)s  %(message)s', level=logging.INFO)
+		else:
+			logging.basicConfig(filename='client.log', filemode="w", format='%(asctime)s  %(message)s', level=logging.INFO)
 		self.new_widget(0, 'ui_root', (0,0), None, [])
 		self.sess_errors = {
 			0:'OK',
@@ -334,6 +328,10 @@ class hnh_client(ShowBase):
 
 	def rx_ack(self, data):
 		seq = data.getUint16()
+		if self.tx_que[0].seq == seq:
+			req = self.tx_que[0]
+			self.tx_que = self.tx_que[1:]
+			dbg('  TXQUE: removed {0} seq={1}'.format(self.msg_types[req.type][0], req.seq))
 		dbg('  seq={0}'.format(seq))
 
 	def rx_beat(self, data):
@@ -368,7 +366,7 @@ class hnh_client(ShowBase):
 			req = self.tx_make_beat()
 		if delta > req.timeout:
 			self.cwriter.send(req.data, self.conn, self.addr)
-			dbg('---> {0}'.format(self.msg_types[req.type][0]))
+			dbg('---> {0} seq={1}'.format(self.msg_types[req.type][0], req.seq))
 			self.last_sent = task.time
 		return task.cont
 
@@ -416,7 +414,7 @@ class hnh_client(ShowBase):
 			else:
 				DBG('!!! UNKNOWN arg type {0}'.format(arg.type))
 				return
-		self.tx_que.append(Struct(timeout=.1, type=msg_type.REL, seq=seq, data=data))
+		self.tx_que.append(Struct(timeout=.4, type=msg_type.REL, seq=seq, data=data))
 		self.tx_seq += 1
 
 	def tx_ask(self, seq):
@@ -442,8 +440,8 @@ class hnh_client(ShowBase):
 		if (self.widgets[wdg_id].type == 'charlist') and (wdg_msg_name == 'add'):
 			if wdg_args[0].value not in self.chars:
 				char = Struct(name=wdg_args[0].value, equip=[arg.value for arg in wdg_args[1:]])
+				b = DirectButton(text = (char.name), scale=.05, pos=(-.9,0,.9-.1*len(self.chars)), command=self.choice_char, extraArgs=[char])
 				self.chars[char.name] = char
-				b = DirectButton(text = (char.name), scale=.05, pos=(-.9,0,.9), command=self.choice_char, extraArgs=[char])
 				dbg('      add character: name={0} equipment:'.format(char.name))
 				for equip in char.equip:
 					dbg('                    {0} ver={1}'.format(self.resources[equip].name, self.resources[equip].version))
