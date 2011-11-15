@@ -178,7 +178,7 @@ class hnh_client(ShowBase):
 	def start(self):
 		loadPrcFileData("", "window-title HNH")
 		loadPrcFileData("", "fullscreen 0")
-		loadPrcFileData("", "win-size 300 300")
+		loadPrcFileData("", "win-size 400 400")
 		loadPrcFileData("", "win-origin 40 50")
 		# FOR REALTIME win props changing:
 		# wp = WindowProperties() 
@@ -333,7 +333,8 @@ class hnh_client(ShowBase):
 		pass
 
 	def rx_ack(self, data):
-		self.tx_que.ack(seq)
+		seq = data.getUint16()
+		dbg('  seq={0}'.format(seq))
 
 	def rx_beat(self, data):
 		pass
