@@ -440,7 +440,7 @@ class hnh_client(ShowBase):
 		if (self.widgets[wdg_id].type == 'charlist') and (wdg_msg_name == 'add'):
 			if wdg_args[0].value not in self.chars:
 				char = Struct(name=wdg_args[0].value, equip=[arg.value for arg in wdg_args[1:]])
-				b = DirectButton(text = (char.name), scale=.05, pos=(-.9,0,.9-.1*len(self.chars)), command=self.choice_char, extraArgs=[char])
+				b = DirectButton(text = (char.name), scale=.1, pos=(-.9,0,.9-.1*len(self.chars)), command=self.choice_char, extraArgs=[char])
 				self.chars[char.name] = char
 				dbg('      add character: name={0} equipment:'.format(char.name))
 				for equip in char.equip:
@@ -455,11 +455,6 @@ class hnh_client(ShowBase):
 	def choice_char(self, char):
 		dbg('SELECT "{0}"'.format(char.name))
 		self.tx_add_rel_wdgmsg(seq=self.tx_seq, wdg_id=4, msg_name='play', args=[Struct(type=arg_type.STR, value='first')])
-		# CLIENT
-		 # REL (1)
-		  # seq=1 type=1(WDGMSG) len=14
-		   # id=4 name=play
-			# STR=first
 
 ###########################################################################
 
@@ -469,12 +464,28 @@ while not hnh.authorize(u'lemings', u'lemings'):
 	#TODO add delay
 dbg('authorized')
 hnh.start()
-#TODO
-#	hnh.start() { wait for all 5 widgets of the first screen }
-#	if hnh.chars.length() == 0:
-#		hnh.create_new_char('lemingX')
-#	hnh.choice_char(0)
-#	if not hnh.enter_game_there_logoff():
-#		hnh.enter_game_on_hf()
-
-
+#TODO: INTERACTIVE SHELL WITH SCRIPTS EXECUTION SUPPORT:
+# scripts/startup.py
+#	hnh.begin() { self.act_que.add.wait_for_widgets((wdg0, wdg1, ..., wdgN)) { for wdg in wifgets: add(wdg) } }
+#	if len(hnh.chars) == 0:
+#		hnh.create_new_char('male', 'lemingX', descendant=False) { choice_create() choice_male() get_free_equip() go_to_ladder() ... }
+#	else:
+#		hnh.choice_char(0)
+#		if not hnh.enter_game_there_logoff():
+#			hnh.enter_game_on_hf()
+#
+#
+# 1) callbacks:
+#    m = None
+#    try:
+#        m = __import__("external_module")
+#    except:
+#        # invalid module - show error
+#    if m:
+#        try:
+#            m.user_defined_func()
+#        except:
+#            # some error - display it
+# 2) http://pypi.python.org/pypi/RestrictedPython
+# 3) http://ipython.org/
+# 4) use python code module (http://stackoverflow.com/questions/393871/scripting-inside-a-python-application/393921#393921)
