@@ -1,12 +1,10 @@
 #!/usr/bin/python3
 
-ENOUGH_FOR_MERGE = 3
-CHECK_ALL_FILES = False
-
 from os import listdir,rmdir,getcwd,rename,remove
 from os.path import isdir,isfile,splitext,basename,join,exists,getctime
 from hashlib import md5
 #from time import time
+from sys import argv
 
 def dirs(path):
 	# TODO: replace with filter(os.path.isdir(os.path.join(path, f)), os.listdir(path))
@@ -35,6 +33,17 @@ def remove_empty_dir(path):
 	return False
 
 # start_time = time()
+
+
+ENOUGH_FOR_MERGE = 3
+
+if len(argv) == 2:
+	try:
+		ENOUGH_FOR_MERGE = int(argv[1])
+	except ValueError:
+		print('invalid argument "{}"'.format(argv[1]))
+print('idential tiles enough for merge = {}'.format(ENOUGH_FOR_MERGE))
+
 	
 cwd = getcwd()
 dirs_list = [d for d in dirs(cwd) if not remove_empty_dir(join(cwd,d))]
@@ -68,15 +77,15 @@ for i,dir1 in enumerate(dirs_list):
 							break
 					(pdx,pdy) = (dx,dy)
 					same_hash_cnt = same_hash_cnt + 1
-					if (not CHECK_ALL_FILES) and (same_hash_cnt >= ENOUGH_FOR_MERGE):
+					if (ENOUGH_FOR_MERGE > 0) and (same_hash_cnt >= ENOUGH_FOR_MERGE):
 						break
 			if diff_shift:
 				break
-			if (not CHECK_ALL_FILES) and (same_hash_cnt >= ENOUGH_FOR_MERGE):
+			if (ENOUGH_FOR_MERGE > 0) and (same_hash_cnt >= ENOUGH_FOR_MERGE):
 				break
 		if not diff_shift:
 			print('  matches: {0}, shift: ({1},{2})'.format(same_hash_cnt,pdx,pdy))
-			if same_hash_cnt >= ENOUGH_FOR_MERGE:
+			if (ENOUGH_FOR_MERGE <= 0) or (same_hash_cnt >= ENOUGH_FOR_MERGE):
 				if pdx != 0 or pdy != 0:
 					for f3 in filter(ispng,files(dir2path)):
 						(x3,y3) = name2coord(f3)
@@ -104,7 +113,5 @@ for d in dirs_list:
 	if l == 0:
 		rmdir(p)
 		print(d,'removed')
-	else:
-		print(d,'has',l,'entries')
 
 # print('finished in ',int(time()-start_time),'seconds')
