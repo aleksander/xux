@@ -489,3 +489,14 @@ hnh.start()
 # 2) http://pypi.python.org/pypi/RestrictedPython
 # 3) http://ipython.org/
 # 4) use python code module (http://stackoverflow.com/questions/393871/scripting-inside-a-python-application/393921#393921)
+
+
+# IDEAS:
+#	AI.targets = [target1 .... targetN]
+#	target - skill, action, building, etc
+#	target.dependancies = [targetI ... targetX]
+
+
+
+
+
