@@ -8,6 +8,9 @@ import logging
 from pandac.PandaModules import loadPrcFileData
 from direct.gui.DirectGui import *
 import os
+# from direct.stdpy import thread
+from direct.stdpy import threading
+# from direct.stdpy import threading2 as threading
 
 
 def dbg(data):
@@ -201,6 +204,8 @@ class hnh_client(ShowBase):
 		self.tx_add_sess()
 		#TODO fsm.enter(sess)
 		self.last_sent = -10.
+		ai = threading.Thread(target=self.ai_thread)
+		ai.start()
 		self.run()
 
 	######################################################  RX  #####################################
@@ -440,7 +445,7 @@ class hnh_client(ShowBase):
 		if (self.widgets[wdg_id].type == 'charlist') and (wdg_msg_name == 'add'):
 			if wdg_args[0].value not in self.chars:
 				char = Struct(name=wdg_args[0].value, equip=[arg.value for arg in wdg_args[1:]])
-				b = DirectButton(text = (char.name), scale=.1, pos=(-.9,0,.9-.1*len(self.chars)), command=self.choice_char, extraArgs=[char])
+				# b = DirectButton(text = (char.name), scale=.1, pos=(-.9,0,.9-.1*len(self.chars)), command=self.choice_char, extraArgs=[char])
 				self.chars[char.name] = char
 				dbg('      add character: name={0} equipment:'.format(char.name))
 				for equip in char.equip:
@@ -452,11 +457,47 @@ class hnh_client(ShowBase):
 		#TODO
 		pass
 	
+	######################################################  AI  #####################################
+
 	def choice_char(self, char):
 		dbg('SELECT "{0}"'.format(char.name))
-		self.tx_add_rel_wdgmsg(seq=self.tx_seq, wdg_id=4, msg_name='play', args=[Struct(type=arg_type.STR, value='first')])
+		self.tx_add_rel_wdgmsg(seq=self.tx_seq, wdg_id=4, msg_name='play', args=[Struct(type=arg_type.STR, value=char.name)])
+		#TODO FIXME wait for server ACK
+
+	def wait_widget(self, wdg_type=None, args=[], timeout=0):
+		#TODO if timeout > 0: start_time = get_current_time()
+		while True:
+			for wdg_id, wdg in self.widgets.items():
+				if wdg_type == None or wdg_type == wdg.type:
+					dbg('wait for widget OK')
+					return True
+					#TODO check args
+			#if get_current_time() - start_time > timeout:
+				#return False
+
+	def wait_for_message(self):
+		#TODO
+		pass
+
+	def ai_thread(self):
+		dbg('AI THREAD STARTED')
+		#TODO hnh.begin() { self.act_que.add.wait_for_widgets((wdg0, wdg1, ..., wdgN)) { for wdg in wifgets: add(wdg) } }
+		self.wait_widget(wdg_type='charlist')
+		self.wait_widget(wdg_type='ibtn')
+		#TODO:
+		#	if len(hnh.chars) == 0:
+		#		hnh.create_new_char('male', 'lemingX', descendant=False) { choice_create() choice_male() get_free_equip() go_to_ladder() ... }
+		#	else:
+		self.choice_char(self.chars['first'])
+		#if not hnh.enter_game_there_logoff():
+		#	hnh.enter_game_on_hf()
+		dbg('AI: enter endless loop')
+		while True:
+			pass
+		
 
 ###########################################################################
+
 
 hnh = hnh_client('moltke.seatribe.se', 1871, 1870)
 while not hnh.authorize(u'lemings', u'lemings'):
@@ -464,16 +505,8 @@ while not hnh.authorize(u'lemings', u'lemings'):
 	#TODO add delay
 dbg('authorized')
 hnh.start()
-#TODO: INTERACTIVE SHELL WITH SCRIPTS EXECUTION SUPPORT:
-# scripts/startup.py
-#	hnh.begin() { self.act_que.add.wait_for_widgets((wdg0, wdg1, ..., wdgN)) { for wdg in wifgets: add(wdg) } }
-#	if len(hnh.chars) == 0:
-#		hnh.create_new_char('male', 'lemingX', descendant=False) { choice_create() choice_male() get_free_equip() go_to_ladder() ... }
-#	else:
-#		hnh.choice_char(0)
-#		if not hnh.enter_game_there_logoff():
-#			hnh.enter_game_on_hf()
-#
+
+#TODO: INTERACTIVE SHELL WITH SCRIPTS EXECUTION SUPPORT
 #
 # 1) callbacks:
 #    m = None
