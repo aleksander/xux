@@ -211,13 +211,15 @@ class hnh_client(ShowBase):
 	######################################################  RX  #####################################
 
 	def rx_task(self, task):
+		#TODO check and ignore repeated datagrams
+		#TODO ??? while self.creader.dataAvailable():
 		if self.creader.dataAvailable():
 			datagram = NetDatagram()
 			if self.creader.getData(datagram):
 				data = PyDatagramIterator.PyDatagramIterator(datagram)
 				msg_type = data.getUint8()
 				if msg_type not in self.msg_types:
-					dbg("UNKNOWN PACKET TYPE "+str(msg_type))
+					dbg("UNKNOWN PACKET TYPE {0}".format(msg_type))
 				else:
 					dbg(self.msg_types[msg_type][0])
 					self.msg_types[msg_type][1](data)
@@ -326,17 +328,19 @@ class hnh_client(ShowBase):
 			tile_name = data.getZString()
 			tile_ver = data.getUint16()
 			self.tiles[tile_id] = (tile_name, tile_ver)
-			dbg('    id={0} name={1} version={2}'.format(tile_id,tile_name,tile_ver))
+			#dbg('    id={0} name={1} version={2}'.format(tile_id,tile_name,tile_ver))
 
 	def rx_rel_buff(self, data):
 		pass
 
 	def rx_ack(self, data):
 		seq = data.getUint16()
-		if self.tx_que[0].seq == seq:
-			req = self.tx_que[0]
-			self.tx_que = self.tx_que[1:]
-			dbg('  TXQUE: removed {0} seq={1}'.format(self.msg_types[req.type][0], req.seq))
+		if self.tx_que: # if que is not empty
+			if self.tx_que[0].seq == seq:
+				req = self.tx_que[0]
+				req.fb.push(True)
+				self.tx_que = self.tx_que[1:]
+				dbg('  TXQUE: removed {0} seq={1}'.format(self.msg_types[req.type][0], req.seq))
 		dbg('  seq={0}'.format(seq))
 
 	def rx_beat(self, data):
@@ -365,7 +369,7 @@ class hnh_client(ShowBase):
 		# self.tx_que.ack_que = []
 		#TODO calculate the delta taking into account time counter overflow
 		delta = task.time - self.last_sent
-		if len(self.tx_que) > 0:
+		if self.tx_que:
 			req = self.tx_que[0]
 		else:
 			req = self.tx_make_beat()
@@ -390,7 +394,7 @@ class hnh_client(ShowBase):
 		self.tx_que = [i for i in self.tx_que if i.type != msg_type.SESS]
 		dbg('---> all SESS removed')
 
-	def tx_add_rel_wdgmsg(self, seq, wdg_id, msg_name, args):
+	def tx_add_rel_wdgmsg(self, seq, wdg_id, msg_name, args=[]):
 		data = PyDatagram.PyDatagram()
 		data.addUint8(msg_type.REL)
 		data.addUint16(seq)
@@ -419,7 +423,10 @@ class hnh_client(ShowBase):
 			else:
 				DBG('!!! UNKNOWN arg type {0}'.format(arg.type))
 				return
-		self.tx_que.append(Struct(timeout=.4, type=msg_type.REL, seq=seq, data=data))
+		feedback = Queue()
+		self.tx_que.append(Struct(timeout=.4, type=msg_type.REL, seq=seq, data=data, fb=feedback))
+		while feedback.isEmpty():
+			pass
 		self.tx_seq += 1
 
 	def tx_ask(self, seq):
@@ -458,20 +465,47 @@ class hnh_client(ShowBase):
 		pass
 	
 	######################################################  AI  #####################################
+	
+	def wdg_id_by_arg(self, arg):
+		for wdg_id,wdg in self.widgets.items():
+			for a in wdg.args:
+				if a.type == arg.type and a.value == arg.value:
+					return wdg_id
+		dbg("CAN'T FIND WDG WITH arg={0}".format())
+		return None
 
 	def choice_char(self, char):
 		dbg('SELECT "{0}"'.format(char.name))
 		self.tx_add_rel_wdgmsg(seq=self.tx_seq, wdg_id=4, msg_name='play', args=[Struct(type=arg_type.STR, value=char.name)])
-		#TODO FIXME wait for server ACK
+		#TODO ??? wait timeout
 
-	def wait_widget(self, wdg_type=None, args=[], timeout=0):
+	def play_from_hf(self):
+		dbg('')
+		dbg('PLAY FROM HEARTH FIRE')
+		dbg('')
+		dbg('')
+		dbg('')
+		wdg_id=self.wdg_id_by_arg(Struct(type=arg_type.STR, value='Your hearth fire'))
+		if wdg_id == None:
+			while True:
+				pass
+		self.tx_add_rel_wdgmsg(seq=self.tx_seq, wdg_id=wdg_id, msg_name='activate')
+		#TODO ??? wait timeout
+
+	def wait_widget(self, wdg_type=None, arg=None, timeout=0):
 		#TODO if timeout > 0: start_time = get_current_time()
 		while True:
 			for wdg_id, wdg in self.widgets.items():
 				if wdg_type == None or wdg_type == wdg.type:
-					dbg('wait for widget OK')
-					return True
-					#TODO check args
+					if arg == None:
+						dbg('WAIT for widget "{0}" OK'.format(wdg_type))
+						return True
+						#TODO check more than one arg
+					else:
+						for a in wdg.args:
+							if a.type == arg.type and a.value == arg.value:
+								dbg('WAIT for widget "{0}" {1}={2} OK'.format(wdg_type, arg.type, arg.value))
+								return True
 			#if get_current_time() - start_time > timeout:
 				#return False
 
@@ -480,18 +514,20 @@ class hnh_client(ShowBase):
 		pass
 
 	def ai_thread(self):
-		dbg('AI THREAD STARTED')
-		#TODO hnh.begin() { self.act_que.add.wait_for_widgets((wdg0, wdg1, ..., wdgN)) { for wdg in wifgets: add(wdg) } }
 		self.wait_widget(wdg_type='charlist')
 		self.wait_widget(wdg_type='ibtn')
 		#TODO:
-		#	if len(hnh.chars) == 0:
+		#	if not hnh.chars:
 		#		hnh.create_new_char('male', 'lemingX', descendant=False) { choice_create() choice_male() get_free_equip() go_to_ladder() ... }
 		#	else:
 		self.choice_char(self.chars['first'])
+		self.wait_widget(wdg_type='btn', arg=Struct(type=arg_type.STR, value='Your hearth fire'))
+		self.wait_widget(wdg_type='btn', arg=Struct(type=arg_type.STR, value='Where you logged out'))
+		self.play_from_hf()
 		#if not hnh.enter_game_there_logoff():
 		#	hnh.enter_game_on_hf()
 		dbg('AI: enter endless loop')
+		#TODO send CLOSE
 		while True:
 			pass
 		
