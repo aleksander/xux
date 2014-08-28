@@ -408,15 +408,22 @@ def show_info(hdr,data):
 	(portsrc,portdst,len,crc) = struct.unpack(fmt,data[:struct.calcsize(fmt)])
 	data = data[struct.calcsize(fmt):]
 	# print('{0}.{1}.{2}.{3}:{4} -> {5}.{6}.{7}.{8}:{9}'.format(ipsrc[0],ipsrc[1],ipsrc[2],ipsrc[3],portsrc,ipdst[0],ipdst[1],ipdst[2],ipdst[3],portdst))
-	if ipdst == bytes([178,63,100,209]):
-		print('CLIENT')
-		hnh_parse(bytearray(data),False)
-	else:
+	# if ipdst == bytes([178,63,100,209]):
+	if portsrc == 1870:
+		if portsrc == portdst:
+			print('SOURCE PORT == DEST PORT')
+			return
 		print('SERVER')
 		hnh_parse(bytearray(data),True)
+	# else:
+	elif portdst == 1870:
+		if portsrc == portdst:
+			print('SOURCE PORT == DEST PORT')
+			return
+		print('CLIENT')
+		hnh_parse(bytearray(data),False)
 
-# for i in range(100):
-	# print()
+# CAPTURE: sudo tcpdump -i wlan0 -w second.pcap udp port 1870
 rdr = pcapy.open_offline('second.pcap')
 rdr.dispatch(-1,show_info)
 # print(counters)
