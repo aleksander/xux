@@ -198,7 +198,7 @@ class SalemProtocolParser:
 		if type not in self.msg_types:
 			print(' UNKNOWN PACKET TYPE {}'.format(type))
 			return
-		print(' {} ({})'.format(self.msg_types[type].name,type))
+		print(' {}'.format(self.msg_types[type].name),end='')
 		self.msg_types[type].parse(self.data)
 		if self.data.len > 0:
 			print('data remains: {}'.format(self.data.data))
@@ -211,6 +211,7 @@ class SalemProtocolParser:
 		
 	######## SESS #################################
 	def rx_sess(self, data):
+		print()
 		if self.server:
 			error = data.u8
 			print('  error={}({})'.format(error,self.sess_errors[error]))
@@ -225,6 +226,7 @@ class SalemProtocolParser:
 	######## REL ##################################
 	def rx_rel (self, data): # Session.java +488
 		seq = data.u16
+		print('  seq={0}'.format(seq))
 		while data.len > 0:
 			rel_type = data.u8
 			if rel_type&0x80 != 0:
@@ -234,13 +236,13 @@ class SalemProtocolParser:
 				rel_len = data.len
 			rel = Message(data.b(rel_len))
 			if rel_type not in self.rel_types:
-				print('  seq={0} rel=UNKNOWN ({1}) len={2}'.format(seq, rel_type, rel_len))
+				print('  UNKNOWN ({}) len={}'.format(rel_type, rel_len))
 				return
 			else:
-				print('  seq={0} rel={1} len={2}'.format(seq, self.rel_types[rel_type].name, rel_len))
+				print('  {} len={}'.format(self.rel_types[rel_type].name, rel_len))
 				self.rel_types[rel_type].parse(rel)
 			if rel.len > 0:
-				print('rel remains: {}'.format(rel))
+				print('rel remains: {}'.format(rel.data))
 
 	def rx_rel_newwdg (self, data):
 		wdg_id = data.u16
@@ -409,14 +411,16 @@ class SalemProtocolParser:
 
 	######## BEAT #################################
 	def rx_beat (self, data):
-		pass
+		print()
 
 	######## MAPREQ ###############################
 	def rx_mapreq (self, data):
+		print()
 		print('  coord={}'.format([data.s32,data.s32]))
 
 	######## MAPDATA ##############################
 	def rx_mapdata (self, data):
+		print()
 		pktid = data.s32
 		off = data.u16
 		length = data.u16
@@ -452,6 +456,7 @@ class SalemProtocolParser:
 
 	######## OBJDATA ##############################
 	def rx_objdata (self, data): # Session.java +241
+		print()
 		while data.len > 0:
 			objdata_fl = data.u8
 			objdata_id = data.s32
@@ -617,12 +622,13 @@ class SalemProtocolParser:
 			
 	######## OBJACK ###############################
 	def rx_objack (self, data):
+		print()
 		while data.len > 0:
 			print('   id={} frame={}'.format(data.s32,data.s32))
 
 	######## CLOSE ################################
 	def rx_close (self, data):
-		pass
+		print()
 
 def show_info(hdr,data):
 	fmt = '!6s6sH'
