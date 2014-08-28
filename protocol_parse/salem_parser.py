@@ -565,24 +565,29 @@ class SalemProtocolParser:
 	def rx_objdata_cmppose (self, data):
 		pfl = data.u8
 		seq = data.u8
+		print('pfl={} seq={}'.format(pfl,seq))
 		if (pfl & 2) != 0:
 			while True:
 				resid = data.u16
+				sdt = None
 				if resid == 65535:
 					break
 				if resid & 0x8000 != 0:
 					resid &= ~0x8000
 					sdt = data.b(data.u8)
+				print('         resid={} sdt={}'.format(resid,sdt))
 		if (pfl & 4) != 0:
 			while True:
 				resid = data.u16
+				sdt = None
 				if resid == 65535:
 					break
 				if (resid & 0x8000) != 0:
 					resid &= ~0x8000
 					sdt = data.b(data.u8)
+				print('         resid={} sdt={}'.format(resid,sdt))
 			ttime = data.u8
-		print('!!! TODO print all this')
+			print('         ttime={}'.format(ttime))
 
 	def rx_objdata_cmpmod (self, data):
 		while True:
@@ -615,7 +620,7 @@ class SalemProtocolParser:
 			print('icon=null')
 		else:
 			ifl = data.u8
-			print('icon=getres({}) ifl={}', resid, ifl)
+			print('icon=getres({}) ifl={}'.format(resid,ifl))
 
 	def rx_objdata_end (self, data):
 		pass
@@ -666,7 +671,7 @@ def show_info(hdr,data):
 		SalemProtocolParser(data,False).parse()
 
 # CAPTURE: sudo tcpdump -i wlan0 -w second.pcap udp port 1870
-rdr = pcapy.open_offline('second.pcap')
+rdr = pcapy.open_offline('3.pcap')
 rdr.dispatch(-1,show_info)
 # print(counters)
 resfile.close()
