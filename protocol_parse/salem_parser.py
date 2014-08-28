@@ -319,26 +319,29 @@ class SalemProtocolParser:
 	def rx_rel_paginae (self, data): # Glob.java +293
 		while data.len > 0:
 			act = data.u8
-			nm = None
-			ver = None
-			if act == b'+':
+			if act == int(b'+'[0]):
 				nm = data.cstr
 				ver = data.u16
+				tmp = ''
 				while True:
 					t = data.u8
 					if t == 0:
 						break
-					elif t == b'!':
-						pass
-					elif t == b'*':
+					elif t == int(b'!'[0]):
+						tmp += ' (!)'
+					elif t == int(b'*'[0]):
 						meter = data.s32
 						dtime = data.s32
-					elif t == b'^':
-						pass
-			elif act == b'-':
+						tmp += ' (*) meter={} dtime={}'.format(meter,dtime)
+					elif t == int(b'^'[0]):
+						tmp += ' (^)'
+				print('    act={}(+) nm={} ver={} {}'.format(act,nm,ver,tmp))
+			elif act == int(b'-'[0]):
 				nm = data.cstr
 				ver = data.u16
-			print('    act={} nm={} ver={} !!! TODO print all other'.format(act,nm,ver))
+				print('    act={}(-) nm={} ver={}'.format(act,nm,ver))
+			else:
+				raise Exception('unknow pagina action')
 
 	def rx_rel_resid (self, data):
 		res_id = data.u16
