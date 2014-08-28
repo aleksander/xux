@@ -256,14 +256,23 @@ class SalemProtocolParser:
 		for elem in cargs:
 			print('     {} : {}'.format(elem.type,elem.value))
 
+	def print_list (self, list, indent):
+		for elem in list:
+			if elem.type == 'TTOL':
+				print('{}{} : ['.format(indent,elem.type))
+				self.print_list(elem.value,indent+'  ');
+				print('{}]'.format(indent))
+			else:
+				print('{}{} : {}'.format(indent,elem.type,elem.value))
+		
+
 	def rx_rel_wdgmsg (self, data):
 		wdg_id = data.u16
 		wdg_msg_name = data.cstr
 		wdg_msg = data.list
 		print('   id={} name={}'.format(wdg_id,wdg_msg_name))
 		print('    list:')
-		for elem in wdg_msg:
-			print('     {} : {}'.format(elem.type,elem.value))
+		self.print_list(wdg_msg,'     ')
 
 	def rx_rel_dstwdg (self, data): #destroy widget
 		id = data.u16
@@ -285,7 +294,7 @@ class SalemProtocolParser:
 			gmsg_type = data.u8
 			if gmsg_type not in gmsg_types:
 				raise Exception('UNKNOWN GMSG TYPE {}'.format(gmsg_type))
-			print('    {}='.format(gmsg_types[gmsg_type]),end='')
+			print('    {} '.format(gmsg_types[gmsg_type]),end='')
 			if gmsg_type == 0: # TIME
 				print(data.s32)
 			elif gmsg_type == 2: # LIGHT
@@ -294,7 +303,7 @@ class SalemProtocolParser:
 				specular = [data.u8,data.u8,data.u8,data.u8]
 				angle = data.s32 / 1000000.0 * math.pi * 2.0
 				elev = data.s32 / 1000000.0 * math.pi * 2.0
-				print('    amb={} diff={} spec={} ang={} elev={}'.format(ambient,diffuse,specular,angle,elev))
+				print('amb={} diff={} spec={} ang={} elev={}'.format(ambient,diffuse,specular,angle,elev))
 			elif gmsg_type == 3: # SKY
 				id1 = data.u16
 				if id1 == 65535:
@@ -456,7 +465,7 @@ class SalemProtocolParser:
 				print('   {} '.format(self.objdata_types[objdata_type].name),end=' ')
 				if objdata_type == 255: # OD_END
 					print('')
-					return
+					break
 				self.objdata_types[objdata_type].parse(data)
 			#if objdata_coord != None and res_id != None:
 			#	objdata[objdata_coord] = res_id
