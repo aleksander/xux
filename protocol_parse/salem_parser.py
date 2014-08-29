@@ -3,10 +3,9 @@
 
 import pure_pcapy as pcapy
 import struct, sys, zlib, math
+from sys import argv
 
 resfile = open('resids.txt','wb')
-
-objdata = {}
 
 class Struct:
         def __init__(self, **kwds):
@@ -133,9 +132,8 @@ class Message:
 		return [self.s32,self.s32]
 
 class SalemProtocolParser:
-	def __init__(self, data, server):
-		self.data = Message(data)
-		self.server = server
+	def __init__(self):
+		self.objdata = {}
 		self.sess_errors = {
 			0:'OK',
 			1:'AUTH',
@@ -193,26 +191,25 @@ class SalemProtocolParser:
 			19: Struct(name =    'OD_ICON', parse = self.rx_objdata_icon),
 			255:Struct(name =     'OD_END', parse = self.rx_objdata_end)}
 
-	def parse (self):
-		type = self.data.u8
+	def parse (self, _data, server):
+		if server:
+			print('SERVER')
+		else:
+			print('CLIENT')
+		data = Message(_data)
+		type = data.u8
 		if type not in self.msg_types:
 			print(' UNKNOWN PACKET TYPE {}'.format(type))
 			return
 		print(' {}'.format(self.msg_types[type].name),end='')
-		self.msg_types[type].parse(self.data)
-		if self.data.len > 0:
-			print('data remains: {}'.format(self.data.data))
-		#try:
-		#	self.msg_types[type].parse(self.data)
-		#except:
-		#	print("Unexpected error: {} {} {}".format(sys.exc_info()[0],sys.exc_info()[1],sys.exc_info()[2]))
-		#	if self.data.len > 0:
-		#		print('data remains: {}'.format(self.data.data))
+		self.msg_types[type].parse(data,server)
+		if data.len > 0:
+			print('data remains: {}'.format(data.data))
 		
 	######## SESS #################################
-	def rx_sess(self, data):
+	def rx_sess(self, data, server):
 		print()
-		if self.server:
+		if server:
 			error = data.u8
 			print('  error={}({})'.format(error,self.sess_errors[error]))
 		else:
@@ -224,7 +221,7 @@ class SalemProtocolParser:
 			print('  unknown={} proto={} ver={} user={} cookie={}'.format(unknown, proto,ver,user,cookie))
 
 	######## REL ##################################
-	def rx_rel (self, data): # Session.java +488
+	def rx_rel (self, data, server): # Session.java +488
 		seq = data.u16
 		print('  seq={0}'.format(seq))
 		while data.len > 0:
@@ -405,21 +402,21 @@ class SalemProtocolParser:
 			print('   remove buffers id={}'.format(data.s32))
 
 	######## ACK ##################################
-	def rx_ack (self, data):
+	def rx_ack (self, data, server):
 		seq = data.u16
 		print('  seq={}'.format(seq))
 
 	######## BEAT #################################
-	def rx_beat (self, data):
+	def rx_beat (self, data, server):
 		print()
 
 	######## MAPREQ ###############################
-	def rx_mapreq (self, data):
+	def rx_mapreq (self, data, server):
 		print()
 		print('  coord={}'.format([data.s32,data.s32]))
 
 	######## MAPDATA ##############################
-	def rx_mapdata (self, data):
+	def rx_mapdata (self, data, server):
 		print()
 		pktid = data.s32
 		off = data.u16
@@ -455,26 +452,26 @@ class SalemProtocolParser:
 		#	print('')
 
 	######## OBJDATA ##############################
-	def rx_objdata (self, data): # Session.java +241
+	def rx_objdata (self, data, server): # Session.java +241
 		print()
 		while data.len > 0:
-			objdata_fl = data.u8
-			objdata_id = data.s32
-			objdata_frame = data.s32
-			print('  id={} frame={}'.format(objdata_id,objdata_frame))
-			if (objdata_fl & 1) != 0:
-				print('   remove id={} frame={}'.format(objdata_id,objdata_frame-1))
+			fl = data.u8
+			id = data.s32
+			frame = data.s32
+			print('  id={} frame={}'.format(id,frame))
+			if (fl & 1) != 0:
+				print('   remove id={} frame={}'.format(id,frame-1))
 			#objdata_coord = None
-			res_id = None
+			#res_id = None
 			while True:
-				objdata_type = data.u8
-				if objdata_type not in self.objdata_types:
-					raise Exception('unknown objdata type {}'.format(objdata_type))
-				print('   {} '.format(self.objdata_types[objdata_type].name),end=' ')
-				if objdata_type == 255: # OD_END
+				type = data.u8
+				if type not in self.objdata_types:
+					raise Exception('unknown objdata type {}'.format(type))
+				print('   {} '.format(self.objdata_types[type].name),end=' ')
+				if type == 255: # OD_END
 					print('')
 					break
-				self.objdata_types[objdata_type].parse(data)
+				self.objdata_types[type].parse(data)
 			#if objdata_coord != None and res_id != None:
 			#	objdata[objdata_coord] = res_id
 
@@ -626,14 +623,18 @@ class SalemProtocolParser:
 		pass
 			
 	######## OBJACK ###############################
-	def rx_objack (self, data):
+	def rx_objack (self, data, server):
 		print()
 		while data.len > 0:
 			print('   id={} frame={}'.format(data.s32,data.s32))
 
 	######## CLOSE ################################
-	def rx_close (self, data):
+	def rx_close (self, data, server):
 		print()
+
+
+parser = SalemProtocolParser()
+
 
 def show_info(hdr,data):
 	fmt = '!6s6sH'
@@ -654,24 +655,22 @@ def show_info(hdr,data):
 	fmt = '!HHHH'
 	(portsrc,portdst,len,crc) = struct.unpack(fmt,data[:struct.calcsize(fmt)])
 	data = data[struct.calcsize(fmt):]
-	# print('{0}.{1}.{2}.{3}:{4} -> {5}.{6}.{7}.{8}:{9}'.format(ipsrc[0],ipsrc[1],ipsrc[2],ipsrc[3],portsrc,ipdst[0],ipdst[1],ipdst[2],ipdst[3],portdst))
-	# if ipdst == bytes([178,63,100,209]):
 	if portsrc == 1870:
 		if portsrc == portdst:
 			print('SOURCE PORT == DEST PORT')
 			return
-		print('SERVER')
-		SalemProtocolParser(data,True).parse()
-	# else:
+		parser.parse(data,True)
 	elif portdst == 1870:
-		if portsrc == portdst:
-			print('SOURCE PORT == DEST PORT')
-			return
-		print('CLIENT')
-		SalemProtocolParser(data,False).parse()
+		parser.parse(data,False)
+
+
 
 # CAPTURE: sudo tcpdump -i wlan0 -w second.pcap udp port 1870
-rdr = pcapy.open_offline('3.pcap')
+
+if len(argv) != 2:
+	print('wrong arguments count')
+	exit(1)
+rdr = pcapy.open_offline(argv[1])
 rdr.dispatch(-1,show_info)
 # print(counters)
 resfile.close()
