@@ -710,3 +710,24 @@ for id in sorted(parser.objdata):
 		resname = ''
 	objfile.write('{} {} {} {} {}\n'.format(obj.fl,obj.frame,obj.coord,resid,resname).encode())
 objfile.close()
+
+x = None
+y = None
+for id,obj in parser.objdata.items():
+	if obj.coord:
+		c = obj.coord
+		if not x:
+			x = Struct(min=c[0],max=c[0])
+			y = Struct(min=c[1],max=c[1])
+		else:
+			if c[0] < x.min:
+				x.min = c[0]
+			if c[0] > x.max:
+				x.max = c[0]
+			if c[1] < y.min:
+				y.min = c[1]
+			if c[1] > y.max:
+				y.max = c[1]
+
+print('x [{}, {}] {}'.format(x.min,x.max,x.max-x.min))
+print('y [{}, {}] {}'.format(y.min,y.max,y.max-y.min))
