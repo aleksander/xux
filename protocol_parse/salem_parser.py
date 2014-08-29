@@ -133,7 +133,7 @@ class Message:
 
 class SalemProtocolParser:
 	def __init__(self):
-		#self.objdata = {}
+		self.objdata = {}
 		self.resids = {}
 		self.sess_errors = {
 			0:'OK',
@@ -462,8 +462,7 @@ class SalemProtocolParser:
 			print('  id={} frame={}'.format(id,frame))
 			if (fl & 1) != 0:
 				print('   remove id={} frame={}'.format(id,frame-1))
-			#objdata_coord = None
-			#res_id = None
+			obj = Struct(fl=fl,frame=frame,coord=None,resid=None)
 			while True:
 				type = data.u8
 				if type not in self.objdata_types:
@@ -472,45 +471,55 @@ class SalemProtocolParser:
 				if type == 255: # OD_END
 					print('')
 					break
-				self.objdata_types[type].parse(data)
-			#if objdata_coord != None and res_id != None:
-			#	objdata[objdata_coord] = res_id
+				self.objdata_types[type].parse(data, obj)
+			if id not in self.objdata:
+				self.objdata[id] = obj
+			else:
+				_obj = self.objdata[id]
+				_obj.fl = obj.fl
+				_obj.frame = obj.frame
+				if obj.coord != None:
+					_obj.coord = obj.coord
+				if obj.resid != None:
+					_obj.resid = obj.resid
 
-	def rx_objdata_rem (self, data):
+	def rx_objdata_rem (self, data, obj):
 		print('remove')
 
-	def rx_objdata_move (self, data):
-		objdata_coord = data.coord
+	def rx_objdata_move (self, data, obj):
+		coord = data.coord
 		ia = data.u16
-		print('coord={} ia={}'.format(objdata_coord, ia))
+		print('coord={} ia={}'.format(coord, ia))
+		obj.coord = coord
 
-	def rx_objdata_res (self, data):
-		res_id = data.u16
-		if (res_id & 0x8000) != 0: #TODO if resid.bit(4).is_set ...
-			res_id &= ~0x8000
-			print('res_id={} sdt={}'.format(res_id,data.b(data.u8)))
-		else:
-			print('res_id={} sdt=[]'.format(res_id))
+	def rx_objdata_res (self, data, obj):
+		resid = data.u16
+		sdt = None
+		if (resid & 0x8000) != 0: #TODO if resid.bit(4).is_set ...
+			resid &= ~0x8000
+			sdt = data.b(data.u8)
+		print('resid={} sdt={}'.format(resid,sdt))
+		obj.resid = resid
 
-	def rx_objdata_linbeg (self, data):
+	def rx_objdata_linbeg (self, data, obj):
 		print('s={} t={} c={}'.format(data.coord,data.coord,data.s32))
 
-	def rx_objdata_linstep (self, data):
+	def rx_objdata_linstep (self, data, obj):
 		print('l={}'.format(data.s32))
 
-	def rx_objdata_speech (self, data):
+	def rx_objdata_speech (self, data, obj):
 		print('zo={} text={}'.format(data.s16,data.cstr))
 
-	def rx_objdata_compose (self, data):
+	def rx_objdata_compose (self, data, obj):
 		print('resid={}'.format(data.u16))
 
-	def rx_objdata_drawoff (self, data):
+	def rx_objdata_drawoff (self, data, obj):
 		print('off={}'.format(data.coord))
 
-	def rx_objdata_lumin (self, data):
+	def rx_objdata_lumin (self, data, obj):
 		print('off={} sz={} str={}'.format(data.coord,data.u16,data.u8))
 
-	def rx_objdata_avatar (self, data):
+	def rx_objdata_avatar (self, data, obj):
 		layers = []
 		while True:
 			layer = data.u16
@@ -519,14 +528,14 @@ class SalemProtocolParser:
 			layers.append(layer)
 		print('layers={}'.format(layers))
 
-	def rx_objdata_follow (self, data):
+	def rx_objdata_follow (self, data, obj):
 		oid = data.u32
 		if oid != 0xffFFffFF:
 			print('oid={} xfres={} xfname={}'.format(oid,data.u16,data.cstr))
 		else:
 			print('oid={}'.format(oid))
 
-	def rx_objdata_homing (self, data):
+	def rx_objdata_homing (self, data, obj):
 		oid = data.u32
 		print('oid={}'.format,end=' ')
 		if oid == 0xffFFffFF:
@@ -536,7 +545,7 @@ class SalemProtocolParser:
 		else:
 			print('homing coord={} v={}'.format(data.coord,data.u16))
 
-	def rx_objdata_overlay (self, data):
+	def rx_objdata_overlay (self, data, obj):
 		olid = data.s32
 		prs = (olid & 1) != 0
 		olid >>= 1
@@ -551,16 +560,16 @@ class SalemProtocolParser:
 			sdt = []
 		print('olid={} prs={} resid={} sdt={}'.format(olid,prs,resid,sdt))
 
-	def rx_objdata_auth (self, data):
+	def rx_objdata_auth (self, data, obj):
 		raise Exception('incorrect objdata type AUTH')
 
-	def rx_objdata_health (self, data):
+	def rx_objdata_health (self, data, obj):
 		print('hp={}'.format(data.u8))
 
-	def rx_objdata_buddy (self, data):
+	def rx_objdata_buddy (self, data, obj):
 		print('name={} group={} btype={}'.format(data.cstr,data.u8,data.u8))
 
-	def rx_objdata_cmppose (self, data):
+	def rx_objdata_cmppose (self, data, obj):
 		pfl = data.u8
 		seq = data.u8
 		print('pfl={} seq={}'.format(pfl,seq))
@@ -587,7 +596,7 @@ class SalemProtocolParser:
 			ttime = data.u8
 			print('         ttime={}'.format(ttime))
 
-	def rx_objdata_cmpmod (self, data):
+	def rx_objdata_cmpmod (self, data, obj):
 		while True:
 			modif = data.u16
 			if modif == 65535:
@@ -598,7 +607,7 @@ class SalemProtocolParser:
 					break
 		print('!!! TODO print all this')
 
-	def rx_objdata_cmpequ (self, data):
+	def rx_objdata_cmpequ (self, data, obj):
 		while True:
 			h = data.u8
 			if h == 255:
@@ -612,7 +621,7 @@ class SalemProtocolParser:
 				z = data.s16
 		print('!!! TODO print all this')
 
-	def rx_objdata_icon (self, data):
+	def rx_objdata_icon (self, data, obj):
 		resid = data.u16
 		if resid == 65535:
 			print('icon=null')
@@ -620,7 +629,7 @@ class SalemProtocolParser:
 			ifl = data.u8
 			print('icon=getres({}) ifl={}'.format(resid,ifl))
 
-	def rx_objdata_end (self, data):
+	def rx_objdata_end (self, data, obj):
 		pass
 			
 	######## OBJACK ###############################
@@ -632,9 +641,6 @@ class SalemProtocolParser:
 	######## CLOSE ################################
 	def rx_close (self, data, server):
 		print()
-
-
-parser = SalemProtocolParser()
 
 
 def show_info(hdr,data):
@@ -659,27 +665,48 @@ def show_info(hdr,data):
 	if portsrc == 1870:
 		if portsrc == portdst:
 			print('SOURCE PORT == DEST PORT')
-			return
-		parser.parse(data,True)
+			exit(1)
+		if parse_server_packets:
+			parser.parse(data,True)
 	elif portdst == 1870:
-		parser.parse(data,False)
+		if parse_client_packets:
+			parser.parse(data,False)
 
 
 
 # CAPTURE: sudo tcpdump -i wlan0 -w second.pcap udp port 1870
 
-if len(argv) != 2:
+parser = SalemProtocolParser()
+parse_client_packets = False
+parse_server_packets = False
+
+if len(argv) != 3:
 	print('wrong arguments count')
 	exit(1)
+if argv[2] == 'client':
+	parse_client_packets = True
+if argv[2] == 'server':
+	parse_server_packets = True
+if argv[2] == 'both':
+	parse_client_packets = True
+	parse_server_packets = True
 rdr = pcapy.open_offline(argv[1])
 rdr.dispatch(-1,show_info)
 
 resfile = open('resids.txt','wb')
-for res_id in sorted(parser.resids):
-	resfile.write('{:5} {:35} {}\n'.format(res_id,parser.resids[res_id].name,parser.resids[res_id].ver).encode())
+for id in sorted(parser.resids):
+	res = parser.resids[id]
+	resfile.write('{:5} {:35} {}\n'.format(id,res.name,res.ver).encode())
 resfile.close()
 
-#objfile = open('objects.txt','wb')
-#for k,v in objdata.items():
-#	objfile.write('{:10} {:10} {:10}\r\n'.format(k[0]+8109022,k[1]+1988892,v).encode())
-#objfile.close()
+objfile = open('objects.txt','wb')
+for id in sorted(parser.objdata):
+	obj = parser.objdata[id]
+	resid = obj.resid
+	res = parser.resids.get(resid)
+	if res:
+		resname = res.name
+	else:
+		resname = ''
+	objfile.write('{} {} {} {} {}\n'.format(obj.fl,obj.frame,obj.coord,resid,resname).encode())
+objfile.close()
