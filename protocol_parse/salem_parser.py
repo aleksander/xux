@@ -50,6 +50,13 @@ class Message:
 		self.data[0:tmp+1] = []
 		return str
 
+	@property
+	def rawstr (self):
+		tmp = self.data.index(b'\x00')
+		str = self.data[:tmp]
+		self.data[0:tmp+1] = []
+		return str
+
 	def b (self, count=0):
 		if count > 0:
 			ret = self.data[:count]
@@ -135,6 +142,7 @@ class SalemProtocolParser:
 	def __init__(self):
 		self.objdata = {}
 		self.resids = {}
+		self.fragbufs = {}
 		self.sess_errors = {
 			0:'OK',
 			1:'AUTH',
@@ -423,34 +431,73 @@ class SalemProtocolParser:
 		off = data.u16
 		length = data.u16
 		unknown = data.b(8)
-		fragbuf = data.b()
+		segment = data.b()
 		print('   pktid={} off={} len={} !!! TODO parse fragbuf'.format(pktid,off,length))
-		#
-		#
-		#fragbuf.add(msg.blob, 8, msg.blob.length - 8, off); # Defrag.java +55
-		#arraycopy(Object src, int srcPos, Object dest, int destPos, int length)
-		#arraycopy(blob,       boff,       this.blob,   off,         blen)
-		#
-		#
-		#coord = [data.s32,data.s32]
-		#mmname = data.cstr
-		#pfl = []
-		#while True:
-		#	pfl.append(data.u8)
-		#	if pfl[-1] == 255:
-		#		pfl[-1:] = []
-		#		break
-		#dec_data = Message(zlib.decompress(data.data))
-		#tiles = dec_data.b(100*100)
-		#pidx = dec_data.u8
-		#if pidx != 0xff:
-		#	print('  !!! FIXME') 
-		#print('   pktid={} off={} len={} grid_coord={} mmname="{}" pfl={}'.format(pktid,off,length,coord,mmname,pfl))
-		#for i in range(0,100):
-		#	print('   ',end='')
-		#	for j in range(0,100):
-		#		print('{:02X}'.format(tiles[i*100+j]), end='')
-		#	print('')
+		
+		fragbufs = self.fragbufs
+		fragbuf = fragbufs.get(pktid)
+		if fragbuf == None:
+			fragbuf = bytearray(length)
+			fragbufs[pktid] = fragbuf
+		fragbuf[off:off+len(segment)] = segment
+		# MCache.java +444
+		# Defrag.java +55
+
+	def parse_fragbufs (self):
+		for id,buf in self.fragbufs.items():
+			data = Message(buf)
+			coord = data.coord
+			# MCache.java +278
+			mmname = data.rawstr
+			pfl = bytearray(256)
+			while True:
+				pidx = data.u8
+				if pidx == 255:
+					break
+				pfl[pidx] = data.u8
+			data = Message(zlib.decompress(data.data))
+			print('coord={} mmname={} pfl={}'.format(coord,mmname,pfl))
+
+#coord = [data.s32,data.s32]
+#mmname = data.cstr
+#pfl = []
+#while True:
+#       pfl.append(data.u8)
+#       if pfl[-1] == 255:
+#               pfl[-1:] = []
+#               break
+#dec_data = Message(zlib.decompress(data.data))
+#tiles = dec_data.b(100*100)
+#pidx = dec_data.u8
+#if pidx != 0xff:
+#       print('  !!! FIXME') 
+#print('   pktid={} off={} len={} grid_coord={} mmname="{}" pfl={}'.format(pktid,off,length,coord,mmname,pfl))
+#for i in range(0,100):
+#       print('   ',end='')
+#       for j in range(0,100):
+#               print('{:02X}'.format(tiles[i*100+j]), end='')
+#       print('')
+
+
+
+#    public void mapdata2(Message msg) {
+#        Coord c = msg.coord();
+#        synchronized(grids) {
+#            synchronized(req) {
+#                if(req.containsKey(c)) {
+#                    Grid g = grids.get(c);
+#                    if(g == null)
+#                        grids.put(c, g = new Grid(c));
+#                    g.fill(msg);
+#                    req.remove(c);
+#                    olseq++;
+#                }
+#            }
+#        }
+#    }
+#
+#
+#
 
 	######## OBJDATA ##############################
 	def rx_objdata (self, data, server): # Session.java +241
@@ -710,6 +757,12 @@ for id in sorted(parser.objdata):
 		resname = ''
 	objfile.write('{} {} {} {} {}\n'.format(obj.fl,obj.frame,obj.coord,resid,resname).encode())
 objfile.close()
+
+print()
+#for id,buf in parser.fragbufs.items():
+#	print('{} {}'.format(id,len(buf)))
+parser.parse_fragbufs()
+print()
 
 x = None
 y = None
