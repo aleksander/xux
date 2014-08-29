@@ -1,11 +1,11 @@
 ﻿#!/usr/bin/python3.2
 # -*- coding: utf-8 -*-
 
+
 import pure_pcapy as pcapy
 import struct, sys, zlib, math
 from sys import argv
 
-resfile = open('resids.txt','wb')
 
 class Struct:
         def __init__(self, **kwds):
@@ -133,7 +133,8 @@ class Message:
 
 class SalemProtocolParser:
 	def __init__(self):
-		self.objdata = {}
+		#self.objdata = {}
+		self.resids = {}
 		self.sess_errors = {
 			0:'OK',
 			1:'AUTH',
@@ -347,7 +348,7 @@ class SalemProtocolParser:
 		res_name = data.cstr
 		res_ver = data.u16
 		print('   id={} name={} ver={}'.format(res_id,res_name,res_ver))
-		resfile.write('{:5} {}\r\n'.format(res_id,res_name).encode())
+		self.resids[res_id] = Struct(name=res_name,ver=res_ver)
 
 	def rx_rel_party (self, data):
 		while data.len > 0:
@@ -672,10 +673,13 @@ if len(argv) != 2:
 	exit(1)
 rdr = pcapy.open_offline(argv[1])
 rdr.dispatch(-1,show_info)
-# print(counters)
+
+resfile = open('resids.txt','wb')
+for res_id in sorted(parser.resids):
+	resfile.write('{:5} {:35} {}\n'.format(res_id,parser.resids[res_id].name,parser.resids[res_id].ver).encode())
 resfile.close()
 
-objfile = open('objects.txt','wb')
-for k,v in objdata.items():
-	objfile.write('{:10} {:10} {:10}\r\n'.format(k[0]+8109022,k[1]+1988892,v).encode())
-objfile.close()
+#objfile = open('objects.txt','wb')
+#for k,v in objdata.items():
+#	objfile.write('{:10} {:10} {:10}\r\n'.format(k[0]+8109022,k[1]+1988892,v).encode())
+#objfile.close()
