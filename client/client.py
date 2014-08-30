@@ -85,10 +85,12 @@ class hnh_client(ShowBase):
 		self.chars = {}
 		self.tx_que = []
 		self.tx_seq = 0
+		#FORMAT = '%(asctime)s  %(message)s'
+		FORMAT = ''
 		if os.name == 'posix':
-			logging.basicConfig(format='%(asctime)s  %(message)s', level=logging.INFO)
+			logging.basicConfig(format=FORMAT, level=logging.INFO)
 		else:
-			logging.basicConfig(filename='client.log', filemode="w", format='%(asctime)s  %(message)s', level=logging.INFO)
+			logging.basicConfig(filename='client.log', filemode="w", format=FORMAT, level=logging.INFO)
 		self.new_widget(0, 'ui_root', (0,0), None, [])
 		self.sess_errors = {
 			0:'OK',
@@ -244,10 +246,10 @@ class hnh_client(ShowBase):
 			else:
 				rel_len = data.getRemainingSize()
 			if rel_type not in self.rel_types:
-				dbg('  seq={0} rel=UNKNOWN ({1}) len={2}'.format(seq, rel_type, rel_len))
+				dbg(' {0:3} ??? ({1})'.format(seq, rel_type))
 				data.skipBytes(rel_len)
 			else:
-				dbg('  seq={0} rel={1} len={2}'.format(seq, self.rel_types[rel_type][0], rel_len))
+				dbg(' {0:3} {1:6}'.format(seq, self.rel_types[rel_type][0]))
 				rel = data.extractBytes(rel_len)
 				dg = Datagram(rel)
 				pdi = PyDatagramIterator.PyDatagramIterator(dg)
@@ -353,7 +355,97 @@ class hnh_client(ShowBase):
 		pass
 
 	def rx_objdata(self, data):
-		pass
+		while data.getRemainingSize():
+			objdata_fl = data.getUint8()
+			objdata_id = data.getInt32()
+			objdata_frame = data.getInt32()
+			print('  id={0} frame={1}'.format(objdata_id, objdata_frame))
+			if objdata_fl&1 != 0:
+				print('   remove id={0} frame={1}'.format(objdata_id, objdata_frame-1))
+			objdata_coord = None
+			res_id = None
+			while True:
+				objdata_type = cu8(data)
+				if objdata_type not in objdata_types:
+					print('   UNKNOWN OBJDATA TYPE {}'.format(objdata_type))
+					raise Exception('unknown objdata type', '...')
+				print('   {}'.format(objdata_types[objdata_type]),end=' ')
+				if objdata_type == 0: # REM
+					print('remove id={} frame={}'.format(objdata_id,objdata_frame))
+				elif objdata_type == 1: # MOVE
+					objdata_coord = (cs32(data),cs32(data))
+					print('coord={}'.format(objdata_coord))
+				elif objdata_type == 2: # RES
+					res_id = cu16(data)
+					if res_id&0x8000 != 0:
+						res_id &= ~0x8000
+						print('res_id={} sdt={}'.format(res_id,cb(data,cu8(data))))
+					else:
+						print('res_id={} sdt=[]'.format(res_id))
+				elif objdata_type == 3: # LINBEG
+					print('s={} t={} c={}'.format([cs32(data),cs32(data)],[cs32(data),cs32(data)],cs32(data)))
+				elif objdata_type == 4: # LINSTEP
+					print('l={}'.format(cs32(data)))
+				elif objdata_type == 5: # SPEECH
+					print('off={} text={}'.format([cs32(data),cs32(data)],cstr(data)))
+				elif objdata_type == 6: # LAYERS
+					res = cu16(data)
+					layers = []
+					while True:
+						layer = cu16(data)
+						if layer == 65535:
+							break
+						layers.append(layer)
+					print('res={} layers={}'.format(res,layers))
+				elif objdata_type == 7: # DRAWOFF
+					print('off={}'.format([cs32(data),cs32(data)]))
+				elif objdata_type == 8: # LUMIN
+					print('off={} sz={} str={}'.format([cs32(data),cs32(data)],cu16(data),cu8(data)))
+				elif objdata_type == 9: # AVATAR
+					layers = []
+					while True:
+						layer = cu16(data)
+						if layer == 65535:
+							break
+						layers.append(layer)
+					print('layers={}'.format(layers))
+				elif objdata_type == 10: # FOLLOW
+					oid = cs32(data)
+					if oid != -1:
+						print('oid={} off={} szo={}'.format(oid,[cs32(data),cs32(data)],cu8(data)))
+					else:
+						print('oid={} off=[???,???] szo=0'.format(oid))
+				elif objdata_type == 11: # HOMING
+					oid = cs32(data)
+					print('oid={}'.format,end=' ')
+					if oid == -1:
+						print('homostop')
+					elif oid == -2:
+						print('homocoord coord={} v={}'.format([cs32(data),cs32(data)],cu16(data)))
+					else:
+						print('homing coord={} v={}'.format([cs32(data),cs32(data)],cu16(data)))
+				elif objdata_type == 12: # OVERLAY
+					olid = cs32(data)
+					prs = (olid & 1) != 0
+					olid >>= 1
+					resid = cu16(data)
+					if resid == 65535:
+						sdt = None
+					elif resid&0x8000 != 0:
+						resid &= ~0x8000
+						sdt = cb(data,cu8(data))
+					else:
+						sdt = []
+					print('olid={} prs={} resid={} sdt={}'.format(olid,prs,resid,sdt))
+				elif objdata_type == 14: # HEALTH
+					print('hp={}'.format(cu8(data)))
+				elif objdata_type == 15: # BUDDY
+					print('name={} group={} btype={}'.format(cstr(data),cu8(data),cu8(data)))
+				elif objdata_type == 255: # END
+					print('')
+					break
+			if objdata_coord != None and res_id != None:
+				objdata[objdata_coord] = res_id
 
 	def rx_objack(self, data):
 		pass
