@@ -31,36 +31,33 @@ class Message:
 	def __init__(self, data):
 		self.data = bytearray(data)
 
-	@property
-	def u8 (self):
-		ret = self.data[0]
-		self.data[0:1] = []
+	def unpack (self, fmt):
+		size = struct.calcsize(fmt)
+		(ret,) = struct.unpack(fmt,self.data[:size])
+		self.data[0:size] = []
 		return ret
 
+	@property
 	def s8 (self):
-		print('!!! s8 FIXME')
-		ret = self.data[0]
-		self.data[0:1] = []
-		return ret
+		return self.unpack('b')
+
+	@property
+	def u8 (self):
+		return self.unpack('B')
+
+	@property
+	def s16 (self):
+		return self.unpack('<h')
 
 	@property
 	def u16 (self):
-		ret = self.data[0]+(self.data[1]<<8)
-		self.data[0:2] = []
-		return ret
+		return self.unpack('<H')
 
 	@property
 	def cstr (self):
-		tmp = self.data.index(b'\x00')
-		str = self.data[:tmp].decode()
-		self.data[0:tmp+1] = []
-		return str
-
-	@property
-	def rawstr (self):
-		tmp = self.data.index(b'\x00')
-		str = self.data[:tmp]
-		self.data[0:tmp+1] = []
+		i = self.data.index(b'\x00')
+		str = self.data[:i].decode()
+		self.data[0:i+1] = []
 		return str
 
 	def b (self, count=0):
@@ -73,28 +70,20 @@ class Message:
 		return ret
 
 	@property
-	def u32 (self):
-		ret = self.data[0]+(self.data[1]<<8)+(self.data[2]<<16)+(self.data[3]<<24)
-		self.data[0:4] = []
-		return ret
+	def s32 (self):
+		return self.unpack('<i')
 
 	@property
-	def s32 (self):
-		ret = self.data[0]+(self.data[1]<<8)+(self.data[2]<<16)+(self.data[3]<<24)
-		if ret>2147483647:
-			ret = -((2147483648*2)-ret)
-		self.data[0:4] = []
-		return ret
+	def u32 (self):
+		return self.unpack('<I')
 
 	@property
 	def f32 (self):
-		print('!!! f32 FIXME')
-		return self.cs32
+		return self.unpack('<f')
 
 	@property
 	def f64 (self):
-		print('!!! f64 FIXME')
-		return (self.cs32,self.cs32)
+		return self.unpack('<d')
 
 	@property
 	def len(self):
@@ -453,16 +442,17 @@ class SalemProtocolParser:
 		for id,buf in self.fragbufs.items():
 			data = Message(buf)
 			coord = data.coord
-			# MCache.java +278
-			mmname = data.rawstr
-			pfl = bytearray(256)
-			while True:
-				pidx = data.u8
-				if pidx == 255:
-					break
-				pfl[pidx] = data.u8
-			data = Message(zlib.decompress(data.data))
-			print('coord={} mmname={} pfl={}'.format(coord,mmname,pfl))
+			print('{} {}'.format(id,coord))
+			## MCache.java +278
+			#mmname = data.cstr
+			#pfl = bytearray(256)
+			#while True:
+			#	pidx = data.u8
+			#	if pidx == 255:
+			#		break
+			#	pfl[pidx] = data.u8
+			#data = Message(zlib.decompress(data.data))
+			#print('coord={} mmname={} pfl={}'.format(coord,mmname,pfl))
 
 #coord = [data.s32,data.s32]
 #mmname = data.cstr
@@ -513,6 +503,9 @@ class SalemProtocolParser:
 			id = data.s32
 			frame = data.s32
 			print('  id={} frame={}'.format(id,frame))
+			if (id == 0):
+				print('!!! SOME PACKET BREAKGE (pure_pcap bug?)')
+				return
 			if (fl & 1) != 0:
 				print('   remove id={} frame={}'.format(id,frame-1))
 			obj = Struct(fl=fl,frame=frame,coord=None,resid=None)
