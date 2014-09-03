@@ -37,6 +37,12 @@ class Message:
 		self.data[0:1] = []
 		return ret
 
+	def s8 (self):
+		print('!!! s8 FIXME')
+		ret = self.data[0]
+		self.data[0:1] = []
+		return ret
+
 	@property
 	def u16 (self):
 		ret = self.data[0]+(self.data[1]<<8)
