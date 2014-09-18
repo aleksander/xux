@@ -42,59 +42,84 @@ struct udp_hdr {
         u_short crc;
 };
 
-typedef struct name_parse {
-    char *name;
-    void (*parse)(u_char *data, u_char is_server);
-} name_func;
+typedef struct {
+    u_char *data;
+    u_short len;
+    u_char from_server;
+} message;
 
-void rx_sess (u_char *data, u_char is_server) {
-    puts("sess");
+typedef struct {
+    char *name;
+    void (*parse)(message *msg);
+} name_parse;
+
+void rx_sess (message *msg) {
+    puts("  sess");
 }
-void rx_rel (u_char *data, u_char is_server) {
-    puts("rel");
+void rx_rel (message *msg) {
+    puts("  rel");
 }
-void rx_ack (u_char *data, u_char is_server) {
-    puts("ack");
+void rx_ack (message *msg) {
+    puts("  ack");
 }
-void rx_beat (u_char *data, u_char is_server) {
-    puts("");
+void rx_beat (message *msg) {
+    puts("  beat");
 }
-void rx_mapreq (u_char *data, u_char is_server) {
-    puts("");
+void rx_mapreq (message *msg) {
+    puts("  mapreq");
 }
-void rx_mapdata (u_char *data, u_char is_server) {
-    puts("");
+void rx_mapdata (message *msg) {
+    puts("  mapdata");
 }
-void rx_objdata (u_char *data, u_char is_server) {
-    puts("");
+void rx_objdata (message *msg) {
+    puts("  objdata");
 }
-void rx_objack (u_char *data, u_char is_server) {
-    puts("");
+void rx_objack (message *msg) {
+    puts("  objack");
 }
-void rx_close (u_char *data, u_char is_server) {
-    puts("");
+void rx_close (message *msg) {
+    puts("  close");
 }
 
 name_parse msg_types[] = {
-    [0] = { name =    "SESS", parse = rx_sess },
-    [1] = { name =     "REL", parse = rx_rel },
-    [2] = { name =     "ACK", parse = rx_ack },
-    [3] = { name =    "BEAT", parse = rx_beat },
-    [4] = { name =  "MAPREQ", parse = rx_mapreq },
-    [5] = { name = "MAPDATA", parse = rx_mapdata },
-    [6] = { name = "OBJDATA", parse = rx_objdata },
-    [7] = { name =  "OBJACK", parse = rx_objack },
-    [8] = { name =   "CLOSE", parse = rx_close }
+    [0] = { .name =    "SESS", .parse = rx_sess },
+    [1] = { .name =     "REL", .parse = rx_rel },
+    [2] = { .name =     "ACK", .parse = rx_ack },
+    [3] = { .name =    "BEAT", .parse = rx_beat },
+    [4] = { .name =  "MAPREQ", .parse = rx_mapreq },
+    [5] = { .name = "MAPDATA", .parse = rx_mapdata },
+    [6] = { .name = "OBJDATA", .parse = rx_objdata },
+    [7] = { .name =  "OBJACK", .parse = rx_objack },
+    [8] = { .name =   "CLOSE", .parse = rx_close }
+};
+
+u_char u8 (message *msg) {
+    if (msg->len < 1) {
+        printf("!!! u8 FAILED !!!");
+    }
+    u_char ret = msg->data[0];
+    msg->data += 1;
+    msg->len -= 1;
+    return ret;
 }
 
-void salem_parse (const u_char *data, u_char is_server) {
-    printf((is_server)?"SERVER\n":"CLIENT\n");
-    
+void salem_parse (const u_char *data, u_short len, u_char from_server) {
+    printf((from_server)?"SERVER\n":"CLIENT\n");
+    message msg;
+    msg.data = (u_char *)data;
+    msg.len = len;
+    msg.from_server = from_server;
+    u_char type = u8(&msg);
+    msg_types[type].parse(&msg);
 }
 
 void parse (u_char *user, const struct pcap_pkthdr *h, const u_char *bytes) {
     printf("%u %u%s\n", h->len, h->caplen, (h->len == h->caplen)?"":" !!! len != caplen");
     if (h->len != h->caplen) return;
+    if (h->len <= sizeof(struct eth_hdr) + sizeof(struct ip_hdr) + sizeof(struct udp_hdr)) {
+        puts("too small frame");
+        return;
+    }
 
     struct eth_hdr *eth = (struct eth_hdr*)(bytes);
     if (ntohs(eth->type) != ETHERTYPE_IP) {
@@ -128,11 +153,13 @@ void parse (u_char *user, const struct pcap_pkthdr *h, const u_char *bytes) {
             return;
         }
         if (*user & PARSE_SERVER_PACKETS) {
-            salem_parse(bytes + sizeof(struct eth_hdr) + sizeof(struct ip_hdr) + sizeof(struct udp_hdr), 1);
+            salem_parse(bytes + sizeof(struct eth_hdr) + sizeof(struct ip_hdr) + sizeof(struct udp_hdr),
+                       h->len - sizeof(struct eth_hdr) - sizeof(struct ip_hdr) - sizeof(struct udp_hdr), 1);
         }
     } else if (ntohs(udp->dport) == 1870) {
         if (*user & PARSE_CLIENT_PACKETS) {
-            salem_parse(bytes + sizeof(struct eth_hdr) + sizeof(struct ip_hdr) + sizeof(struct udp_hdr), 0);
+            salem_parse(bytes + sizeof(struct eth_hdr) + sizeof(struct ip_hdr) + sizeof(struct udp_hdr),
+                       h->len - sizeof(struct eth_hdr) - sizeof(struct ip_hdr) - sizeof(struct udp_hdr), 0);
         }
     }
 
