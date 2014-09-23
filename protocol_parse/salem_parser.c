@@ -61,7 +61,7 @@ typedef struct {
             struct {
                 u8 type;
                 ...
-            } rel[];
+            } rels[];
         } rel;
         struct {
         } ack;
@@ -80,6 +80,24 @@ typedef struct {
     };
 } salem_message;
 */
+
+/* PROOF OF CONCEPT */
+void map_to_rel (u_char *data, rel *rel) {
+    rel->seq = data;
+    data += 1;
+    map_to_rel(data, rel->rels);
+}
+void map_to_client_sess (u_char *data, client_sess *sess) {
+    sess->unknown = data;
+    data += 2;
+    sess->proto = data;
+    data += strlen(sess->proto);
+    sess->ver = data;
+    data += 2;
+    sess->user = data;
+    data += strlen(sess->user);
+}
+/******************/
 
 typedef struct {
     u_char *data;
