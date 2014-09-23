@@ -82,20 +82,50 @@ typedef struct {
 */
 
 /* PROOF OF CONCEPT */
-void map_to_rel (u_char *data, rel *rel) {
-    rel->seq = data;
-    data += 1;
-    map_to_rel(data, rel->rels);
+u_char *u8 (message *msg) {
+    if (msg->len < 1) abort();
+    u_char *ret = msg->data;
+    ++msg->data;
+    --msg->len;
+    return ret;
 }
-void map_to_client_sess (u_char *data, client_sess *sess) {
-    sess->unknown = data;
-    data += 2;
-    sess->proto = data;
-    data += strlen(sess->proto);
-    sess->ver = data;
-    data += 2;
-    sess->user = data;
-    data += strlen(sess->user);
+
+u_short *u16 (message *msg) {
+    if (msg->len < 2) abort();
+    u_short *ret = msg->data;
+    msg->data += 2;
+    msg->len -= 2;
+    return ret;
+}
+
+char *zstr (message *msg) {
+    if (msg->len < 1) abort();
+    char *ret = msg->data;
+    while (1) {
+        if (msg->data[0] == 0) {
+            ++msg->data;
+            --msg->len;
+            return ret;
+        }
+        ++msg->data;
+        --msg->len;
+        if (msg->len == 0) abort();
+    }
+}
+
+void map_to_rel (message *msg, rel *rel) {
+    rel->seq = u8(msg);
+    while (msg->len > 0) {
+        rel_element = new_rel_element(rel);
+        map_to_rel_element(msg, rel_element);
+    }
+}
+
+void map_to_client_sess (message *msg, client_sess *sess) {
+    sess->unknown = u16(msg);
+    sess->proto = zstr(msg);
+    sess->ver = u16(msg);
+    sess->user = zstr(msg);
 }
 /******************/
 
@@ -215,29 +245,31 @@ void rx_objack (message *msg) {
 void rx_close (message *msg) {
 }
 
-name_parse msg_types[] = {
-    [0] = { .name =    "SESS", .parse = rx_sess },
-    [1] = { .name =     "REL", .parse = rx_rel },
-    [2] = { .name =     "ACK", .parse = rx_ack },
-    [3] = { .name =    "BEAT", .parse = rx_beat },
-    [4] = { .name =  "MAPREQ", .parse = rx_mapreq },
-    [5] = { .name = "MAPDATA", .parse = rx_mapdata },
-    [6] = { .name = "OBJDATA", .parse = rx_objdata },
-    [7] = { .name =  "OBJACK", .parse = rx_objack },
-    [8] = { .name =   "CLOSE", .parse = rx_close }
+name_map_print msg_types[] = {
+    [0] = { .name =    "SESS", .map = map_sess,  , .print = print_sess    },
+    [1] = { .name =     "REL", .map = rx_rel     , .print = print_rel     },
+    [2] = { .name =     "ACK", .map = rx_ack     , .print = print_ack     },
+    [3] = { .name =    "BEAT", .map = rx_beat    , .print = print_beat    },
+    [4] = { .name =  "MAPREQ", .map = rx_mapreq  , .print = print_mapreq  },
+    [5] = { .name = "MAPDATA", .map = rx_mapdata , .print = print_mapdata },
+    [6] = { .name = "OBJDATA", .map = rx_objdata , .print = print_objdata },
+    [7] = { .name =  "OBJACK", .map = rx_objack  , .print = print_objack  },
+    [8] = { .name =   "CLOSE", .map = rx_close   , .print = print_close   }
 };
 
-void salem_parse (const u_char *data, u_short len, u_char from_server) {
-    printf((from_server)?"SERVER\n":"CLIENT\n");
-    message msg;
-    msg.data = (u_char *)data;
-    msg.len = len;
-    msg.from_server = from_server;
-    u_char type = u8(&msg);
+void map_to_any (message *msg, salem_message *smsg) {
+    smsg->type = u8(msg);
     printf("  %s\n", msg_types[type].name);
-    msg_types[type].parse(&msg);
-    if (msg.len > 0) {
-        printf("DATA REMAINS %u bytes\n", msg.len);
+    msg_types[type].map(msg, smsg);
+}
+
+void salem_parse (message *msg) {
+    printf((msg->from_server)?"SERVER\n":"CLIENT\n");
+    salem_message smsg;
+    memset(&smsg, 0, sizeof(salem_message));
+    map_to_any(msg, &smsg);
+    if (msg->len > 0) {
+        printf("DATA REMAINS %u bytes\n", msg->len);
     }
 }
 
@@ -278,19 +310,23 @@ void parse (u_char *user, const struct pcap_pkthdr *h, const u_char *bytes) {
 
     udp_hdr *udp = (udp_hdr*)(bytes + sizeof(eth_hdr) + sizeof(ip_hdr));
     //printf("%u > %u\n", ntohs(udp->sport), ntohs(udp->dport));
+
+    message msg;
+    msg.data = (u_char *)bytes + sizeof(eth_hdr) + sizeof(ip_hdr) + sizeof(udp_hdr);
+    msg.len = h->len - sizeof(eth_hdr) - sizeof(ip_hdr) - sizeof(udp_hdr);
     if (ntohs(udp->sport) == 1870) {
-        if (ntohs(udp->dport) == 1870) {
+        if (udp->sport == udp->dport) {
             printf("sport == dport\n");
             return;
         }
         if (*user & PARSE_SERVER_PACKETS) {
-            salem_parse(bytes + sizeof(eth_hdr) + sizeof(ip_hdr) + sizeof(udp_hdr),
-                       h->len - sizeof(eth_hdr) - sizeof(ip_hdr) - sizeof(udp_hdr), 1);
+            msg.from_server = 1;
+            salem_parse(&msg);
         }
     } else if (ntohs(udp->dport) == 1870) {
         if (*user & PARSE_CLIENT_PACKETS) {
-            salem_parse(bytes + sizeof(eth_hdr) + sizeof(ip_hdr) + sizeof(udp_hdr),
-                       h->len - sizeof(eth_hdr) - sizeof(ip_hdr) - sizeof(udp_hdr), 0);
+            msg.from_server = 0;
+            salem_parse(&msg);
         }
     }
 
