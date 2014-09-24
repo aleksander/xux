@@ -82,6 +82,61 @@ typedef struct {
 */
 
 /* PROOF OF CONCEPT */
+typedef struct {
+    u_short *unknown;
+    char    *proto;
+    u_short *ver;
+    char    *user;
+    u_char  *cookie;
+} client_sess;
+typedef struct {
+    u_char *error;
+} server_sess;
+typedef struct {
+    u_char *type;
+    // ...
+} rel_element;
+typedef struct {
+    u_short *seq;
+    rel_element *rels;
+    u_int rels_len;
+} rel;
+typedef struct {
+} ack;
+typedef struct {
+} beat;
+typedef struct {
+} mapreq;
+typedef struct {
+} mapdata;
+typedef struct {
+} objdata;
+typedef struct {
+} objack;
+typedef struct {
+} close;
+typedef struct {
+    u_char *type;
+    union {
+        client_sess c_sess;
+        server_sess s_sess;
+        rel rel;
+        ack ack;
+        beat beat;
+        mapreq mapreq;
+        mapdata mapdata;
+        objdata objdata;
+        objack objack;
+        close close;
+    };
+} salem_message;
+
+typedef struct {
+    u_char *data;
+    u_short len;
+    u_char from_server;
+} message;
+
 u_char *u8 (message *msg) {
     if (msg->len < 1) abort();
     u_char *ret = msg->data;
@@ -92,7 +147,7 @@ u_char *u8 (message *msg) {
 
 u_short *u16 (message *msg) {
     if (msg->len < 2) abort();
-    u_short *ret = msg->data;
+    u_short *ret = (u_short *)msg->data;
     msg->data += 2;
     msg->len -= 2;
     return ret;
@@ -113,28 +168,52 @@ char *zstr (message *msg) {
     }
 }
 
-void map_to_rel (message *msg, rel *rel) {
-    rel->seq = u8(msg);
+rel_element *new_rel_element(rel *rel) {
+    ++rel->rels_len;
+    rel->rels = realloc(rel->rels, sizeof(rel_element) * rel->rels_len);
+    rel_element *last_rel = &rel->rels[rel->rels_len-1];
+    memset(last_rel, 0, sizeof(rel_element));
+    return last_rel;
+}
+
+void map_to_rel_element (message *msg, rel_element *el) {
+    el->type = u8(msg);
+}
+
+void map_to_rel (message *msg, salem_message *smsg) {
+    smsg->rel.seq = u16(msg);
     while (msg->len > 0) {
-        rel_element = new_rel_element(rel);
-        map_to_rel_element(msg, rel_element);
+        rel_element *rel_el = new_rel_element(&smsg->rel);
+        map_to_rel_element(msg, rel_el);
     }
 }
 
-void map_to_client_sess (message *msg, client_sess *sess) {
-    sess->unknown = u16(msg);
-    sess->proto = zstr(msg);
-    sess->ver = u16(msg);
-    sess->user = zstr(msg);
+void map_to_client_sess (message *msg, salem_message *smsg) {
+    smsg->c_sess.unknown = u16(msg);
+    smsg->c_sess.proto = zstr(msg);
+    smsg->c_sess.ver = u16(msg);
+    smsg->c_sess.user = zstr(msg);
 }
+
+void map_to_server_sess (message *msg, salem_message *smsg) {
+    smsg->s_sess.error = u8(msg);
+}
+
+void map_to_sess (message *msg, salem_message *smsg) {
+    if (msg->from_server) map_to_server_sess(msg, smsg);
+    else map_to_client_sess(msg, smsg);
+}
+
+void map_to_ack (message *msg, salem_message *smsg) {}
+void map_to_beat (message *msg, salem_message *smsg) {}
+void map_to_mapreq (message *msg, salem_message *smsg) {}
+void map_to_mapdata (message *msg, salem_message *smsg) {}
+void map_to_objdata (message *msg, salem_message *smsg) {}
+void map_to_objack (message *msg, salem_message *smsg) {}
+void map_to_close (message *msg, salem_message *smsg) {}
 /******************/
 
-typedef struct {
-    u_char *data;
-    u_short len;
-    u_char from_server;
-} message;
-
+/*
 u_char u8 (message *msg) {
     if (msg->len < 1) {
         printf("!!! u8 FAILED !!!");
@@ -180,11 +259,7 @@ u_char *bytes (message *msg, u_short len) {
     }
     return b;
 }
-
-typedef struct {
-    char *name;
-    void (*parse)(message *msg);
-} name_parse;
+*/
 
 char *sess_errors[] = {
     [0] = "OK",
@@ -195,6 +270,7 @@ char *sess_errors[] = {
     [5] = "EXPR"
 };
 
+/*
 void rx_sess (message *msg) {
     if (msg->from_server) {
         u_char error = u8(msg);
@@ -244,23 +320,29 @@ void rx_objack (message *msg) {
 }
 void rx_close (message *msg) {
 }
+*/
+
+typedef struct {
+    char *name;
+    void (*map)(message *msg, salem_message *smsg);
+} name_map_print;
 
 name_map_print msg_types[] = {
-    [0] = { .name =    "SESS", .map = map_sess,  , .print = print_sess    },
-    [1] = { .name =     "REL", .map = rx_rel     , .print = print_rel     },
-    [2] = { .name =     "ACK", .map = rx_ack     , .print = print_ack     },
-    [3] = { .name =    "BEAT", .map = rx_beat    , .print = print_beat    },
-    [4] = { .name =  "MAPREQ", .map = rx_mapreq  , .print = print_mapreq  },
-    [5] = { .name = "MAPDATA", .map = rx_mapdata , .print = print_mapdata },
-    [6] = { .name = "OBJDATA", .map = rx_objdata , .print = print_objdata },
-    [7] = { .name =  "OBJACK", .map = rx_objack  , .print = print_objack  },
-    [8] = { .name =   "CLOSE", .map = rx_close   , .print = print_close   }
+    [0] = { .name =    "SESS", .map = map_to_sess,  /*, .print = print_sess   */ },
+    [1] = { .name =     "REL", .map = map_to_rel    /*, .print = print_rel    */ },
+    [2] = { .name =     "ACK", .map = map_to_ack    /*, .print = print_ack    */ },
+    [3] = { .name =    "BEAT", .map = map_to_beat   /*, .print = print_beat   */ },
+    [4] = { .name =  "MAPREQ", .map = map_to_mapreq /*, .print = print_mapreq */ },
+    [5] = { .name = "MAPDATA", .map = map_to_mapdata/*, .print = print_mapdata*/ },
+    [6] = { .name = "OBJDATA", .map = map_to_objdata/*, .print = print_objdata*/ },
+    [7] = { .name =  "OBJACK", .map = map_to_objack /*, .print = print_objack */ },
+    [8] = { .name =   "CLOSE", .map = map_to_close  /*, .print = print_close  */ }
 };
 
 void map_to_any (message *msg, salem_message *smsg) {
     smsg->type = u8(msg);
-    printf("  %s\n", msg_types[type].name);
-    msg_types[type].map(msg, smsg);
+    //printf("  %s\n", msg_types[type].name);
+    msg_types[*smsg->type].map(msg, smsg);
 }
 
 void salem_parse (message *msg) {
