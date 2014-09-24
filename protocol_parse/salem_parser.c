@@ -90,7 +90,7 @@ typedef struct {
     u_char  *cookie;
 } client_sess;
 typedef struct {
-    u_char *error;
+    u_char *err;
 } server_sess;
 typedef struct {
     u_char *type;
@@ -102,6 +102,7 @@ typedef struct {
     u_int rels_len;
 } rel;
 typedef struct {
+    u_short *seq;
 } ack;
 typedef struct {
 } beat;
@@ -117,6 +118,7 @@ typedef struct {
 } close;
 typedef struct {
     u_char *type;
+    u_char from_server;
     union {
         client_sess c_sess;
         server_sess s_sess;
@@ -168,6 +170,15 @@ char *zstr (message *msg) {
     }
 }
 
+u_char *bytes (message *msg, u_int num) {
+    if (msg->len < 1) abort();
+    if (num > 0 && msg->len < num) abort();
+    u_char *ret = msg->data;
+    msg->data += (num > 0)?num:msg->len;
+    msg->len -= (num > 0)?num:msg->len;
+    return ret;
+}
+
 rel_element *new_rel_element(rel *rel) {
     ++rel->rels_len;
     rel->rels = realloc(rel->rels, sizeof(rel_element) * rel->rels_len);
@@ -178,6 +189,14 @@ rel_element *new_rel_element(rel *rel) {
 
 void map_to_rel_element (message *msg, rel_element *el) {
     el->type = u8(msg);
+    u_short len;
+    if ((*el->type & 0x80) != 0) {
+        *el->type &= 0x7f;
+        len = *u16(msg);
+    } else {
+        len = msg->len;
+    }
+    u_char *rel = bytes(msg, len);
 }
 
 void map_to_rel (message *msg, salem_message *smsg) {
@@ -193,10 +212,11 @@ void map_to_client_sess (message *msg, salem_message *smsg) {
     smsg->c_sess.proto = zstr(msg);
     smsg->c_sess.ver = u16(msg);
     smsg->c_sess.user = zstr(msg);
+    smsg->c_sess.cookie = bytes(msg, 0);
 }
 
 void map_to_server_sess (message *msg, salem_message *smsg) {
-    smsg->s_sess.error = u8(msg);
+    smsg->s_sess.err = u8(msg);
 }
 
 void map_to_sess (message *msg, salem_message *smsg) {
@@ -204,7 +224,9 @@ void map_to_sess (message *msg, salem_message *smsg) {
     else map_to_client_sess(msg, smsg);
 }
 
-void map_to_ack (message *msg, salem_message *smsg) {}
+void map_to_ack (message *msg, salem_message *smsg) {
+    smsg->ack.seq = u16(msg);
+}
 void map_to_beat (message *msg, salem_message *smsg) {}
 void map_to_mapreq (message *msg, salem_message *smsg) {}
 void map_to_mapdata (message *msg, salem_message *smsg) {}
@@ -212,54 +234,6 @@ void map_to_objdata (message *msg, salem_message *smsg) {}
 void map_to_objack (message *msg, salem_message *smsg) {}
 void map_to_close (message *msg, salem_message *smsg) {}
 /******************/
-
-/*
-u_char u8 (message *msg) {
-    if (msg->len < 1) {
-        printf("!!! u8 FAILED !!!");
-        abort();
-    }
-    u_char ret = msg->data[0];
-    msg->data += 1;
-    msg->len -= 1;
-    return ret;
-}
-
-u_short u16 (message *msg) {
-    u_short ret = u8(msg);
-    ret += ((u_short)u8(msg)) << 8;
-    return ret;
-}
-
-char *cstr (message *msg) {
-    char *str = NULL;
-    int i = -1;
-    do {
-        ++i;
-        str = realloc(str, i + 1);
-        str[i] = u8(msg);
-    } while (str[i] != 0);
-    return str;
-}
-
-u_char *bytes (message *msg, u_short len) {
-    u_char *b;
-    if (len > 0) {
-        if (len > msg->len) {
-            abort();
-        }
-        b = malloc(len);
-        memcpy(b, msg->data, len);
-        msg->data += len;
-        msg->len -= len;
-    } else {
-        b = malloc(msg->len);
-        memcpy(b, msg->data, msg->len);
-        msg->len = 0;
-    }
-    return b;
-}
-*/
 
 char *sess_errors[] = {
     [0] = "OK",
@@ -270,86 +244,78 @@ char *sess_errors[] = {
     [5] = "EXPR"
 };
 
-/*
-void rx_sess (message *msg) {
-    if (msg->from_server) {
-        u_char error = u8(msg);
-        printf("    error=%u (%s)\n", error, sess_errors[error]);
-    } else {
-        u_short unknown = u16(msg);
-        char *proto = cstr(msg);
-        u_short ver = u16(msg);
-        char *user = cstr(msg);
-        printf("    unknown=%hu proto='%s' ver=%hu user='%s' cookie=TODO\n", unknown, proto, ver, user);
-        free(proto);
-        free(user);
-    }
-}
-
-void rx_rel (message *msg) {
-    u_char seq = u16(msg);
-    printf("    seq=%u\n", seq);
-    while (msg->len > 0) {
-        u_char type = u8(msg);
-        u_short len;
-        if ((type & 0x80) != 0) {
-            type &= 0x7f;
-            len = u16(msg);
-        } else {
-            len = msg->len;
-        }
-        printf("      type=%u len=%hu\n", type, len);
-        u_char *rel = bytes(msg, len);
-        free(rel);
-    }
-}
-
-void rx_ack (message *msg) {
-    u_short seq = u16(msg);
-    printf("    seq=%hu\n", seq);
-}
-void rx_beat (message *msg) {
-}
-void rx_mapreq (message *msg) {
-}
-void rx_mapdata (message *msg) {
-}
-void rx_objdata (message *msg) {
-}
-void rx_objack (message *msg) {
-}
-void rx_close (message *msg) {
-}
-*/
+char *rel_types[] = {
+    [0 ] = "NEWWDG", 
+    [1 ] = "WDGMSG", 
+    [2 ] = "DSTWDG", 
+    [3 ] = "MAPIV", 
+    [4 ] = "GLOBLOB",
+    [5 ] = "PAGINAE",
+    [6 ] = "RESID",
+    [7 ] = "PARTY",
+    [8 ] = "SFX",
+    [9 ] = "CATTR",
+    [10] = "MUSIC",
+    [11] = "TILES",
+    [12] = "BUFF",
+};
 
 typedef struct {
     char *name;
     void (*map)(message *msg, salem_message *smsg);
+    void (*print)(salem_message *smsg);
 } name_map_print;
 
+void print_sess    (salem_message *smsg) {
+    if (smsg->from_server) printf("    err=%u %s\n", *smsg->s_sess.err, sess_errors[*smsg->s_sess.err]);
+    else printf("    unknown=%hu proto=%s ver=%hu user=%s cookie=TODO\n",
+       *smsg->c_sess.unknown, smsg->c_sess.proto, *smsg->c_sess.ver, smsg->c_sess.user/*, *smsg->c_sess.cookie*/);
+}
+
+void print_rel     (salem_message *smsg) {
+    printf("    seq=%hu\n", *smsg->rel.seq);
+    u_int i;
+    for (i=0; i<smsg->rel.rels_len; ++i) {
+        printf("      type=%u %s\n", *smsg->rel.rels[i].type, rel_types[*smsg->rel.rels[i].type]);
+    }
+}
+void print_ack     (salem_message *smsg) {}
+void print_beat    (salem_message *smsg) {}
+void print_mapreq  (salem_message *smsg) {}
+void print_mapdata (salem_message *smsg) {}
+void print_objdata (salem_message *smsg) {}
+void print_objack  (salem_message *smsg) {}
+void print_close   (salem_message *smsg) {}
+
 name_map_print msg_types[] = {
-    [0] = { .name =    "SESS", .map = map_to_sess,  /*, .print = print_sess   */ },
-    [1] = { .name =     "REL", .map = map_to_rel    /*, .print = print_rel    */ },
-    [2] = { .name =     "ACK", .map = map_to_ack    /*, .print = print_ack    */ },
-    [3] = { .name =    "BEAT", .map = map_to_beat   /*, .print = print_beat   */ },
-    [4] = { .name =  "MAPREQ", .map = map_to_mapreq /*, .print = print_mapreq */ },
-    [5] = { .name = "MAPDATA", .map = map_to_mapdata/*, .print = print_mapdata*/ },
-    [6] = { .name = "OBJDATA", .map = map_to_objdata/*, .print = print_objdata*/ },
-    [7] = { .name =  "OBJACK", .map = map_to_objack /*, .print = print_objack */ },
-    [8] = { .name =   "CLOSE", .map = map_to_close  /*, .print = print_close  */ }
+    [0] = { .name =    "SESS", .map = map_to_sess   , .print = print_sess    },
+    [1] = { .name =     "REL", .map = map_to_rel    , .print = print_rel     },
+    [2] = { .name =     "ACK", .map = map_to_ack    , .print = print_ack     },
+    [3] = { .name =    "BEAT", .map = map_to_beat   , .print = print_beat    },
+    [4] = { .name =  "MAPREQ", .map = map_to_mapreq , .print = print_mapreq  },
+    [5] = { .name = "MAPDATA", .map = map_to_mapdata, .print = print_mapdata },
+    [6] = { .name = "OBJDATA", .map = map_to_objdata, .print = print_objdata },
+    [7] = { .name =  "OBJACK", .map = map_to_objack , .print = print_objack  },
+    [8] = { .name =   "CLOSE", .map = map_to_close  , .print = print_close   }
 };
 
-void map_to_any (message *msg, salem_message *smsg) {
+void map (message *msg, salem_message *smsg) {
+    smsg->from_server = msg->from_server;
     smsg->type = u8(msg);
-    //printf("  %s\n", msg_types[type].name);
     msg_types[*smsg->type].map(msg, smsg);
+}
+
+void print (salem_message *smsg) {
+    printf("  %s\n", msg_types[*smsg->type].name);
+    msg_types[*smsg->type].print(smsg);
 }
 
 void salem_parse (message *msg) {
     printf((msg->from_server)?"SERVER\n":"CLIENT\n");
     salem_message smsg;
     memset(&smsg, 0, sizeof(salem_message));
-    map_to_any(msg, &smsg);
+    map(msg, &smsg);
+    print(&smsg);
     if (msg->len > 0) {
         printf("DATA REMAINS %u bytes\n", msg->len);
     }
