@@ -11,6 +11,8 @@
 #include <arpa/inet.h>
 #include <net/ethernet.h>
 
+#include <assert.h>
+
 #define IP_HL(ip)       (((ip)->ip_vhl) & 0x0f)
 #define IP_V(ip)        (((ip)->ip_vhl) >> 4)
 
@@ -83,19 +85,28 @@ typedef struct {
 
 /* PROOF OF CONCEPT */
 typedef struct {
+    u_char *bytes;
+    size_t len;
+} bseq;
+
+typedef struct {
     u_short *unknown;
     char    *proto;
     u_short *ver;
     char    *user;
-    u_char  *cookie;
+    bseq     cookie;
 } client_sess;
+
 typedef struct {
     u_char *err;
+    bseq    trash;
 } server_sess;
+
 typedef struct {
     u_char *type;
     // ...
 } rel_element;
+
 typedef struct {
     u_short *seq;
     rel_element *rels;
@@ -111,9 +122,19 @@ typedef struct {
 typedef struct {
 } mapdata;
 typedef struct {
-} objdata;
-typedef struct {
 } objack;
+
+typedef struct {
+    u_char  *fl;
+    int32_t *id;
+    int32_t *frame;
+} objdata_element;
+
+typedef struct {
+    objdata_element *objs;
+    u_int objs_len;
+} objdata;
+
 typedef struct {
 } close;
 typedef struct {
@@ -140,7 +161,7 @@ typedef struct {
 } message;
 
 u_char *u8 (message *msg) {
-    if (msg->len < 1) abort();
+    assert(msg->len >= 1);
     u_char *ret = msg->data;
     ++msg->data;
     --msg->len;
@@ -148,16 +169,40 @@ u_char *u8 (message *msg) {
 }
 
 u_short *u16 (message *msg) {
-    if (msg->len < 2) abort();
+    assert(msg->len >= 2);
     u_short *ret = (u_short *)msg->data;
     msg->data += 2;
     msg->len -= 2;
     return ret;
 }
 
+int16_t *s16 (message *msg) {
+    assert(msg->len >= 2);
+    int16_t *ret = (int16_t *)msg->data;
+    msg->data += 2;
+    msg->len -= 2;
+    return ret;
+}
+
+uint32_t *u32 (message *msg) {
+    assert(msg->len >= 4);
+    uint32_t *ret = (uint32_t *)msg->data;
+    msg->data += 4;
+    msg->len -= 4;
+    return ret;
+}
+
+int32_t *s32 (message *msg) {
+    assert(msg->len >= 4);
+    int32_t *ret = (int32_t *)msg->data;
+    msg->data += 4;
+    msg->len -= 4;
+    return ret;
+}
+
 char *zstr (message *msg) {
-    if (msg->len < 1) abort();
-    char *ret = msg->data;
+    assert(msg->len >= 1);
+    char *ret = (char *)msg->data;
     while (1) {
         if (msg->data[0] == 0) {
             ++msg->data;
@@ -166,18 +211,65 @@ char *zstr (message *msg) {
         }
         ++msg->data;
         --msg->len;
-        if (msg->len == 0) abort();
+        assert(msg->len != 0);
     }
 }
 
-u_char *bytes (message *msg, u_int num) {
-    if (msg->len < 1) abort();
-    if (num > 0 && msg->len < num) abort();
-    u_char *ret = msg->data;
+typedef struct {
+    int32_t *x;
+    int32_t *y;
+} coord_t;
+
+coord_t coord (message *msg) {
+    coord_t c;
+    c.x = s32(msg);
+    c.y = s32(msg);
+    return c;
+}
+
+bseq bytes (message *msg, u_int num) {
+    bseq ret;
+    assert(msg->len >= 1);
+    assert(num == 0 || msg->len >= num);
+    ret.bytes = msg->data;
+    ret.len = (num > 0)?num:msg->len;
     msg->data += (num > 0)?num:msg->len;
     msg->len -= (num > 0)?num:msg->len;
     return ret;
 }
+
+char *print_bseq (bseq *seq) {
+    static char ret[512];
+    if ((seq->len * 3 - 1) > 511) {
+        sprintf(ret, "too long bytes sequence");
+        return ret;
+    }
+    u_int i;
+    u_int pos = 0;
+    memset(ret, 0, 512);
+    for (i=0; i<seq->len; ++i) {
+        sprintf(ret+pos, "%s%02X", (i)?" ":"", seq->bytes[i]);
+        pos += (i)?3:2;
+    }
+    return ret;
+}
+
+char *print_bseq_text (bseq *seq) {
+    static char ret[512];
+    if ((seq->len * 2) > 511) {
+        sprintf(ret, "too long bytes sequence");
+        return ret;
+    }
+    u_int i;
+    memset(ret, 0, 512);
+    for (i=0; i<seq->len; ++i) {
+        char c = seq->bytes[i];
+        sprintf(ret+i, "%c", (isprint(c))?c:'.');
+    }
+    return ret;
+}
+
+//////  REL  /////////////////////////////////////////////////////////////////////////
 
 rel_element *new_rel_element(rel *rel) {
     ++rel->rels_len;
@@ -196,16 +288,27 @@ void map_to_rel_element (message *msg, rel_element *el) {
     } else {
         len = msg->len;
     }
-    u_char *rel = bytes(msg, len);
+    bseq rel = bytes(msg, len);
 }
 
 void map_to_rel (message *msg, salem_message *smsg) {
     smsg->rel.seq = u16(msg);
     while (msg->len > 0) {
-        rel_element *rel_el = new_rel_element(&smsg->rel);
-        map_to_rel_element(msg, rel_el);
+        rel_element *el = new_rel_element(&smsg->rel);
+        map_to_rel_element(msg, el);
     }
 }
+
+//////  SESS  ////////////////////////////////////////////////////////////////////////
+
+char *sess_errors[] = {
+    [0] = "OK",
+    [1] = "AUTH",
+    [2] = "BUSY",
+    [3] = "CONN",
+    [4] = "PVER",
+    [5] = "EXPR"
+};
 
 void map_to_client_sess (message *msg, salem_message *smsg) {
     smsg->c_sess.unknown = u16(msg);
@@ -217,6 +320,7 @@ void map_to_client_sess (message *msg, salem_message *smsg) {
 
 void map_to_server_sess (message *msg, salem_message *smsg) {
     smsg->s_sess.err = u8(msg);
+    //smsg->s_sess.trash = bytes(msg, 0);
 }
 
 void map_to_sess (message *msg, salem_message *smsg) {
@@ -224,25 +328,218 @@ void map_to_sess (message *msg, salem_message *smsg) {
     else map_to_client_sess(msg, smsg);
 }
 
+void print_sess (salem_message *smsg) {
+    if (smsg->from_server) printf("    err=%u %s trash=[%s]\n",
+       *smsg->s_sess.err, sess_errors[*smsg->s_sess.err], print_bseq_text(&smsg->s_sess.trash));
+    else printf("    unknown=%hu proto=%s ver=%hu user=%s cookie=[%s]\n",
+       *smsg->c_sess.unknown, smsg->c_sess.proto, *smsg->c_sess.ver, smsg->c_sess.user, print_bseq_text(&smsg->c_sess.cookie));
+}
+
+//////  ACK  /////////////////////////////////////////////////////////////////////////
+
 void map_to_ack (message *msg, salem_message *smsg) {
     smsg->ack.seq = u16(msg);
 }
 void map_to_beat (message *msg, salem_message *smsg) {}
 void map_to_mapreq (message *msg, salem_message *smsg) {}
 void map_to_mapdata (message *msg, salem_message *smsg) {}
-void map_to_objdata (message *msg, salem_message *smsg) {}
+
+//////  OBJDATA  /////////////////////////////////////////////////////////////////////
+
+objdata_element *new_objdata_element (objdata *obj) {
+    ++obj->objs_len;
+    obj->objs = realloc(obj->objs, sizeof(objdata_element) * obj->objs_len);
+    objdata_element *last_obj = &obj->objs[obj->objs_len-1];
+    memset(last_obj, 0, sizeof(objdata_element));
+    return last_obj;
+}
+
+typedef struct {
+    char *name;
+    void (*parse)(message *msg);
+} name_parse;
+
+void rx_objdata_rem     (message *msg) {
+}
+void rx_objdata_move    (message *msg) {
+    coord(msg);
+    u16(msg);
+}
+void rx_objdata_res     (message *msg) {
+    if (((*u16(msg)) & 0x8000) != 0) {
+        bytes(msg, *u8(msg));
+    }
+}
+void rx_objdata_linbeg  (message *msg) {
+    coord(msg);
+    coord(msg);
+    s32(msg);
+}
+void rx_objdata_linstep (message *msg) {
+    s32(msg);
+}
+void rx_objdata_speech  (message *msg) {
+    s16(msg);
+    zstr(msg);
+}
+void rx_objdata_compose (message *msg) {
+    u16(msg);
+}
+void rx_objdata_drawoff (message *msg) {
+    coord(msg);
+}
+void rx_objdata_lumin   (message *msg) {
+    coord(msg);
+    u16(msg);
+    u8(msg);
+}
+void rx_objdata_avatar  (message *msg) {
+    for (;;) {
+        if (*u16(msg) == 65535) break;
+    }
+}
+void rx_objdata_follow  (message *msg) {
+    if (*u32(msg) != 0xffffffff) {
+        u16(msg);
+        zstr(msg);
+    }
+}
+void rx_objdata_homing  (message *msg) {
+    uint32_t oid = *u32(msg);
+    if (oid == 0xffffffff) {
+    } else if (oid == 0xfffffffe) {
+        coord(msg);
+        u16(msg);
+    } else {
+        coord(msg);
+        u16(msg);
+    }
+}
+void rx_objdata_overlay (message *msg) {
+    s32(msg);
+    uint16_t resid = *u16(msg);
+    if (resid == 65535) {
+    } else if ((resid & 0x8000) != 0) {
+        bytes(msg, *u8(msg));
+    } else {
+    }
+}
+void rx_objdata_auth    (message *msg) {
+    abort();
+}
+void rx_objdata_health  (message *msg) {
+    u8(msg);
+}
+void rx_objdata_buddy   (message *msg) {
+    zstr(msg);
+    u8(msg);
+    u8(msg);
+}
+void rx_objdata_cmppose (message *msg) {
+    uint8_t pfl = *u8(msg);
+    u8(msg);
+    if ((pfl & 2) != 0) {
+        for (;;) {
+            uint16_t resid = *u16(msg);
+            if (resid == 65535) break;
+            if ((resid & 0x8000) != 0) {
+                bytes(msg, *u8(msg));
+            }
+        }
+    }
+    if ((pfl & 4) != 0) {
+        for (;;) {
+            uint16_t resid = *u16(msg);
+            if (resid == 65535) break;
+            if ((resid & 0x8000) != 0) {
+                bytes(msg, *u8(msg));
+            }
+        }
+        u8(msg);
+    }
+}
+void rx_objdata_cmpmod  (message *msg) {
+    for (;;) {
+        uint16_t modif = *u16(msg);
+        if (modif == 65535) break;
+        for (;;) {
+            if (*u16(msg) == 65535) break;
+        }
+    }
+}
+void rx_objdata_cmpequ  (message *msg) {
+    for (;;) {
+        uint8_t h = *u8(msg);
+        if (h == 255) break;
+        zstr(msg);
+        u16(msg);
+        if (((h & 0x80) & 128) != 0) {
+            s16(msg);
+            s16(msg);
+            s16(msg);
+        }
+    }
+}
+void rx_objdata_icon    (message *msg) {
+    if (*u16(msg) != 65535) {
+        u8(msg);
+    }
+}
+
+name_parse objdata_types[] = {
+    [0 ]  = { .name =     "OD_REM", .parse = rx_objdata_rem     },
+    [1 ]  = { .name =    "OD_MOVE", .parse = rx_objdata_move    },
+    [2 ]  = { .name =     "OD_RES", .parse = rx_objdata_res     },
+    [3 ]  = { .name =  "OD_LINBEG", .parse = rx_objdata_linbeg  },
+    [4 ]  = { .name = "OD_LINSTEP", .parse = rx_objdata_linstep },
+    [5 ]  = { .name =  "OD_SPEECH", .parse = rx_objdata_speech  },
+    [6 ]  = { .name = "OD_COMPOSE", .parse = rx_objdata_compose },
+    [7 ]  = { .name = "OD_DRAWOFF", .parse = rx_objdata_drawoff },
+    [8 ]  = { .name =   "OD_LUMIN", .parse = rx_objdata_lumin   },
+    [9 ]  = { .name =  "OD_AVATAR", .parse = rx_objdata_avatar  },
+    [10]  = { .name =  "OD_FOLLOW", .parse = rx_objdata_follow  },
+    [11]  = { .name =  "OD_HOMING", .parse = rx_objdata_homing  },
+    [12]  = { .name = "OD_OVERLAY", .parse = rx_objdata_overlay },
+    [13]  = { .name =    "OD_AUTH", .parse = rx_objdata_auth    },
+    [14]  = { .name =  "OD_HEALTH", .parse = rx_objdata_health  },
+    [15]  = { .name =   "OD_BUDDY", .parse = rx_objdata_buddy   },
+    [16]  = { .name = "OD_CMPPOSE", .parse = rx_objdata_cmppose },
+    [17]  = { .name =  "OD_CMPMOD", .parse = rx_objdata_cmpmod  },
+    [18]  = { .name =  "OD_CMPEQU", .parse = rx_objdata_cmpequ  },
+    [19]  = { .name =    "OD_ICON", .parse = rx_objdata_icon    }
+};
+
+void map_to_objdata_element (message *msg, objdata_element *el) {
+    el->fl = u8(msg);
+    el->id = s32(msg);
+    el->frame = s32(msg);
+    for (;;) {
+        u_char type = *u8(msg);
+        if (type == 255) break;
+        printf("    %u %s\n", type, objdata_types[type].name);
+        objdata_types[type].parse(msg);
+    }
+}
+
+void map_to_objdata (message *msg, salem_message *smsg) {
+    while (msg->len > 0) {
+        objdata_element *el = new_objdata_element(&smsg->objdata);
+        map_to_objdata_element(msg, el);
+    }
+}
+
+void print_objdata (salem_message *smsg) {
+    u_int i;
+    for (i=0; i<smsg->objdata.objs_len; ++i) {
+        printf("    fl=%u id=%d frame=%d\n", *smsg->objdata.objs[i].fl, *smsg->objdata.objs[i].id, *smsg->objdata.objs[i].frame);
+    }
+}
+
+//////  OBJACK  //////////////////////////////////////////////////////////////////////
+
 void map_to_objack (message *msg, salem_message *smsg) {}
 void map_to_close (message *msg, salem_message *smsg) {}
 /******************/
-
-char *sess_errors[] = {
-    [0] = "OK",
-    [1] = "AUTH",
-    [2] = "BUSY",
-    [3] = "CONN",
-    [4] = "PVER",
-    [5] = "EXPR"
-};
 
 char *rel_types[] = {
     [0 ] = "NEWWDG", 
@@ -266,12 +563,6 @@ typedef struct {
     void (*print)(salem_message *smsg);
 } name_map_print;
 
-void print_sess    (salem_message *smsg) {
-    if (smsg->from_server) printf("    err=%u %s\n", *smsg->s_sess.err, sess_errors[*smsg->s_sess.err]);
-    else printf("    unknown=%hu proto=%s ver=%hu user=%s cookie=TODO\n",
-       *smsg->c_sess.unknown, smsg->c_sess.proto, *smsg->c_sess.ver, smsg->c_sess.user/*, *smsg->c_sess.cookie*/);
-}
-
 void print_rel     (salem_message *smsg) {
     printf("    seq=%hu\n", *smsg->rel.seq);
     u_int i;
@@ -283,7 +574,6 @@ void print_ack     (salem_message *smsg) {}
 void print_beat    (salem_message *smsg) {}
 void print_mapreq  (salem_message *smsg) {}
 void print_mapdata (salem_message *smsg) {}
-void print_objdata (salem_message *smsg) {}
 void print_objack  (salem_message *smsg) {}
 void print_close   (salem_message *smsg) {}
 
@@ -302,11 +592,12 @@ name_map_print msg_types[] = {
 void map (message *msg, salem_message *smsg) {
     smsg->from_server = msg->from_server;
     smsg->type = u8(msg);
+    printf("  %s\n", msg_types[*smsg->type].name);
     msg_types[*smsg->type].map(msg, smsg);
 }
 
 void print (salem_message *smsg) {
-    printf("  %s\n", msg_types[*smsg->type].name);
+    //printf("  %s\n", msg_types[*smsg->type].name);
     msg_types[*smsg->type].print(smsg);
 }
 
