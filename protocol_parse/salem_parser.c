@@ -93,6 +93,7 @@ typedef struct {
 typedef struct {
 } beat;
 typedef struct {
+    coord_t coord;
 } mapreq;
 typedef struct {
 } mapdata;
@@ -300,16 +301,50 @@ void map_to_rel (message *msg, salem_message *smsg) {
     }
 }
 
-//////  SESS  ////////////////////////////////////////////////////////////////////////
+typedef struct {
+    char *name;
+    void (*parse)(message *msg/*, objdata_element *el*/);
+} rel_name_parse;
 
-char *sess_errors[] = {
-    [0] = "OK",
-    [1] = "AUTH",
-    [2] = "BUSY",
-    [3] = "CONN",
-    [4] = "PVER",
-    [5] = "EXPR"
+void rx_rel_newwdg  (message *msg) {}
+void rx_rel_wdgmsg  (message *msg) {}
+void rx_rel_dstwdg  (message *msg) {}
+void rx_rel_mapiv   (message *msg) {}
+void rx_rel_globlob (message *msg) {}
+void rx_rel_paginae (message *msg) {}
+void rx_rel_resid   (message *msg) {}
+void rx_rel_party   (message *msg) {}
+void rx_rel_sfx     (message *msg) {}
+void rx_rel_cattr   (message *msg) {}
+void rx_rel_music   (message *msg) {}
+void rx_rel_tiles   (message *msg) {}
+void rx_rel_buff    (message *msg) {}
+
+rel_name_parse rel_types[] = {
+    [0 ] = { .name = "NEWWDG" , .parse = rx_rel_newwdg  },
+    [1 ] = { .name = "WDGMSG" , .parse = rx_rel_wdgmsg  },
+    [2 ] = { .name = "DSTWDG" , .parse = rx_rel_dstwdg  },
+    [3 ] = { .name = "MAPIV"  , .parse = rx_rel_mapiv   },
+    [4 ] = { .name = "GLOBLOB", .parse = rx_rel_globlob },
+    [5 ] = { .name = "PAGINAE", .parse = rx_rel_paginae },
+    [6 ] = { .name = "RESID"  , .parse = rx_rel_resid   },
+    [7 ] = { .name = "PARTY"  , .parse = rx_rel_party   },
+    [8 ] = { .name = "SFX"    , .parse = rx_rel_sfx     },
+    [9 ] = { .name = "CATTR"  , .parse = rx_rel_cattr   },
+    [10] = { .name = "MUSIC"  , .parse = rx_rel_music   },
+    [11] = { .name = "TILES"  , .parse = rx_rel_tiles   },
+    [12] = { .name = "BUFF"   , .parse = rx_rel_buff    },
 };
+
+void print_rel (salem_message *smsg) {
+    printf("    seq=%hu\n", *smsg->rel.seq);
+    u_int i;
+    for (i=0; i<smsg->rel.rels_len; ++i) {
+        printf("      type=%u(%s)\n", *smsg->rel.rels[i].type, rel_types[*smsg->rel.rels[i].type].name);
+    }
+}
+
+//////  SESS  ////////////////////////////////////////////////////////////////////////
 
 void map_to_client_sess (message *msg, salem_message *smsg) {
     smsg->c_sess.unknown = u16(msg);
@@ -328,6 +363,15 @@ void map_to_sess (message *msg, salem_message *smsg) {
     if (msg->from_server) map_to_server_sess(msg, smsg);
     else map_to_client_sess(msg, smsg);
 }
+
+char *sess_errors[] = {
+    [0] = "OK",
+    [1] = "AUTH",
+    [2] = "BUSY",
+    [3] = "CONN",
+    [4] = "PVER",
+    [5] = "EXPR"
+};
 
 void print_sess (salem_message *smsg) {
     if (smsg->from_server) printf("    err=%u %s trash=[%s]\n",
@@ -348,7 +392,13 @@ void map_to_beat (message *msg, salem_message *smsg) {}
 
 //////  MAPREQ  //////////////////////////////////////////////////////////////////////
 
-void map_to_mapreq (message *msg, salem_message *smsg) {}
+void map_to_mapreq (message *msg, salem_message *smsg) {
+    smsg->mapreq.coord = coord(msg);
+}
+
+void print_mapreq (salem_message *smsg) {
+    printf("    [%d,%d]\n", *smsg->mapreq.coord.x, *smsg->mapreq.coord.y);
+}
 
 //////  MAPDATA  /////////////////////////////////////////////////////////////////////
 
@@ -367,7 +417,7 @@ objdata_element *new_objdata_element (objdata *obj) {
 typedef struct {
     char *name;
     void (*parse)(message *msg, objdata_element *el);
-} name_parse;
+} objdata_name_parse;
 
 void rx_objdata_rem (message *msg, objdata_element *el) {
 }
@@ -522,7 +572,7 @@ void rx_objdata_icon (message *msg, objdata_element *el) {
     }
 }
 
-name_parse objdata_types[] = {
+objdata_name_parse objdata_types[] = {
     [0 ]  = { .name =     "OD_REM", .parse = rx_objdata_rem     },
     [1 ]  = { .name =    "OD_MOVE", .parse = rx_objdata_move    },
     [2 ]  = { .name =     "OD_RES", .parse = rx_objdata_res     },
@@ -577,11 +627,23 @@ void print_objdata (salem_message *smsg) {
 
 //////  OBJACK  //////////////////////////////////////////////////////////////////////
 
-void map_to_objack (message *msg, salem_message *smsg) {}
+void map_to_objack (message *msg, salem_message *smsg) {
+    while (msg->len > 0) {
+        int32_t *id = s32(msg);
+        int32_t *frame = s32(msg);
+    }
+}
 
 //////  CLOSE  ///////////////////////////////////////////////////////////////////////
 
 void map_to_close (message *msg, salem_message *smsg) {}
+
+
+void print_ack     (salem_message *smsg) {}
+void print_beat    (salem_message *smsg) {}
+void print_mapdata (salem_message *smsg) {}
+void print_objack  (salem_message *smsg) {}
+void print_close   (salem_message *smsg) {}
 
 
 
@@ -593,41 +655,11 @@ void map_to_close (message *msg, salem_message *smsg) {}
 
 
 
-char *rel_types[] = {
-    [0 ] = "NEWWDG", 
-    [1 ] = "WDGMSG", 
-    [2 ] = "DSTWDG", 
-    [3 ] = "MAPIV", 
-    [4 ] = "GLOBLOB",
-    [5 ] = "PAGINAE",
-    [6 ] = "RESID",
-    [7 ] = "PARTY",
-    [8 ] = "SFX",
-    [9 ] = "CATTR",
-    [10] = "MUSIC",
-    [11] = "TILES",
-    [12] = "BUFF",
-};
-
 typedef struct {
     char *name;
     void (*map)(message *msg, salem_message *smsg);
     void (*print)(salem_message *smsg);
 } name_map_print;
-
-void print_rel     (salem_message *smsg) {
-    printf("    seq=%hu\n", *smsg->rel.seq);
-    u_int i;
-    for (i=0; i<smsg->rel.rels_len; ++i) {
-        printf("      type=%u %s\n", *smsg->rel.rels[i].type, rel_types[*smsg->rel.rels[i].type]);
-    }
-}
-void print_ack     (salem_message *smsg) {}
-void print_beat    (salem_message *smsg) {}
-void print_mapreq  (salem_message *smsg) {}
-void print_mapdata (salem_message *smsg) {}
-void print_objack  (salem_message *smsg) {}
-void print_close   (salem_message *smsg) {}
 
 name_map_print msg_types[] = {
     [0] = { .name =    "SESS", .map = map_to_sess   , .print = print_sess    },
@@ -713,15 +745,15 @@ void parse (u_char *user, const struct pcap_pkthdr *h, const u_char *bytes) {
         if (*user & PARSE_SERVER_PACKETS) {
             msg.from_server = 1;
             salem_parse(&msg);
+            printf("\n");
         }
     } else if (ntohs(udp->dport) == 1870) {
         if (*user & PARSE_CLIENT_PACKETS) {
             msg.from_server = 0;
             salem_parse(&msg);
+            printf("\n");
         }
     }
-
-    printf("\n");
 }
 
 int main (int argc, char *argv[]) {
