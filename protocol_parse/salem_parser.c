@@ -20,28 +20,28 @@
 #define PARSE_SERVER_PACKETS 2
 
 typedef struct {
-        u_char  dhost[ETHER_ADDR_LEN];    /* destination host address */
-        u_char  shost[ETHER_ADDR_LEN];    /* source host address */
-        u_short type;                     /* IP? ARP? RARP? etc */
+        uint8_t  dhost[ETHER_ADDR_LEN];    /* destination host address */
+        uint8_t  shost[ETHER_ADDR_LEN];    /* source host address */
+        uint16_t type;                     /* IP? ARP? RARP? etc */
 } eth_hdr;
 
 typedef struct {
-        u_char  ip_vhl;                 /* version << 4 | header length >> 2 */
-        u_char  ip_tos;                 /* type of service */
-        u_short ip_len;                 /* total length */
-        u_short ip_id;                  /* identification */
-        u_short ip_off;                 /* fragment offset field */
-        u_char  ip_ttl;                 /* time to live */
-        u_char  ip_p;                   /* protocol */
-        u_short ip_sum;                 /* checksum */
+        uint8_t  ip_vhl;                 /* version << 4 | header length >> 2 */
+        uint8_t  ip_tos;                 /* type of service */
+        uint16_t ip_len;                 /* total length */
+        uint16_t ip_id;                  /* identification */
+        uint16_t ip_off;                 /* fragment offset field */
+        uint8_t  ip_ttl;                 /* time to live */
+        uint8_t  ip_p;                   /* protocol */
+        uint16_t ip_sum;                 /* checksum */
         struct  in_addr ip_src,ip_dst;  /* source and dest address */
 } ip_hdr;
 
 typedef struct {
-        u_short sport;               /* source port */
-        u_short dport;               /* destination port */
-        u_short len;
-        u_short crc;
+        uint16_t sport;               /* source port */
+        uint16_t dport;               /* destination port */
+        uint16_t len;
+        uint16_t crc;
 } udp_hdr;
 
 
@@ -55,7 +55,7 @@ typedef struct {
 
 
 typedef struct {
-    u_char *bytes;
+    uint8_t *bytes;
     size_t len;
 } bseq;
 
@@ -65,30 +65,30 @@ typedef struct {
 } coord_t;
 
 typedef struct {
-    u_short *unknown;
+    uint16_t *unknown;
     char    *proto;
-    u_short *ver;
+    uint16_t *ver;
     char    *user;
     bseq     cookie;
 } client_sess;
 
 typedef struct {
-    u_char *err;
+    uint8_t *err;
     bseq    trash;
 } server_sess;
 
 typedef struct {
-    u_char *type;
+    uint8_t *type;
     // ...
 } rel_element;
 
 typedef struct {
-    u_short *seq;
+    uint16_t *seq;
     rel_element *rels;
-    u_int rels_len;
+    size_t rels_len;
 } rel;
 typedef struct {
-    u_short *seq;
+    uint16_t *seq;
 } ack;
 typedef struct {
 } beat;
@@ -102,7 +102,7 @@ typedef struct {
 
 typedef struct {
     //TODO substructure all this
-    u_char   *fl;
+    uint8_t   *fl;
     int32_t  *id;
     int32_t  *frame;
     coord_t   move_coord;
@@ -139,14 +139,14 @@ typedef struct {
 
 typedef struct {
     objdata_element *objs;
-    u_int objs_len;
+    size_t objs_len;
 } objdata;
 
 typedef struct {
 } close;
 typedef struct {
-    u_char *type;
-    u_char from_server;
+    uint8_t *type;
+    uint8_t from_server;
     union {
         client_sess c_sess;
         server_sess s_sess;
@@ -162,22 +162,22 @@ typedef struct {
 } salem_message;
 
 typedef struct {
-    u_char *data;
-    u_short len;
-    u_char from_server;
+    uint8_t *data;
+    size_t len;
+    uint8_t from_server;
 } message;
 
-u_char *u8 (message *msg) {
+uint8_t *u8 (message *msg) {
     assert(msg->len >= 1);
-    u_char *ret = msg->data;
+    uint8_t *ret = msg->data;
     ++msg->data;
     --msg->len;
     return ret;
 }
 
-u_short *u16 (message *msg) {
+uint16_t *u16 (message *msg) {
     assert(msg->len >= 2);
-    u_short *ret = (u_short *)msg->data;
+    uint16_t *ret = (uint16_t *)msg->data;
     msg->data += 2;
     msg->len -= 2;
     return ret;
@@ -229,7 +229,7 @@ coord_t coord (message *msg) {
     return c;
 }
 
-bseq bytes (message *msg, u_int num) {
+bseq bytes (message *msg, size_t num) {
     bseq ret;
     assert(msg->len >= 1);
     assert(num == 0 || msg->len >= num);
@@ -246,8 +246,8 @@ char *print_bseq (bseq *seq) {
         sprintf(ret, "too long bytes sequence");
         return ret;
     }
-    u_int i;
-    u_int pos = 0;
+    size_t i;
+    size_t pos = 0;
     memset(ret, 0, 512);
     for (i=0; i<seq->len; ++i) {
         sprintf(ret+pos, "%s%02X", (i)?" ":"", seq->bytes[i]);
@@ -262,7 +262,7 @@ char *print_bseq_text (bseq *seq) {
         sprintf(ret, "too long bytes sequence");
         return ret;
     }
-    u_int i;
+    size_t i;
     memset(ret, 0, 512);
     for (i=0; i<seq->len; ++i) {
         char c = seq->bytes[i];
@@ -283,7 +283,7 @@ rel_element *new_rel_element(rel *rel) {
 
 void map_to_rel_element (message *msg, rel_element *el) {
     el->type = u8(msg);
-    u_short len;
+    uint16_t len;
     if ((*el->type & 0x80) != 0) {
         *el->type &= 0x7f;
         len = *u16(msg);
@@ -338,7 +338,7 @@ rel_name_parse rel_types[] = {
 
 void print_rel (salem_message *smsg) {
     printf("    seq=%hu\n", *smsg->rel.seq);
-    u_int i;
+    size_t i;
     for (i=0; i<smsg->rel.rels_len; ++i) {
         printf("      type=%u(%s)\n", *smsg->rel.rels[i].type, rel_types[*smsg->rel.rels[i].type].name);
     }
@@ -600,7 +600,7 @@ void map_to_objdata_element (message *msg, objdata_element *el) {
     el->id = s32(msg);
     el->frame = s32(msg);
     for (;;) {
-        u_char type = *u8(msg);
+        uint8_t type = *u8(msg);
         if (type == 255) break;
         objdata_types[type].parse(msg, el);
     }
@@ -614,7 +614,7 @@ void map_to_objdata (message *msg, salem_message *smsg) {
 }
 
 void print_objdata (salem_message *smsg) {
-    u_int i;
+    size_t i;
     for (i=0; i<smsg->objdata.objs_len; ++i) {
         objdata_element *e = &smsg->objdata.objs[i];
         printf("    fl=%u id=%d frame=%d\n", *e->fl, *e->id, *e->frame);
@@ -692,11 +692,11 @@ void salem_parse (message *msg) {
     map(msg, &smsg);
     print(&smsg);
     if (msg->len > 0) {
-        printf("DATA REMAINS %u bytes\n", msg->len);
+        printf("DATA REMAINS %zu bytes\n", msg->len);
     }
 }
 
-void parse (u_char *user, const struct pcap_pkthdr *h, const u_char *bytes) {
+void parse (uint8_t *user, const struct pcap_pkthdr *h, const uint8_t *bytes) {
     //printf("%u %u%s\n", h->len, h->caplen, (h->len == h->caplen)?"":" !!! len != caplen");
     if (h->len != h->caplen) {
         printf("len != caplen");
@@ -712,7 +712,7 @@ void parse (u_char *user, const struct pcap_pkthdr *h, const u_char *bytes) {
         printf("not IP\n");
         return;
     }
-    //u_int i;
+    //size_t i;
     //for (i=0; i<6; ++i) { printf("%02x", eth->dhost[i]); }
     //printf(" ");
     //for (i=0; i<6; ++i) { printf("%02x", eth->shost[i]); }
@@ -722,6 +722,10 @@ void parse (u_char *user, const struct pcap_pkthdr *h, const u_char *bytes) {
     int size_ip = IP_HL(ip)*4;
     if (size_ip != 20) {
         printf("wrong IP header length: %u\n", size_ip);
+        return;
+    }
+    if ((ip->ip_off & ~0x40) != 0) {
+        printf("fragmentation!\n");
         return;
     }
     if (ip->ip_p != IPPROTO_UDP) {
@@ -735,7 +739,7 @@ void parse (u_char *user, const struct pcap_pkthdr *h, const u_char *bytes) {
     //printf("%u > %u\n", ntohs(udp->sport), ntohs(udp->dport));
 
     message msg;
-    msg.data = (u_char *)bytes + sizeof(eth_hdr) + sizeof(ip_hdr) + sizeof(udp_hdr);
+    msg.data = (uint8_t *)bytes + sizeof(eth_hdr) + sizeof(ip_hdr) + sizeof(udp_hdr);
     msg.len = h->len - sizeof(eth_hdr) - sizeof(ip_hdr) - sizeof(udp_hdr);
     if (ntohs(udp->sport) == 1870) {
         if (udp->sport == udp->dport) {
@@ -757,7 +761,7 @@ void parse (u_char *user, const struct pcap_pkthdr *h, const u_char *bytes) {
 }
 
 int main (int argc, char *argv[]) {
-    u_char to_parse;
+    uint8_t to_parse;
     if (argc != 3) {
         puts("wrong arguments count");
         exit(1);
