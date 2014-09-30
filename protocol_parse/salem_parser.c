@@ -44,50 +44,25 @@ typedef struct {
         u_short crc;
 } udp_hdr;
 
-/*
-typedef struct {
-    u_char type;
-    union {
-        struct {
-            u16  unknown;
-            zstr proto;
-            u16  ver;
-            zstr user;
-            u8[] cookie;
-        } sess_client;
-        struct {
-            u8 error;
-        } sess_server;
-        struct {
-            u16 seq;
-            struct {
-                u8 type;
-                ...
-            } rels[];
-        } rel;
-        struct {
-        } ack;
-        struct {
-        } beat;
-        struct {
-        } mapreq;
-        struct {
-        } mapdata;
-        struct {
-        } objdata;
-        struct {
-        } objack;
-        struct {
-        } close;
-    };
-} salem_message;
-*/
 
-/* PROOF OF CONCEPT */
+
+
+
+//////////////////////////////////////////////////////////////////////////////////////
+
+
+
+
+
 typedef struct {
     u_char *bytes;
     size_t len;
 } bseq;
+
+typedef struct {
+    int32_t *x;
+    int32_t *y;
+} coord_t;
 
 typedef struct {
     u_short *unknown;
@@ -125,9 +100,40 @@ typedef struct {
 } objack;
 
 typedef struct {
-    u_char  *fl;
-    int32_t *id;
-    int32_t *frame;
+    //TODO substructure all this
+    u_char   *fl;
+    int32_t  *id;
+    int32_t  *frame;
+    coord_t   move_coord;
+    coord_t   linbeg_s;
+    coord_t   linbeg_t;
+    int32_t  *linbeg_c;
+    int16_t  *speech_zo;
+    char     *speech_text;
+    uint16_t *move_ia;
+    int32_t  *linstep;
+    uint16_t *res_id;
+    bseq      res_sdt;
+    uint8_t  *health;
+    uint16_t *compose_resid;
+    coord_t   draw_off;
+    coord_t   lumin_off;
+    uint16_t *lumin_sz;
+    uint8_t  *lumin_str;
+    uint32_t *follow_oid;
+    uint16_t *follow_xfres;
+    char     *follow_xfname;
+    uint32_t *homing_oid;
+    coord_t   homing_coord;
+    uint16_t *homing_v;
+    int32_t  *overlay_id;
+    uint16_t *overlay_resid;
+    bseq      overlay_sdt;
+    char     *buddy_name;
+    uint8_t  *buddy_group;
+    uint8_t  *buddy_type;
+    uint16_t *icon_resid;
+    uint8_t  *icon_ifl;
 } objdata_element;
 
 typedef struct {
@@ -214,11 +220,6 @@ char *zstr (message *msg) {
         assert(msg->len != 0);
     }
 }
-
-typedef struct {
-    int32_t *x;
-    int32_t *y;
-} coord_t;
 
 coord_t coord (message *msg) {
     coord_t c;
@@ -340,8 +341,17 @@ void print_sess (salem_message *smsg) {
 void map_to_ack (message *msg, salem_message *smsg) {
     smsg->ack.seq = u16(msg);
 }
+
+//////  BEAT  ////////////////////////////////////////////////////////////////////////
+
 void map_to_beat (message *msg, salem_message *smsg) {}
+
+//////  MAPREQ  //////////////////////////////////////////////////////////////////////
+
 void map_to_mapreq (message *msg, salem_message *smsg) {}
+
+//////  MAPDATA  /////////////////////////////////////////////////////////////////////
+
 void map_to_mapdata (message *msg, salem_message *smsg) {}
 
 //////  OBJDATA  /////////////////////////////////////////////////////////////////////
@@ -356,86 +366,106 @@ objdata_element *new_objdata_element (objdata *obj) {
 
 typedef struct {
     char *name;
-    void (*parse)(message *msg);
+    void (*parse)(message *msg, objdata_element *el);
 } name_parse;
 
-void rx_objdata_rem     (message *msg) {
+void rx_objdata_rem (message *msg, objdata_element *el) {
 }
-void rx_objdata_move    (message *msg) {
-    coord(msg);
-    u16(msg);
+
+void rx_objdata_move (message *msg, objdata_element *el) {
+    el->move_coord = coord(msg);
+    el->move_ia = u16(msg);
 }
-void rx_objdata_res     (message *msg) {
-    if (((*u16(msg)) & 0x8000) != 0) {
-        bytes(msg, *u8(msg));
+
+void rx_objdata_res (message *msg, objdata_element *el) {
+    el->res_id = u16(msg);
+    if ((*el->res_id & 0x8000) != 0) {
+        el->res_sdt = bytes(msg, *u8(msg));
     }
 }
-void rx_objdata_linbeg  (message *msg) {
-    coord(msg);
-    coord(msg);
-    s32(msg);
+
+void rx_objdata_linbeg (message *msg, objdata_element *el) {
+    el->linbeg_s = coord(msg);
+    el->linbeg_t = coord(msg);
+    el->linbeg_c = s32(msg);
 }
-void rx_objdata_linstep (message *msg) {
-    s32(msg);
+
+void rx_objdata_linstep (message *msg, objdata_element *el) {
+    el->linstep = s32(msg);
 }
-void rx_objdata_speech  (message *msg) {
-    s16(msg);
-    zstr(msg);
+
+void rx_objdata_speech (message *msg, objdata_element *el) {
+    el->speech_zo = s16(msg);
+    el->speech_text = zstr(msg);
 }
-void rx_objdata_compose (message *msg) {
-    u16(msg);
+
+void rx_objdata_compose (message *msg, objdata_element *el) {
+    el->compose_resid = u16(msg);
 }
-void rx_objdata_drawoff (message *msg) {
-    coord(msg);
+
+void rx_objdata_drawoff (message *msg, objdata_element *el) {
+    el->draw_off = coord(msg);
 }
-void rx_objdata_lumin   (message *msg) {
-    coord(msg);
-    u16(msg);
-    u8(msg);
+
+void rx_objdata_lumin (message *msg, objdata_element *el) {
+    el->lumin_off = coord(msg);
+    el->lumin_sz = u16(msg);
+    el->lumin_str = u8(msg);
 }
-void rx_objdata_avatar  (message *msg) {
+
+void rx_objdata_avatar (message *msg, objdata_element *el) {
+    //TODO
     for (;;) {
         if (*u16(msg) == 65535) break;
     }
 }
-void rx_objdata_follow  (message *msg) {
-    if (*u32(msg) != 0xffffffff) {
-        u16(msg);
-        zstr(msg);
+
+void rx_objdata_follow (message *msg, objdata_element *el) {
+    el->follow_oid = u32(msg);
+    if (*el->follow_oid != 0xffffffff) {
+        el->follow_xfres = u16(msg);
+        el->follow_xfname = zstr(msg);
     }
 }
-void rx_objdata_homing  (message *msg) {
-    uint32_t oid = *u32(msg);
-    if (oid == 0xffffffff) {
-    } else if (oid == 0xfffffffe) {
-        coord(msg);
-        u16(msg);
+
+void rx_objdata_homing (message *msg, objdata_element *el) {
+    el->homing_oid = u32(msg);
+    if (*el->homing_oid == 0xffffffff) {
+    } else if (*el->homing_oid == 0xfffffffe) {
+        el->homing_coord = coord(msg);
+        el->homing_v = u16(msg);
     } else {
-        coord(msg);
-        u16(msg);
+        el->homing_coord = coord(msg);
+        el->homing_v = u16(msg);
     }
 }
-void rx_objdata_overlay (message *msg) {
-    s32(msg);
-    uint16_t resid = *u16(msg);
-    if (resid == 65535) {
-    } else if ((resid & 0x8000) != 0) {
-        bytes(msg, *u8(msg));
+
+void rx_objdata_overlay (message *msg, objdata_element *el) {
+    el->overlay_id = s32(msg);
+    el->overlay_resid = u16(msg);
+    if (*el->overlay_resid == 65535) {
+    } else if ((*el->overlay_resid & 0x8000) != 0) {
+        el->overlay_sdt = bytes(msg, *u8(msg));
     } else {
     }
 }
-void rx_objdata_auth    (message *msg) {
+
+void rx_objdata_auth (message *msg, objdata_element *el) {
     abort();
 }
-void rx_objdata_health  (message *msg) {
-    u8(msg);
+
+void rx_objdata_health (message *msg, objdata_element *el) {
+    el->health = u8(msg);
 }
-void rx_objdata_buddy   (message *msg) {
-    zstr(msg);
-    u8(msg);
-    u8(msg);
+
+void rx_objdata_buddy (message *msg, objdata_element *el) {
+    el->buddy_name = zstr(msg);
+    el->buddy_group = u8(msg);
+    el->buddy_type = u8(msg);
 }
-void rx_objdata_cmppose (message *msg) {
+
+void rx_objdata_cmppose (message *msg, objdata_element *el) {
+    //TODO
     uint8_t pfl = *u8(msg);
     u8(msg);
     if ((pfl & 2) != 0) {
@@ -458,7 +488,9 @@ void rx_objdata_cmppose (message *msg) {
         u8(msg);
     }
 }
-void rx_objdata_cmpmod  (message *msg) {
+
+void rx_objdata_cmpmod (message *msg, objdata_element *el) {
+    //TODO
     for (;;) {
         uint16_t modif = *u16(msg);
         if (modif == 65535) break;
@@ -467,7 +499,9 @@ void rx_objdata_cmpmod  (message *msg) {
         }
     }
 }
-void rx_objdata_cmpequ  (message *msg) {
+
+void rx_objdata_cmpequ (message *msg, objdata_element *el) {
+    //TODO
     for (;;) {
         uint8_t h = *u8(msg);
         if (h == 255) break;
@@ -480,9 +514,11 @@ void rx_objdata_cmpequ  (message *msg) {
         }
     }
 }
-void rx_objdata_icon    (message *msg) {
-    if (*u16(msg) != 65535) {
-        u8(msg);
+
+void rx_objdata_icon (message *msg, objdata_element *el) {
+    el->icon_resid = u16(msg);
+    if (*el->icon_resid != 65535) {
+        el->icon_ifl = u8(msg);
     }
 }
 
@@ -516,8 +552,7 @@ void map_to_objdata_element (message *msg, objdata_element *el) {
     for (;;) {
         u_char type = *u8(msg);
         if (type == 255) break;
-        printf("    %u %s\n", type, objdata_types[type].name);
-        objdata_types[type].parse(msg);
+        objdata_types[type].parse(msg, el);
     }
 }
 
@@ -531,15 +566,32 @@ void map_to_objdata (message *msg, salem_message *smsg) {
 void print_objdata (salem_message *smsg) {
     u_int i;
     for (i=0; i<smsg->objdata.objs_len; ++i) {
-        printf("    fl=%u id=%d frame=%d\n", *smsg->objdata.objs[i].fl, *smsg->objdata.objs[i].id, *smsg->objdata.objs[i].frame);
+        objdata_element *e = &smsg->objdata.objs[i];
+        printf("    fl=%u id=%d frame=%d\n", *e->fl, *e->id, *e->frame);
+        if (e->move_coord.x) printf("      move=[%d,%d] ia=%hu\n", *e->move_coord.x, *e->move_coord.y, *e->move_ia);
+        if (e->linstep)      printf("      linstep=%d\n", *e->linstep);
+        if (e->res_id)       printf("      resid=%hu sdt=[%s]\n", (uint16_t)((*e->res_id)&(~0x8000)), print_bseq(&e->res_sdt));
+        if (e->health)       printf("      health=%u\n", *e->health);
     }
 }
 
 //////  OBJACK  //////////////////////////////////////////////////////////////////////
 
 void map_to_objack (message *msg, salem_message *smsg) {}
+
+//////  CLOSE  ///////////////////////////////////////////////////////////////////////
+
 void map_to_close (message *msg, salem_message *smsg) {}
-/******************/
+
+
+
+
+
+//////////////////////////////////////////////////////////////////////////////////////
+
+
+
+
 
 char *rel_types[] = {
     [0 ] = "NEWWDG", 
