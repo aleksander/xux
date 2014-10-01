@@ -1,0 +1,10 @@
+[package]
+
+name = "client-rs"
+version = "0.0.1"
+authors = ["Your Name <you@example.com>"]
+
+[dependencies.openssl]
+
+git = "https://github.com/sfackler/rust-openssl"
+
