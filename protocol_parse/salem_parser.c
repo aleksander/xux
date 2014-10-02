@@ -351,7 +351,9 @@ void map_to_client_sess (message *msg, salem_message *smsg) {
     smsg->c_sess.proto = zstr(msg);
     smsg->c_sess.ver = u16(msg);
     smsg->c_sess.user = zstr(msg);
-    smsg->c_sess.cookie = bytes(msg, 0);
+    uint16_t l = *u16(msg); // cookie length
+    printf("l=%hu\n", l);
+    smsg->c_sess.cookie = bytes(msg, l);
 }
 
 void map_to_server_sess (message *msg, salem_message *smsg) {
