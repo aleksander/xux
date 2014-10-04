@@ -274,7 +274,6 @@ class SalemProtocolParser:
 		wdg_msg_name = data.cstr
 		wdg_msg = data.list
 		print('   id={} name={}'.format(wdg_id,wdg_msg_name))
-		print('    list:')
 		self.print_list(wdg_msg,'     ')
 
 	def rx_rel_dstwdg (self, data): #destroy widget
