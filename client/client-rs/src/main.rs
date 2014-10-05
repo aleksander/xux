@@ -200,8 +200,7 @@ fn main() {
         "MAPDATA",
         "OBJDATA",
         "OBJACK",
-        "CLOSE"
-    ];
+        "CLOSE" ];
 
     let sess_errors = [
         "OK",
@@ -209,8 +208,7 @@ fn main() {
         "BUSY",
         "CONN",
         "PVER",
-        "EXPR"
-    ];
+        "EXPR" ];
 
     let rel_types = [
         "NEWWDG",
@@ -225,8 +223,30 @@ fn main() {
         "CATTR",
         "MUSIC",
         "TILES",
-        "BUFF"
-    ];
+        "BUFF",
+        "SESSKEY" ];
+
+    let objdata_types = [
+        "OD_REM",
+        "OD_MOVE",
+        "OD_RES",
+        "OD_LINBEG",
+        "OD_LINSTEP",
+        "OD_SPEECH",
+        "OD_COMPOSE",
+        "OD_DRAWOFF",
+        "OD_LUMIN",
+        "OD_AVATAR",
+        "OD_FOLLOW",
+        "OD_HOMING",
+        "OD_OVERLAY",
+        "OD_AUTH",
+        "OD_HEALTH",
+        "OD_BUDDY",
+        "OD_CMPPOSE",
+        "OD_CMPMOD",
+        "OD_CMPEQU",
+        "OD_ICON" ];
 
     let beater_to_sender = main_tx.clone();
     let (receiver_to_beater, from_receiver) = channel();
@@ -273,31 +293,24 @@ fn main() {
                     //connected = true;
                     receiver_to_beater.send(());
                 },
-                8 /*CLOSE*/ => {
-                    sender_tx.send(());
-                    // ??? should we send CLOSE too ???
-                    break;
-                },
                 1 /*REL*/ => {
                     let seq = r.read_le_u16().unwrap();
                     println!("  seq: {}", seq);
                     let mut rel_count = 0u16;
                     while !r.eof() {
-                        let mut rel_len = 0;
-                        let mut rel = Vec::new();
+                        let rel;
                         let mut rel_type = r.read_u8().unwrap() as uint;
                         if (rel_type & 0x80) != 0 {
                             rel_type &= !0x80;
-                            rel_len = r.read_le_u16().unwrap() as uint;
+                            let rel_len = r.read_le_u16().unwrap() as uint;
                             rel = r.read_exact(rel_len).unwrap();
                         } else {
-                            rel_len = 0; // all remains
                             rel = r.read_to_end().unwrap();
                         }
                         if rel_type < rel_types.len() {
                             println!("  {}", rel_types[rel_type]);
                         } else {
-                            println!("  UNKNOWN {}", rel_type);
+                            println!("\x1b[31m  UNKNOWN {}\x1b[39;49m", rel_type);
                         }
                         rel_count += 1;
 
@@ -329,10 +342,189 @@ fn main() {
                     }
                     receiver_to_sender.send(ack(seq + (rel_count - 1)));
                 },
-                _ /*UNKNOWN*/ => {}
+                2 /*ACK*/ => {
+                    let seq = r.read_le_u16().unwrap();
+                    println!("  seq: {}", seq);
+                },
+                3 /*BEAT*/ => {},
+                4 /*MAPREQ*/ => {},
+                5 /*MAPDATA*/ => {},
+                6 /*OBJDATA*/ => {
+                    let mut w = MemWriter::new();
+                    w.write_u8(7).unwrap(); //OBJACK
+                    while !r.eof() {
+                        /*let fl =*/ r.read_u8().unwrap();
+                        let id = r.read_le_u32().unwrap();
+                        let frame = r.read_le_i32().unwrap();
+                        println!("  id={} frame={}", id, frame);
+                        w.write_le_u32(id).unwrap();
+                        w.write_le_i32(frame).unwrap();
+                        loop {
+                            let t = r.read_u8().unwrap() as uint;
+                            if t < objdata_types.len() { println!("    {}", objdata_types[t]); }
+                            match t {
+                                0   /*OD_REM*/ => {},
+                                1   /*OD_MOVE*/ => {
+                                    let (x,y) = (r.read_le_i32().unwrap(), r.read_le_i32().unwrap());
+                                    /*let ia =*/ r.read_le_u16().unwrap();
+                                    println!("      ({},{})", x, y);
+                                },
+                                2   /*OD_RES*/ => {
+                                    let /*mut*/ resid = r.read_le_u16().unwrap();
+                                    if (resid & 0x8000) != 0 {
+                                        /*resid &= !0x8000;*/
+                                        let sdt_len = r.read_u8().unwrap() as uint;
+                                        /*let sdt =*/ r.read_exact(sdt_len).unwrap();
+                                    }
+                                },
+                                3   /*OD_LINBEG*/ => {
+                                    /*let s =*/ (r.read_le_i32().unwrap(), r.read_le_i32().unwrap());
+                                    /*let t =*/ (r.read_le_i32().unwrap(), r.read_le_i32().unwrap());
+                                    /*let c =*/ r.read_le_i32();
+                                },
+                                4   /*OD_LINSTEP*/ => {
+                                    /*let l =*/ r.read_le_i32();
+                                },
+                                5   /*OD_SPEECH*/ => {
+                                    /*let zo =*/ r.read_le_u16();
+                                    /*let text =*/ String::from_utf8(r.read_until(0).unwrap()).unwrap();
+                                },
+                                6   /*OD_COMPOSE*/ => {
+                                    /*let resid =*/ r.read_le_u16().unwrap();
+                                },
+                                7   /*OD_DRAWOFF*/ => {
+                                    /*let off =*/ (r.read_le_i32().unwrap(), r.read_le_i32().unwrap());
+                                },
+                                8   /*OD_LUMIN*/ => {
+                                    /*let off =*/ (r.read_le_i32().unwrap(), r.read_le_i32().unwrap());
+                                    /*let sz =*/ r.read_le_u16().unwrap();
+                                    /*let str_ =*/ r.read_u8().unwrap();
+                                },
+                                9   /*OD_AVATAR*/ => {
+                                    loop {
+                                        let layer = r.read_le_u16().unwrap();
+                                        if layer == 65535 { break; }
+                                    }
+                                },
+                                10  /*OD_FOLLOW*/ => {
+                                    let oid = r.read_le_u32().unwrap();
+                                    if oid == 0xff_ff_ff_ff {
+                                        /*let xfres =*/ r.read_le_u16().unwrap();
+                                        /*let xfname =*/ String::from_utf8(r.read_until(0).unwrap()).unwrap();
+                                    }
+                                },
+                                11  /*OD_HOMING*/ => {
+                                    let oid = r.read_le_u32().unwrap();
+                                    match oid {
+                                        0xff_ff_ff_ff => {},
+                                        0xff_ff_ff_fe => {
+                                            /*let tgtc =*/ (r.read_le_i32().unwrap(), r.read_le_i32().unwrap());
+                                            /*let v =*/ r.read_le_u16().unwrap();
+                                        },
+                                        _             => {
+                                            /*let tgtc =*/ (r.read_le_i32().unwrap(), r.read_le_i32().unwrap());
+                                            /*let v =*/ r.read_le_u16().unwrap();
+                                        }
+                                    }
+                                },
+                                12  /*OD_OVERLAY*/ => {
+                                    /*let olid =*/ r.read_le_i32().unwrap();
+                                    let resid = r.read_le_u16().unwrap();
+                                    if (resid & 0x8000) != 0 {
+                                        let sdt_len = r.read_u8().unwrap() as uint;
+                                        /*let sdt =*/ r.read_exact(sdt_len).unwrap();
+                                    }
+                                },
+                                13  /*OD_AUTH*/   => { /* Removed */ },
+                                14  /*OD_HEALTH*/ => {
+                                    /*let hp =*/ r.read_u8().unwrap();
+                                },
+                                15  /*OD_BUDDY*/ => {
+                                    let name = String::from_utf8(r.read_until(0).unwrap()).unwrap();
+                                    if name.len() > 0 {
+                                        /*let group =*/ r.read_u8().unwrap();
+                                        /*let btype =*/ r.read_u8().unwrap();
+                                    }
+                                },
+                                16  /*OD_CMPPOSE*/ => {
+                                    let pfl = r.read_u8().unwrap();
+                                    /*let seq =*/ r.read_u8().unwrap();
+                                    if (pfl & 2) != 0 {
+                                        loop {
+                                            let /*mut*/ resid = r.read_le_u16().unwrap();
+                                            if resid == 65535 { break; }
+                                            if (resid & 0x8000) != 0 {
+                                                /*resid &= !0x8000;*/
+                                                let sdt_len = r.read_u8().unwrap() as uint;
+                                                /*let sdt =*/ r.read_exact(sdt_len).unwrap();
+                                            }
+                                        }
+                                    }
+                                    if (pfl & 4) != 0 {
+                                        loop {
+                                            let /*mut*/ resid = r.read_le_u16().unwrap();
+                                            if resid == 65535 { break; }
+                                            if (resid & 0x8000) != 0 {
+                                                /*resid &= !0x8000;*/
+                                                let sdt_len = r.read_u8().unwrap() as uint;
+                                                /*let sdt =*/ r.read_exact(sdt_len).unwrap();
+                                            }
+                                        }
+                                        /*let ttime =*/ r.read_u8().unwrap();
+                                    }
+                                },
+                                17  /*OD_CMPMOD*/ => {
+                                    loop {
+                                        let modif = r.read_le_u16().unwrap();
+                                        if modif == 65535 { break; }
+                                        loop {
+                                            let resid = r.read_le_u16().unwrap();
+                                            if resid == 65535 { break; }
+                                        }
+                                    }
+                                },
+                                18  /*OD_CMPEQU*/ => {
+                                    loop {
+                                        let h = r.read_u8().unwrap();
+                                        if h == 255 { break; }
+                                        /*let at =*/ String::from_utf8(r.read_until(0).unwrap()).unwrap();
+                                        /*let resid =*/ r.read_le_u16().unwrap();
+                                        if (h & 0x80) != 0 {
+                                            /*let x =*/ r.read_le_u16().unwrap();
+                                            /*let y =*/ r.read_le_u16().unwrap();
+                                            /*let z =*/ r.read_le_u16().unwrap();
+                                        }
+                                    }
+                                },
+                                19  /*OD_ICON*/ => {
+                                    let resid = r.read_le_u16().unwrap();
+                                    if resid != 65535 {
+                                        /*let ifl =*/ r.read_u8().unwrap();
+                                    }
+                                },
+                                255 /*OD_END*/ => { break; },
+                                _   /*UNKNOWN*/ => {}
+                            }
+                        }
+                    }
+                    receiver_to_sender.send(w.unwrap()); // send OBJACKs
+                },
+                7 /*OBJACK*/ => {},
+                8 /*CLOSE*/ => {
+                    sender_tx.send(());
+                    // ??? should we send CLOSE too ???
+                    break;
+                },
+                _ /*UNKNOWN*/ => {
+                }
             }
 
-            //TODO send SESS until reply
+            if !r.eof() {
+                let remains = r.read_to_end().unwrap();
+                println!("                       REMAINS {} bytes", remains.len());
+            }
+
+            //TODO send REL until reply
             if charlist.len() > 0 {
                 println!("send play '{}'", charlist[0]);
                 receiver_to_sender.send(rel_wdgmsg_play(0, charlist[0].as_slice()));

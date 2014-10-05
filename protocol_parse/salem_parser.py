@@ -170,7 +170,8 @@ class SalemProtocolParser:
 			9: Struct(name =   'CATTR', parse = self.rx_rel_cattr),
 			10:Struct(name =   'MUSIC', parse = self.rx_rel_music),
 			11:Struct(name =   'TILES', parse = self.rx_rel_tiles),
-			12:Struct(name =    'BUFF', parse = self.rx_rel_buff)
+			12:Struct(name =    'BUFF', parse = self.rx_rel_buff),
+			13:Struct(name = 'SESSKEY', parse = self.rx_rel_sesskey)
 		}
 		self.objdata_types = {
 			0:  Struct(name =     'OD_REM', parse = self.rx_objdata_rem),
@@ -403,6 +404,10 @@ class SalemProtocolParser:
 			.format(data.s32,data.u16,data.cstr,data.s32,data.s32,data.s32,data.s32,data.u8))
 		elif buff_name == 'rm':
 			print('   remove buffers id={}'.format(data.s32))
+
+	def rx_rel_sesskey (self, data):
+		sess_key = data.b()
+		print('   sess_key={}'.format(sess_key))
 
 	######## ACK ##################################
 	def rx_ack (self, data, server):
