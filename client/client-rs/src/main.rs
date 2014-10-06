@@ -1,3 +1,5 @@
+#![feature(macro_rules)]
+
 extern crate openssl;
 extern crate serialize;
 
@@ -12,12 +14,11 @@ use openssl::crypto::hash::{SHA256, hash};
 use openssl::ssl::{Sslv23, SslContext, SslStream};
 use serialize::hex::ToHex;
 
-//#![feature(macro_rules)]
-//macro_rules! tryio (
-//   ($fmt:expr $e:expr) => (
-//       (match $e { Ok(e) => e, Err(e) => return Err(MyError{source:$fmt, detail:e.detail}) })
-//   )
-//)
+macro_rules! tryio (
+   ($fmt:expr $e:expr) => (
+       (match $e { Ok(e) => e, Err(e) => return Err(MyError{source:$fmt, detail:e.detail}) })
+   )
+)
 
 struct MyError {
     source: &'static str,
@@ -27,11 +28,12 @@ struct MyError {
 fn authorize (host: &str, port: u16, user: &str, pass: &str) -> Result<Vec<u8>, MyError> {
     println!("authorize at {}:{}", host, port);
     //let stream = TcpStream::connect(host, port).unwrap();
-    let stream = match TcpStream::connect(host, port) {
-        Ok(e)=>e,
-        Err(e)=>return Err(MyError{source:"connect", detail:e.detail})
-    };
-    //let stream = tryio!(TcpStream::connect(host, port));
+
+    //let stream = match TcpStream::connect(host, port) {
+    //    Ok(e)=>e,
+    //    Err(e)=>return Err(MyError{source:"connect", detail:e.detail})
+    //};
+    let stream = tryio!("tcp.connect" TcpStream::connect(host, port));
 
     let mut stream = SslStream::new(&SslContext::new(Sslv23).unwrap(), stream).unwrap();
 
@@ -533,7 +535,6 @@ fn main() {
     main_tx.send(sess(user.as_slice(), cookie.as_slice()));
     main_rx.recv();
 }
-
 
 
 
