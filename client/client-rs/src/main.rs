@@ -3,15 +3,10 @@ extern crate serialize;
 
 use std::io::Writer;
 use std::io::MemWriter;
-//use std::io::IoError;
 use std::io::net::tcp::TcpStream;
 use std::str;
-//use std::from_str::FromStr;
-//use std::string;
 use std::io::net::udp::UdpSocket;
-//use std::io::net::udp::UdpStream;
 use std::io::net::ip::SocketAddr;
-
 
 use openssl::crypto::hash::{SHA256, hash};
 use openssl::ssl::{Sslv23, SslContext, SslStream};
@@ -351,7 +346,7 @@ fn main() {
                 5 /*MAPDATA*/ => {},
                 6 /*OBJDATA*/ => {
                     let mut w = MemWriter::new();
-                    w.write_u8(7).unwrap(); //OBJACK
+                    w.write_u8(7).unwrap(); //OBJACK writer
                     while !r.eof() {
                         /*let fl =*/ r.read_u8().unwrap();
                         let id = r.read_le_u32().unwrap();
@@ -383,7 +378,8 @@ fn main() {
                                     /*let c =*/ r.read_le_i32();
                                 },
                                 4   /*OD_LINSTEP*/ => {
-                                    /*let l =*/ r.read_le_i32();
+                                    let l = r.read_le_i32().unwrap();
+                                    println!("      l={}", l);
                                 },
                                 5   /*OD_SPEECH*/ => {
                                     /*let zo =*/ r.read_le_u16();
