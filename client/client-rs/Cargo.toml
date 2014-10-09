@@ -2,20 +2,11 @@
 
 name = "client-rs"
 version = "0.0.1"
-authors = ["Your Name <you@example.com>"]
+authors = ["Aleksander Usov <aleksander.usov@gmail.com>"]
 
 [dependencies.openssl]
 git = "https://github.com/sfackler/rust-openssl"
 
-[dependencies.graphics]
-git = "https://github.com/PistonDevelopers/graphics"
-
-[dependencies.piston]
-git = "https://github.com/PistonDevelopers/piston"
-
-[dependencies.sdl2_game_window]
-git = "https://github.com/PistonDevelopers/sdl2_game_window"
-
-[dependencies.opengl_graphics]
-git = "https://github.com/pistondevelopers/opengl_graphics"
+[dependencies.ncurses]
+git = "https://github.com/jeaye/ncurses-rs"
 

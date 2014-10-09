@@ -3,26 +3,32 @@
 extern crate openssl;
 extern crate serialize;
 
-extern crate piston;
-extern crate graphics;
-extern crate sdl2_game_window;
-extern crate opengl_graphics;
+extern crate ncurses;
+use ncurses::{initscr, refresh, mvaddstr, mvaddch};
 
 use std::io::Writer;
 use std::io::MemWriter;
 use std::io::net::tcp::TcpStream;
-use std::str;
 use std::io::net::udp::UdpSocket;
+use std::io::net::ip::Ipv4Addr;
 use std::io::net::ip::SocketAddr;
-
+use std::io::net::addrinfo::get_host_addresses;
+use std::io::MemReader;
+use std::io::timer;
+use std::collections::smallintmap::SmallIntMap;
+use std::str;
+use std::time::Duration;
+use serialize::hex::ToHex;
 use openssl::crypto::hash::{SHA256, hash};
 use openssl::ssl::{Sslv23, SslContext, SslStream};
-use serialize::hex::ToHex;
 
 macro_rules! tryio (
-   ($fmt:expr $e:expr) => (
-       (match $e { Ok(e) => e, Err(e) => return Err(MyError{source:$fmt, detail:e.detail}) })
-   )
+    ($fmt:expr $e:expr) => (
+        match $e {
+            Ok(e) => e,
+            Err(e) => return Err(MyError{source:$fmt, detail:e.detail})
+        }
+    )
 )
 
 struct MyError {
@@ -134,120 +140,8 @@ fn rel_wdgmsg_play (seq: u16, name: &str) -> Vec<u8> {
 
 
 
-/* CONCEPT:
-     client.connect()
-        start receiver thread
-        start transmitter thread
-        add task.sess
-            while not acked { send sess }
-            if sess err != ok => fail
-            else {set connected, add task.beat(every 5 sec)}
-        add task.wait_for_login_screen_ui
-        add task.wdg_msg(0, "focus", 1)
-     client.choice("Lemming")
-     client...
-
-     client.receiver
-        save and ack all rel
-*/
-
-
-
 fn main() {
-    use std::io::net::addrinfo::get_host_addresses;
-    use std::io::net::ip::Ipv4Addr;
-    use std::io::MemReader;
-    use std::collections::smallintmap::SmallIntMap;
-    use std::str::from_utf8;
-    use opengl_graphics::{Gl};
-    use sdl2_game_window::WindowSDL2;
-    use graphics::{ Context, AddColor, AddLine, AddRoundBorder, RelativeColor, RelativeTransform2d, Draw };
-    use piston::{ EventIterator, EventSettings, WindowSettings, Render };
-
-    let host = "game.salemthegame.com";
-    let host_ip = get_host_addresses(host).unwrap()[0];
-    //let addrs = get_host_addresses(host).unwrap();
-    //println!("host ip: {}", addrs);
-    //TODO get first ipv4 addr as host addr
-    let auth_port: u16 = 1871;
-    let port: u16 = 1870;
-    let user = "salvian";
-    let pass = "простойпароль";
-
-    let cookie = match authorize(host, auth_port, user, pass) {
-        Ok(cookie) => cookie,
-        Err(e) => { println!("error. {}: {}", e.source, e.detail.unwrap()); return; }
-    };
-    println!("success. cookie = [{}]", cookie.as_slice().to_hex());
-
-    let host_addr = SocketAddr {ip:host_ip, port:port};
-    let any_addr  = SocketAddr {ip:Ipv4Addr(0,0,0,0), port:0u16};
-    let mut udp_rx = UdpSocket::bind(any_addr).unwrap();
-    let mut udp_tx = udp_rx.clone();
-
-    let (main_tx, sender_rx) = channel();
-    let (sender_tx, main_rx) = channel();
-
-    ///////////  RENDER  ///////////////////////////////////////////////////
-
-    fn render (c: &Context, gl: &mut Gl) {
-        //Create a line.
-        let line = c.line(0.0, 0.0, 0.0, 100.0)
-            .round_border_radius(3.0)
-            .rgb(1.0, 1.0, 0.0);
-        // Draw ten lines beside each other with hue transformed color.
-        let n = 10;
-        let (start, end) = (0.0, 400.0);
-        for i in range(0u, n + 1) {
-            let f = i as f64 / n as f64;
-            line.trans(f * (end - start) + start, 0.0)
-                .hue_deg(f as f32 * 360.0)
-                .draw(gl);
-        }
-    }
-
-    fn render_update ((x,y):(u32,u32)) {
-        //TODO
-    }
-
-    let opengl = piston::shader_version::opengl::OpenGL_3_2;
-    let mut window = WindowSDL2::new(opengl, WindowSettings {title: "xxx".to_string(), size: [600, 300],
-                                                             fullscreen: false, exit_on_esc: true, samples: 0});
-    let event_settings = EventSettings {updates_per_second: 120, max_frames_per_second: 60};
-    let mut event_iter = EventIterator::new(&mut window, &event_settings);
-    let ref mut gl = Gl::new(opengl);
-    let (any_to_render, render_from_any) = channel();
-    'e: for e in event_iter {
-        match e {
-            Render(ref args) => {
-                gl.viewport(0, 0, args.width as i32, args.height as i32);
-                let c = Context::abs(args.width as f64, args.height as f64);
-                c.rgb(1.0, 1.0, 1.0).draw(gl);
-                render(&c, gl);
-            }
-            _ => {}
-        }
-        'r: loop {
-            match render_from_any.try_recv() {
-                Ok(r) => render_update(r),
-                Err(e) => match e {
-                    Empty => {continue 'r;},
-                    Disconnected => {break 'e;},
-                }
-            }
-        }
-    }
-
-    // UDP sender
-    spawn(proc() {
-        loop {
-            let buf: Vec<u8> = sender_rx.recv();
-            println!("sender: send {} bytes", buf.len());
-            udp_tx.send_to(buf.as_slice(), host_addr).unwrap();
-        }
-    });
-
-    let msg_types = [
+    /*let msg_types = [
         "SESS",
         "REL",
         "ACK",
@@ -256,15 +150,15 @@ fn main() {
         "MAPDATA",
         "OBJDATA",
         "OBJACK",
-        "CLOSE" ];
+        "CLOSE" ];*/
 
-    let sess_errors = [
+    /*let sess_errors = [
         "OK",
         "AUTH",
         "BUSY",
         "CONN",
         "PVER",
-        "EXPR" ];
+        "EXPR" ];*/
 
     let rel_types = [
         "NEWWDG",
@@ -282,7 +176,7 @@ fn main() {
         "BUFF",
         "SESSKEY" ];
 
-    let objdata_types = [
+    /*let objdata_types = [
         "OD_REM",
         "OD_MOVE",
         "OD_RES",
@@ -302,15 +196,80 @@ fn main() {
         "OD_CMPPOSE",
         "OD_CMPMOD",
         "OD_CMPEQU",
-        "OD_ICON" ];
+        "OD_ICON" ];*/
 
-    let beater_to_sender = main_tx.clone();
+    let host = "game.salemthegame.com";
+    let port: u16 = 1870;
+    let auth_port: u16 = 1871;
+    let user = "salvian";
+    let pass = "простойпароль";
+    let host_ip = get_host_addresses(host).unwrap()[0];
+
+    let cookie = match authorize(host, auth_port, user, pass) {
+        Ok(cookie) => cookie,
+        Err(e) => { println!("error. {}: {}", e.source, e.detail.unwrap()); return; }
+    };
+    println!("success. cookie = [{}]", cookie.as_slice().to_hex());
+
+    let host_addr = SocketAddr {ip:host_ip, port:port};
+    let any_addr  = SocketAddr {ip:Ipv4Addr(0,0,0,0), port:0u16};
+    let mut udp_rx = UdpSocket::bind(any_addr).unwrap();
+    let mut udp_tx = udp_rx.clone();
+
+    let (main_to_sender, sender_from_any) = channel();
+    let (sender_tx, _/*main_rx*/) = channel();
     let (receiver_to_beater, from_receiver) = channel();
+    let receiver_to_sender = main_to_sender.clone();
+    let beater_to_sender = main_to_sender.clone();
+    let (sender_to_viewer, viewer_from_any) = channel();
+
+    // viewer
+    spawn(proc() {
+        let mut objects = SmallIntMap::new();
+        /* Start ncurses. */
+        initscr();
+        let (id,x,y):(u32,i32,i32) = viewer_from_any.recv();
+        objects.insert(id as uint,(x,y));
+        let mut minx = x;
+        let mut miny = y;
+        let mut maxx = x;
+        let mut maxy = y;
+        loop {
+            for _ in range(0u,100) {
+                let (id,x,y):(u32,i32,i32) = viewer_from_any.recv();
+                objects.insert(id as uint,(x,y));
+                if x < minx { minx = x; }
+                if y < miny { miny = y; }
+                if x > maxx { maxx = x; }
+                if y > maxy { maxy = y; }
+            }
+            /* Print to the back buffer. */
+            for &(x,y) in objects.values() {
+                mvaddch((y-miny)/10, (x-minx)/10, 'x' as u32);
+            }
+            mvaddstr(0, 0, format!("objects: {}", objects.len()).as_slice());
+            mvaddstr(1, 0, format!("x: ({},{}) dx: {}", minx, maxx, maxx-minx).as_slice());
+            mvaddstr(2, 0, format!("y: ({},{}) dy: {}", miny, maxy, maxy-miny).as_slice());
+            /* Update the screen. */
+            refresh();
+            /* Wait for a key press. */
+            //getch();
+            /* Terminate ncurses. */
+            //endwin();
+        }
+    });
+
+    // UDP sender
+    spawn(proc() {
+        loop {
+            let buf: Vec<u8> = sender_from_any.recv();
+            //println!("sender: send {} bytes", buf.len());
+            udp_tx.send_to(buf.as_slice(), host_addr).unwrap();
+        }
+    });
+
     // BEATer
     spawn(proc() {
-        use std::io::timer;
-        use std::time::Duration;
-
         from_receiver.recv();
         //send BEAT every 5 sec
         loop {
@@ -319,7 +278,6 @@ fn main() {
         }
     });
 
-    let receiver_to_sender = main_tx.clone();
     // UDP receiver
     spawn(proc() {
         //let mut connected = false;
@@ -336,12 +294,12 @@ fn main() {
             //println!("seceiver: dgram [{}]", buf.slice_to(len).to_hex());
             let mut r = MemReader::new(buf.slice_to(len).to_vec());
             let mtype = r.read_u8().unwrap() as uint;
-            println!("seceiver: {}", msg_types[mtype]);
+            //println!("seceiver: {}", msg_types[mtype]);
             match mtype {
                 0 /*SESS*/ => {
                     let sess_error = r.read_u8().unwrap() as uint;
                     if sess_error != 0 {
-                        println!("sess error {}", sess_errors[sess_error]);
+                        //println!("sess error {}", sess_errors[sess_error]);
                         sender_tx.send(());
                         // ??? should we send CLOSE too ???
                         break;
@@ -351,7 +309,7 @@ fn main() {
                 },
                 1 /*REL*/ => {
                     let seq = r.read_le_u16().unwrap();
-                    println!("  seq: {}", seq);
+                    //println!("  seq: {}", seq);
                     let mut rel_count = 0u16;
                     while !r.eof() {
                         let rel;
@@ -364,9 +322,9 @@ fn main() {
                             rel = r.read_to_end().unwrap();
                         }
                         if rel_type < rel_types.len() {
-                            println!("  {}", rel_types[rel_type]);
+                            //println!("  {}", rel_types[rel_type]);
                         } else {
-                            println!("\x1b[31m  UNKNOWN {}\x1b[39;49m", rel_type);
+                            //println!("\x1b[31m  UNKNOWN {}\x1b[39;49m", rel_type);
                         }
                         rel_count += 1;
 
@@ -375,21 +333,21 @@ fn main() {
                             0 /*NEWWDG*/ => {
                                 let wdg_id = rr.read_le_u16().unwrap();
                                 let wdg_type = String::from_utf8(rr.read_until(0).unwrap()).unwrap();
-                                let wdg_parent = rr.read_le_u16().unwrap();
+                                let _/*wdg_parent*/ = rr.read_le_u16().unwrap();
                                 //pargs = read_list
                                 //cargs = read_list
-                                println!("    id:{} type:{} parent:{}", wdg_id, wdg_type, wdg_parent);
+                                //println!("    id:{} type:{} parent:{}", wdg_id, wdg_type, wdg_parent);
                                 widgets.insert(wdg_id as uint, wdg_type);
                             },
                             1 /*WDGMSG*/ => {
                                 let wdg_id = rr.read_le_u16().unwrap();
                                 let msg_name = String::from_utf8(rr.read_until(0).unwrap()).unwrap();
-                                println!("    id:{} name:{}", wdg_id, msg_name);
+                                //println!("    id:{} name:{}", wdg_id, msg_name);
                                 if widgets.find(&(wdg_id as uint)).unwrap().as_slice() == "charlist\0" && msg_name.as_slice() == "add\0" {
                                     let el_type = rr.read_u8().unwrap();
                                     if el_type != 2 { println!("{} NOT T_STR", el_type); continue; }
                                     let char_name = String::from_utf8(rr.read_until(0).unwrap()).unwrap();
-                                    println!("add char '{}'", char_name);
+                                    //println!("add char '{}'", char_name);
                                     charlist.push(char_name);
                                 }
                             },
@@ -399,8 +357,8 @@ fn main() {
                     receiver_to_sender.send(ack(seq + (rel_count - 1)));
                 },
                 2 /*ACK*/ => {
-                    let seq = r.read_le_u16().unwrap();
-                    println!("  seq: {}", seq);
+                    let _/*seq*/ = r.read_le_u16().unwrap();
+                    //println!("  seq: {}", seq);
                 },
                 3 /*BEAT*/ => {},
                 4 /*MAPREQ*/ => {},
@@ -412,18 +370,19 @@ fn main() {
                         /*let fl =*/ r.read_u8().unwrap();
                         let id = r.read_le_u32().unwrap();
                         let frame = r.read_le_i32().unwrap();
-                        println!("  id={} frame={}", id, frame);
+                        //println!("  id={} frame={}", id, frame);
                         w.write_le_u32(id).unwrap();
                         w.write_le_i32(frame).unwrap();
                         loop {
                             let t = r.read_u8().unwrap() as uint;
-                            if t < objdata_types.len() { println!("    {}", objdata_types[t]); }
+                            //if t < objdata_types.len() { println!("    {}", objdata_types[t]); }
                             match t {
                                 0   /*OD_REM*/ => {},
                                 1   /*OD_MOVE*/ => {
                                     let (x,y) = (r.read_le_i32().unwrap(), r.read_le_i32().unwrap());
                                     /*let ia =*/ r.read_le_u16().unwrap();
-                                    println!("      ({},{})", x, y);
+                                    //println!("      ({},{})", x, y);
+                                    sender_to_viewer.send((id,x,y));
                                 },
                                 2   /*OD_RES*/ => {
                                     let /*mut*/ resid = r.read_le_u16().unwrap();
@@ -436,14 +395,14 @@ fn main() {
                                 3   /*OD_LINBEG*/ => {
                                     /*let s =*/ (r.read_le_i32().unwrap(), r.read_le_i32().unwrap());
                                     /*let t =*/ (r.read_le_i32().unwrap(), r.read_le_i32().unwrap());
-                                    /*let c =*/ r.read_le_i32();
+                                    let _/*c*/ = r.read_le_i32();
                                 },
                                 4   /*OD_LINSTEP*/ => {
-                                    let l = r.read_le_i32().unwrap();
-                                    println!("      l={}", l);
+                                    let _/*l*/ = r.read_le_i32().unwrap();
+                                    //println!("      l={}", l);
                                 },
                                 5   /*OD_SPEECH*/ => {
-                                    /*let zo =*/ r.read_le_u16();
+                                    let _/*zo*/ = r.read_le_u16();
                                     /*let text =*/ String::from_utf8(r.read_until(0).unwrap()).unwrap();
                                 },
                                 6   /*OD_COMPOSE*/ => {
@@ -577,13 +536,13 @@ fn main() {
             }
 
             if !r.eof() {
-                let remains = r.read_to_end().unwrap();
-                println!("                       REMAINS {} bytes", remains.len());
+                let _/*remains*/ = r.read_to_end().unwrap();
+                //println!("                       REMAINS {} bytes", remains.len());
             }
 
             //TODO send REL until reply
             if charlist.len() > 0 {
-                println!("send play '{}'", charlist[0]);
+                //println!("send play '{}'", charlist[0]);
                 receiver_to_sender.send(rel_wdgmsg_play(0, charlist[0].as_slice()));
                 charlist.clear();
             }
@@ -591,8 +550,7 @@ fn main() {
     });
 
     //TODO send SESS until reply
-    main_tx.send(sess(user.as_slice(), cookie.as_slice()));
-    main_rx.recv();
+    main_to_sender.send(sess(user.as_slice(), cookie.as_slice()));
 }
 
 
