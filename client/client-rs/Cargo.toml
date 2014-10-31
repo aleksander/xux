@@ -7,6 +7,7 @@ authors = ["Aleksander Usov <aleksander.usov@gmail.com>"]
 [dependencies.openssl]
 git = "https://github.com/sfackler/rust-openssl"
 
-[dependencies.ncurses]
-git = "https://github.com/jeaye/ncurses-rs"
+[dependencies.sdl2]
+git = "https://github.com/AngryLawyer/rust-sdl2"
+
 
