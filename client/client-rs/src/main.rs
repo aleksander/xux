@@ -355,13 +355,13 @@ impl Client {
                             obj.frame = frame;
                             loop {
                                 let t = r.read_u8().unwrap() as uint;
-                                if debug { if t < objdata_types.len() { println!("    {}", objdata_types[t]); } }
+                                //if debug { if t < objdata_types.len() { println!("    {}", objdata_types[t]); } }
                                 match t {
                                     0   /*OD_REM*/ => {},
                                     1   /*OD_MOVE*/ => {
                                         let (x,y) = (r.read_le_i32().unwrap(), r.read_le_i32().unwrap());
                                         /*let ia =*/ r.read_le_u16().unwrap();
-                                        if debug { println!("      ({},{})", x, y); }
+                                        if debug { println!("    MOVE ({},{})", x, y); }
                                         obj.x = x;
                                         obj.y = y;
                                     },
@@ -372,6 +372,7 @@ impl Client {
                                             let sdt_len = r.read_u8().unwrap() as uint;
                                             let _/*sdt*/ = r.read_exact(sdt_len).unwrap();
                                         }
+                                        if debug { println!("    RES {}", resid); }
                                         obj.resid = resid;
                                     },
                                     3   /*OD_LINBEG*/ => {
@@ -381,7 +382,7 @@ impl Client {
                                     },
                                     4   /*OD_LINSTEP*/ => {
                                         let l = r.read_le_i32().unwrap();
-                                        if debug { println!("      l={}", l); }
+                                        if debug { println!("    LINSTEP l={}", l); }
                                     },
                                     5   /*OD_SPEECH*/ => {
                                         let _/*zo*/ = r.read_le_u16();
