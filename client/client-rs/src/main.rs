@@ -40,7 +40,6 @@ struct Error {
 }
 
 fn sess (name: &str, cookie: &[u8]) -> Vec<u8> {
-    //unknown=2 proto=Salem ver=33 user=soos cookie=[ .//J..%.....R...G......Q x![..e.b]
     let mut w = MemWriter::new();
     w.write_u8(0).unwrap(); // SESS
     w.write_le_u16(2).unwrap(); // unknown
@@ -69,22 +68,11 @@ fn beat () -> Vec<u8> {
 
 fn rel_wdgmsg_play (seq: u16, name: &str) -> Vec<u8> {
     let mut w = MemWriter::new();
-    //REL  seq=0
-    //  WDGMSG
-    //  id=0 name=focus
-    //    list:
-    //    INT : 1
-
-    // REL
-    w.write_u8(1).unwrap();
-    // sequence
-    w.write_le_u16(seq).unwrap();
-    // rel type WDGMSG
-    w.write_u8(1).unwrap();
-    // widget id
-    w.write_le_u16(3).unwrap();
-    // message name
-    w.write("play".as_bytes()).unwrap();
+    w.write_u8(1).unwrap(); // REL
+    w.write_le_u16(seq).unwrap();// sequence
+    w.write_u8(1).unwrap();// rel type WDGMSG
+    w.write_le_u16(3).unwrap();// widget id
+    w.write("play".as_bytes()).unwrap();// message name
     w.write_u8(0).unwrap();
     // args list
     w.write_u8(2).unwrap(); // list element type T_STR
