@@ -5,8 +5,8 @@ extern crate serialize;
 
 extern crate sdl2;
 extern crate native;
-use sdl2::video::{Window, PosCentered, OPENGL};
-use sdl2::event::{QuitEvent, NoEvent, poll_event};
+//use sdl2::video::{Window, PosCentered, OPENGL};
+//use sdl2::event::{QuitEvent, NoEvent, poll_event};
 
 use std::io::Writer;
 use std::io::MemWriter;
@@ -18,7 +18,7 @@ use std::io::net::ip::SocketAddr;
 use std::io::net::addrinfo::get_host_addresses;
 use std::io::MemReader;
 use std::io::timer;
-use std::collections::hashmap::HashMap;
+use std::collections::hash_map::HashMap;
 use std::str;
 use std::time::Duration;
 use serialize::hex::ToHex;
@@ -100,15 +100,319 @@ impl Obj {
     }
 }
 
+struct Sess {
+    error : u8,
+}
+
+struct Rel {
+    seq : u16,
+}
+
+struct Ack;
+struct Beat;
+struct MapReq;
+struct MapData;
+struct ObjData;
+struct ObjAck;
+struct Close;
+
+//#[deriving(Show)]
+enum Msg {
+    SESS( Sess ),
+    REL( Rel ),
+    ACK( Ack ),
+    BEAT( Beat ),
+    MAPREQ( MapReq ),
+    MAPDATA( MapData ),
+    OBJDATA( ObjData ),
+    OBJACK( ObjAck ),
+    CLOSE( Close ),
+    UNKNOWN( u8 ),
+}
+
+impl Msg {
+    fn from_buf (buf:&[u8]) -> Msg {
+        let mut r = MemReader::new(buf.to_vec());
+        let mtype = r.read_u8().unwrap();
+        //if debug { println!("receiver: {}", msg_types[mtype]); }
+        match mtype {
+            0 /*SESS*/ => {
+                Msg::SESS(Sess{error : r.read_u8().unwrap()})
+            },
+            1 /*REL*/ => {
+                let seq = r.read_le_u16().unwrap();
+                let mut rel_count = 0u16;
+                while !r.eof() {
+                    let rel;
+                    let mut rel_type = r.read_u8().unwrap() as uint;
+                    if (rel_type & 0x80) != 0 {
+                        rel_type &= !0x80;
+                        let rel_len = r.read_le_u16().unwrap() as uint;
+                        rel = r.read_exact(rel_len).unwrap();
+                    } else {
+                        rel = r.read_to_end().unwrap();
+                    }
+                    rel_count += 1;
+
+                    let mut rr = MemReader::new(rel);
+                    match rel_type {
+                        0  /*NEWWDG*/ => {
+                            let wdg_id = rr.read_le_u16().unwrap();
+                            let wdg_type = String::from_utf8(rr.read_until(0).unwrap()).unwrap();
+                            let wdg_parent = rr.read_le_u16().unwrap();
+                            //pargs = read_list
+                            //cargs = read_list
+                            if debug { println!("  NEWWDG id:{} type:{} parent:{}", wdg_id, wdg_type, wdg_parent); }
+                            widgets.insert(wdg_id as uint, wdg_type);
+                        },
+                        1  /*WDGMSG*/ => {
+                            let wdg_id = rr.read_le_u16().unwrap();
+                            let msg_name = String::from_utf8(rr.read_until(0).unwrap()).unwrap();
+                            if debug { println!("  WDGMSG id:{} name:{}", wdg_id, msg_name); }
+                            if widgets.find(&(wdg_id as uint)).unwrap().as_slice() == "charlist\0" && msg_name.as_slice() == "add\0" {
+                                let el_type = rr.read_u8().unwrap();
+                                if el_type != 2 { println!("{} NOT T_STR", el_type); continue; }
+                                let char_name = String::from_utf8(rr.read_until(0).unwrap()).unwrap();
+                                if debug { println!("    add char '{}'", char_name); }
+                                charlist.push(char_name);
+                            }
+                        },
+                        2  /*DSTWDG*/ => {},
+                        3  /*MAPIV*/ => {},
+                        4  /*GLOBLOB*/ => {},
+                        5  /*PAGINAE*/ => {},
+                        6  /*RESID*/ => {
+                            let resid = rr.read_le_u16().unwrap();
+                            let resname = String::from_utf8(rr.read_until(0).unwrap()).unwrap();
+                            let resver = rr.read_le_u16().unwrap();
+                            println!("  RESID id:{} name:{} ver:{}", resid, resname, resver);
+                            resources.insert(resid, resname);
+                        },
+                        7  /*PARTY*/ => {},
+                        8  /*SFX*/ => {},
+                        9  /*CATTR*/ => {},
+                        10 /*MUSIC*/ => {},
+                        11 /*TILES*/ => {},
+                        12 /*BUFF*/ => {},
+                        13 /*SESSKEY*/ => {},
+                        _ => {
+                            println!("\x1b[31m  UNKNOWN {}\x1b[39;49m", rel_type);
+                        },
+                    }
+                }
+                //XXX are we handle seq right in the case of overflow ???
+                receiver_to_sender.send(ack(seq + (rel_count - 1)));
+            },
+            2 /*ACK*/ => {
+                let seq = r.read_le_u16().unwrap();
+                if debug { println!("ACK seq: {}", seq); }
+            },
+            3 /*BEAT*/ => {
+                if debug { println!("BEAT !!! client can't receive this !!!"); }
+            },
+            4 /*MAPREQ*/ => {
+                if debug { println!("MAPREQ !!! client can't receive this !!!"); }
+            },
+            5 /*MAPDATA*/ => {
+                if debug { println!("MAPDATA"); }
+            },
+            6 /*OBJDATA*/ => {
+                if debug { println!("OBJDATA"); }
+                let mut w = MemWriter::new();
+                w.write_u8(7).unwrap(); //OBJACK writer
+                while !r.eof() {
+                    /*let fl =*/ r.read_u8().unwrap();
+                    let id = r.read_le_u32().unwrap();
+                    let frame = r.read_le_i32().unwrap();
+                    if debug { println!("  id={} frame={}", id, frame); }
+                    w.write_le_u32(id).unwrap();
+                    w.write_le_i32(frame).unwrap();
+                    let mut obj = Obj::new();
+                    obj.frame = frame;
+                    loop {
+                        let t = r.read_u8().unwrap() as uint;
+                        //if debug { if t < objdata_types.len() { println!("    {}", objdata_types[t]); } }
+                        match t {
+                            0   /*OD_REM*/ => {},
+                            1   /*OD_MOVE*/ => {
+                                let (x,y) = (r.read_le_i32().unwrap(), r.read_le_i32().unwrap());
+                                /*let ia =*/ r.read_le_u16().unwrap();
+                                if debug { println!("    MOVE ({},{})", x, y); }
+                                obj.x = x;
+                                obj.y = y;
+                            },
+                            2   /*OD_RES*/ => {
+                                let mut resid = r.read_le_u16().unwrap();
+                                if (resid & 0x8000) != 0 {
+                                    resid &= !0x8000;
+                                    let sdt_len = r.read_u8().unwrap() as uint;
+                                    let _/*sdt*/ = r.read_exact(sdt_len).unwrap();
+                                }
+                                if debug { println!("    RES {}", resid); }
+                                obj.resid = resid;
+                            },
+                            3   /*OD_LINBEG*/ => {
+                                /*let s =*/ (r.read_le_i32().unwrap(), r.read_le_i32().unwrap());
+                                /*let t =*/ (r.read_le_i32().unwrap(), r.read_le_i32().unwrap());
+                                let _/*c*/ = r.read_le_i32();
+                            },
+                            4   /*OD_LINSTEP*/ => {
+                                let l = r.read_le_i32().unwrap();
+                                if debug { println!("    LINSTEP l={}", l); }
+                            },
+                            5   /*OD_SPEECH*/ => {
+                                let _/*zo*/ = r.read_le_u16();
+                                /*let text =*/ String::from_utf8(r.read_until(0).unwrap()).unwrap();
+                            },
+                            6   /*OD_COMPOSE*/ => {
+                                /*let resid =*/ r.read_le_u16().unwrap();
+                            },
+                            7   /*OD_DRAWOFF*/ => {
+                                /*let off =*/ (r.read_le_i32().unwrap(), r.read_le_i32().unwrap());
+                            },
+                            8   /*OD_LUMIN*/ => {
+                                /*let off =*/ (r.read_le_i32().unwrap(), r.read_le_i32().unwrap());
+                                /*let sz =*/ r.read_le_u16().unwrap();
+                                /*let str_ =*/ r.read_u8().unwrap();
+                            },
+                            9   /*OD_AVATAR*/ => {
+                                loop {
+                                    let layer = r.read_le_u16().unwrap();
+                                    if layer == 65535 { break; }
+                                }
+                            },
+                            10  /*OD_FOLLOW*/ => {
+                                let oid = r.read_le_u32().unwrap();
+                                if oid == 0xff_ff_ff_ff {
+                                    /*let xfres =*/ r.read_le_u16().unwrap();
+                                    /*let xfname =*/ String::from_utf8(r.read_until(0).unwrap()).unwrap();
+                                }
+                            },
+                            11  /*OD_HOMING*/ => {
+                                let oid = r.read_le_u32().unwrap();
+                                match oid {
+                                    0xff_ff_ff_ff => {},
+                                    0xff_ff_ff_fe => {
+                                        /*let tgtc =*/ (r.read_le_i32().unwrap(), r.read_le_i32().unwrap());
+                                        /*let v =*/ r.read_le_u16().unwrap();
+                                    },
+                                    _             => {
+                                        /*let tgtc =*/ (r.read_le_i32().unwrap(), r.read_le_i32().unwrap());
+                                        /*let v =*/ r.read_le_u16().unwrap();
+                                    }
+                                }
+                            },
+                            12  /*OD_OVERLAY*/ => {
+                                /*let olid =*/ r.read_le_i32().unwrap();
+                                let resid = r.read_le_u16().unwrap();
+                                if (resid & 0x8000) != 0 {
+                                    let sdt_len = r.read_u8().unwrap() as uint;
+                                    /*let sdt =*/ r.read_exact(sdt_len).unwrap();
+                                }
+                            },
+                            13  /*OD_AUTH*/   => { /* Removed */ },
+                            14  /*OD_HEALTH*/ => {
+                                /*let hp =*/ r.read_u8().unwrap();
+                            },
+                            15  /*OD_BUDDY*/ => {
+                                let name = String::from_utf8(r.read_until(0).unwrap()).unwrap();
+                                if name.len() > 0 {
+                                    /*let group =*/ r.read_u8().unwrap();
+                                    /*let btype =*/ r.read_u8().unwrap();
+                                }
+                            },
+                            16  /*OD_CMPPOSE*/ => {
+                                let pfl = r.read_u8().unwrap();
+                                /*let seq =*/ r.read_u8().unwrap();
+                                if (pfl & 2) != 0 {
+                                    loop {
+                                        let /*mut*/ resid = r.read_le_u16().unwrap();
+                                        if resid == 65535 { break; }
+                                        if (resid & 0x8000) != 0 {
+                                            /*resid &= !0x8000;*/
+                                            let sdt_len = r.read_u8().unwrap() as uint;
+                                            /*let sdt =*/ r.read_exact(sdt_len).unwrap();
+                                        }
+                                    }
+                                }
+                                if (pfl & 4) != 0 {
+                                    loop {
+                                        let /*mut*/ resid = r.read_le_u16().unwrap();
+                                        if resid == 65535 { break; }
+                                        if (resid & 0x8000) != 0 {
+                                            /*resid &= !0x8000;*/
+                                            let sdt_len = r.read_u8().unwrap() as uint;
+                                            /*let sdt =*/ r.read_exact(sdt_len).unwrap();
+                                        }
+                                    }
+                                    /*let ttime =*/ r.read_u8().unwrap();
+                                }
+                            },
+                            17  /*OD_CMPMOD*/ => {
+                                loop {
+                                    let modif = r.read_le_u16().unwrap();
+                                    if modif == 65535 { break; }
+                                    loop {
+                                        let resid = r.read_le_u16().unwrap();
+                                        if resid == 65535 { break; }
+                                    }
+                                }
+                            },
+                            18  /*OD_CMPEQU*/ => {
+                                loop {
+                                    let h = r.read_u8().unwrap();
+                                    if h == 255 { break; }
+                                    /*let at =*/ String::from_utf8(r.read_until(0).unwrap()).unwrap();
+                                    /*let resid =*/ r.read_le_u16().unwrap();
+                                    if (h & 0x80) != 0 {
+                                        /*let x =*/ r.read_le_u16().unwrap();
+                                        /*let y =*/ r.read_le_u16().unwrap();
+                                        /*let z =*/ r.read_le_u16().unwrap();
+                                    }
+                                }
+                            },
+                            19  /*OD_ICON*/ => {
+                                let resid = r.read_le_u16().unwrap();
+                                if resid != 65535 {
+                                    /*let ifl =*/ r.read_u8().unwrap();
+                                }
+                            },
+                            255 /*OD_END*/ => { break; },
+                            _   /*UNKNOWN*/ => {}
+                        }
+                    }
+                    receiver_to_viewer.send((id,obj));
+                }
+                receiver_to_sender.send(w.unwrap()); // send OBJACKs
+            },
+            7 /*OBJACK*/ => {
+                if debug { println!("OBJACK !!! client can't receive this !!!"); }
+            },
+            8 /*CLOSE*/ => {
+                if debug { println!("CLOSE"); }
+                receiver_to_main.send(());
+                // ??? should we send CLOSE too ???
+                break;
+            },
+            _ /*UNKNOWN*/ => {
+                if debug { println!("UNKNOWN !!!"); }
+            }
+        }
+
+
+        Msg::UNKNOWN(0)
+    }
+}
+
 struct Client {
     user: &'static str,
     //pass: &'static str,
     cookie: Vec<u8>,
-    host: &'static str,
-    auth_port: u16,
+    //host: &'static str,
+    //auth_port: u16,
     //port: u16,
     auth_addr: SocketAddr,
-    host_addr: SocketAddr,
+    //game_addr: SocketAddr,
     //any_addr: SocketAddr,
     //udp_rx: UdpSocket,
     //udp_tx: UdpSocket,
@@ -167,7 +471,7 @@ impl Client {
         let viewer_from_any = rx3;
         let mut objects = HashMap::new();
         spawn(proc() {
-
+            /*
             sdl2::init(sdl2::INIT_EVERYTHING);
             let window = match Window::new("xxx", PosCentered, PosCentered, 640, 480, OPENGL) {
                 Ok(window) => window,
@@ -182,6 +486,7 @@ impl Client {
                 }
             }
             sdl2::quit();
+            */
 
             let (id,obj):(u32,Obj) = viewer_from_any.recv();
             objects.insert(id,obj);
@@ -258,13 +563,15 @@ impl Client {
             widgets.insert(0, "root".to_string());
             loop {
                 let (len,addr) = udp_rx.recv_from(buf.as_mut_slice()).unwrap();
+                //FIXME connect the socket
                 if addr != host_addr {
                     println!("wrong host: {}", addr);
                     continue;
                 }
                 //println!("seceiver: dgram [{}]", buf.slice_to(len).to_hex());
                 let mut r = MemReader::new(buf.slice_to(len).to_vec());
-                let mtype = r.read_u8().unwrap() as uint;
+                let msg = Msg::from_buf(buf.slice_to(len));
+                let mtype = r.read_u8().unwrap();
                 //if debug { println!("receiver: {}", msg_types[mtype]); }
                 match mtype {
                     0 /*SESS*/ => {
@@ -557,11 +864,11 @@ impl Client {
         Client {
             user: "",
             cookie: Vec::new(),
-            host: host,           //FIXME only need because TcpStream::connect() don't accept SocketAddr
-            auth_port: auth_port, //FIXME only need because TcpStream::connect() don't accept SocketAddr
+            //host: host,
+            //auth_port: auth_port,
             //port: port,
             auth_addr: SocketAddr {ip: host_ip, port: auth_port},
-            host_addr: SocketAddr {ip: host_ip, port: port},
+            //game_addr: SocketAddr {ip: host_ip, port: port},
             //udp_rx: sock.clone(),
             //udp_tx: sock.clone(),
 
@@ -587,7 +894,7 @@ impl Client {
         //self.pass = pass;
         println!("authorize {} @ {}", user, self.auth_addr);
         //TODO add method connect(SocketAddr) to TcpStream
-        let stream = tryio!("tcp.connect" TcpStream::connect(self.host, self.auth_port));
+        let stream = tryio!("tcp.connect" TcpStream::connect(self.auth_addr));
         let mut stream = SslStream::new(&SslContext::new(Sslv23).unwrap(), stream).unwrap();
 
         // send 'pw' command
