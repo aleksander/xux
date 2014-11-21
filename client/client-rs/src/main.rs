@@ -24,6 +24,7 @@ use std::time::Duration;
 use serialize::hex::ToHex;
 use openssl::crypto::hash::{SHA256, hash};
 use openssl::ssl::{Sslv23, SslContext, SslStream};
+use std::vec::Vec;
 
 macro_rules! tryio (
     ($fmt:expr $e:expr) => (
@@ -91,12 +92,7 @@ struct Obj {
 
 impl Obj {
     fn new() -> Obj {
-        Obj{
-            x:0,
-            y:0,
-            frame:0,
-            resid:0,
-        } 
+        Obj{ x:0, y:0, frame:0, resid:0 } 
     }
 }
 
@@ -106,13 +102,94 @@ struct Sess {
 
 struct Rel {
     seq : u16,
+    rel : Vec<RelElem>
 }
 
-struct Ack;
+enum RelElem {
+    NEWWDG(NewWdg),
+    WDGMSG(WdgMsg),
+    DSTWDG(DstWdg),
+    MAPIV(MapIv),
+    GLOBLOB(GlobLob),
+    PAGINAE(Paginae),
+    RESID(ResId),
+    PARTY(Party),
+    SFX(Sfx),
+    CATTR(Cattr),
+    MUSIC(Music),
+    TILES(Tiles),
+    BUFF(Buff),
+    SESSKEY(SessKey),
+    UNKNOWN( u8 ),
+}
+
+impl RelElem {
+    fn from_buf (kind:u8, buf:&[u8]) -> RelElem {
+        let mut r = MemReader::new(buf.to_vec());
+        match kind {
+            0  /*NEWWDG*/ => {
+                let wdg_id = r.read_le_u16().unwrap();
+                let wdg_type = String::from_utf8(r.read_until(0).unwrap()).unwrap();
+                let wdg_parent = r.read_le_u16().unwrap();
+                //pargs = read_list
+                //cargs = read_list
+                if debug { println!("  NEWWDG id:{} type:{} parent:{}", wdg_id, wdg_type, wdg_parent); }
+                widgets.insert(wdg_id as uint, wdg_type);
+            },
+            1  /*WDGMSG*/ => {
+                let wdg_id = r.read_le_u16().unwrap();
+                let msg_name = String::from_utf8(r.read_until(0).unwrap()).unwrap();
+                if debug { println!("  WDGMSG id:{} name:{}", wdg_id, msg_name); }
+                if widgets.find(&(wdg_id as uint)).unwrap().as_slice() == "charlist\0" && msg_name.as_slice() == "add\0" {
+                    let el_type = r.read_u8().unwrap();
+                    if el_type != 2 { println!("{} NOT T_STR", el_type); continue; }
+                    let char_name = String::from_utf8(r.read_until(0).unwrap()).unwrap();
+                    if debug { println!("    add char '{}'", char_name); }
+                    charlist.push(char_name);
+                }
+            },
+            2  /*DSTWDG*/ => {},
+            3  /*MAPIV*/ => {},
+            4  /*GLOBLOB*/ => {},
+            5  /*PAGINAE*/ => {},
+            6  /*RESID*/ => {
+                let resid = r.read_le_u16().unwrap();
+                let resname = String::from_utf8(r.read_until(0).unwrap()).unwrap();
+                let resver = r.read_le_u16().unwrap();
+                println!("  RESID id:{} name:{} ver:{}", resid, resname, resver);
+                resources.insert(resid, resname);
+            },
+            7  /*PARTY*/ => {},
+            8  /*SFX*/ => {},
+            9  /*CATTR*/ => {},
+            10 /*MUSIC*/ => {},
+            11 /*TILES*/ => {},
+            12 /*BUFF*/ => {},
+            13 /*SESSKEY*/ => {},
+            _ => {
+                println!("\x1b[31m  UNKNOWN {}\x1b[39;49m", rel_type);
+            },
+        }
+    }
+}
+
+struct Ack {
+    seq : u16,
+}
+
 struct Beat;
 struct MapReq;
 struct MapData;
-struct ObjData;
+struct ObjData {
+    obj : Vec<ObjDataElem>,
+}
+
+struct ObjDataElem {
+    fl    : u8,
+    id    : u32,
+    frame : i32,
+}
+
 struct ObjAck;
 struct Close;
 
@@ -134,112 +211,52 @@ impl Msg {
     fn from_buf (buf:&[u8]) -> Msg {
         let mut r = MemReader::new(buf.to_vec());
         let mtype = r.read_u8().unwrap();
-        //if debug { println!("receiver: {}", msg_types[mtype]); }
         match mtype {
             0 /*SESS*/ => {
-                Msg::SESS(Sess{error : r.read_u8().unwrap()})
+                Msg::SESS( Sess{ error : r.read_u8().unwrap() } )
             },
             1 /*REL*/ => {
                 let seq = r.read_le_u16().unwrap();
-                let mut rel_count = 0u16;
+                let mut rel_vec = Vec::new();
                 while !r.eof() {
-                    let rel;
-                    let mut rel_type = r.read_u8().unwrap() as uint;
+                    let rel_buf;
+                    let mut rel_type = r.read_u8().unwrap();
                     if (rel_type & 0x80) != 0 {
                         rel_type &= !0x80;
-                        let rel_len = r.read_le_u16().unwrap() as uint;
-                        rel = r.read_exact(rel_len).unwrap();
+                        let rel_len = r.read_le_u16().unwrap();
+                        rel_buf = r.read_exact(rel_len as uint).unwrap();
                     } else {
-                        rel = r.read_to_end().unwrap();
+                        rel_buf = r.read_to_end().unwrap();
                     }
-                    rel_count += 1;
-
-                    let mut rr = MemReader::new(rel);
-                    match rel_type {
-                        0  /*NEWWDG*/ => {
-                            let wdg_id = rr.read_le_u16().unwrap();
-                            let wdg_type = String::from_utf8(rr.read_until(0).unwrap()).unwrap();
-                            let wdg_parent = rr.read_le_u16().unwrap();
-                            //pargs = read_list
-                            //cargs = read_list
-                            if debug { println!("  NEWWDG id:{} type:{} parent:{}", wdg_id, wdg_type, wdg_parent); }
-                            widgets.insert(wdg_id as uint, wdg_type);
-                        },
-                        1  /*WDGMSG*/ => {
-                            let wdg_id = rr.read_le_u16().unwrap();
-                            let msg_name = String::from_utf8(rr.read_until(0).unwrap()).unwrap();
-                            if debug { println!("  WDGMSG id:{} name:{}", wdg_id, msg_name); }
-                            if widgets.find(&(wdg_id as uint)).unwrap().as_slice() == "charlist\0" && msg_name.as_slice() == "add\0" {
-                                let el_type = rr.read_u8().unwrap();
-                                if el_type != 2 { println!("{} NOT T_STR", el_type); continue; }
-                                let char_name = String::from_utf8(rr.read_until(0).unwrap()).unwrap();
-                                if debug { println!("    add char '{}'", char_name); }
-                                charlist.push(char_name);
-                            }
-                        },
-                        2  /*DSTWDG*/ => {},
-                        3  /*MAPIV*/ => {},
-                        4  /*GLOBLOB*/ => {},
-                        5  /*PAGINAE*/ => {},
-                        6  /*RESID*/ => {
-                            let resid = rr.read_le_u16().unwrap();
-                            let resname = String::from_utf8(rr.read_until(0).unwrap()).unwrap();
-                            let resver = rr.read_le_u16().unwrap();
-                            println!("  RESID id:{} name:{} ver:{}", resid, resname, resver);
-                            resources.insert(resid, resname);
-                        },
-                        7  /*PARTY*/ => {},
-                        8  /*SFX*/ => {},
-                        9  /*CATTR*/ => {},
-                        10 /*MUSIC*/ => {},
-                        11 /*TILES*/ => {},
-                        12 /*BUFF*/ => {},
-                        13 /*SESSKEY*/ => {},
-                        _ => {
-                            println!("\x1b[31m  UNKNOWN {}\x1b[39;49m", rel_type);
-                        },
-                    }
+                    rel_vec.push(RelElem::from_buf(rel_type, rel_buf.as_slice()));
                 }
-                //XXX are we handle seq right in the case of overflow ???
-                receiver_to_sender.send(ack(seq + (rel_count - 1)));
+                Msg::REL( Rel{ seq : seq, rel : rel_vec } )
             },
             2 /*ACK*/ => {
-                let seq = r.read_le_u16().unwrap();
-                if debug { println!("ACK seq: {}", seq); }
+                Msg::ACK( Ack{ seq : r.read_le_u16().unwrap() } )
             },
             3 /*BEAT*/ => {
-                if debug { println!("BEAT !!! client can't receive this !!!"); }
+                Msg::BEAT(Beat)
             },
             4 /*MAPREQ*/ => {
-                if debug { println!("MAPREQ !!! client can't receive this !!!"); }
+                Msg::MAPREQ(MapReq)
             },
             5 /*MAPDATA*/ => {
-                if debug { println!("MAPDATA"); }
+                Msg::MAPDATA(MapData)
             },
             6 /*OBJDATA*/ => {
-                if debug { println!("OBJDATA"); }
-                let mut w = MemWriter::new();
-                w.write_u8(7).unwrap(); //OBJACK writer
+                let mut obj = Vec::new();
                 while !r.eof() {
-                    /*let fl =*/ r.read_u8().unwrap();
+                    let fl = r.read_u8().unwrap();
                     let id = r.read_le_u32().unwrap();
                     let frame = r.read_le_i32().unwrap();
-                    if debug { println!("  id={} frame={}", id, frame); }
-                    w.write_le_u32(id).unwrap();
-                    w.write_le_i32(frame).unwrap();
-                    let mut obj = Obj::new();
-                    obj.frame = frame;
                     loop {
                         let t = r.read_u8().unwrap() as uint;
-                        //if debug { if t < objdata_types.len() { println!("    {}", objdata_types[t]); } }
                         match t {
                             0   /*OD_REM*/ => {},
                             1   /*OD_MOVE*/ => {
                                 let (x,y) = (r.read_le_i32().unwrap(), r.read_le_i32().unwrap());
                                 /*let ia =*/ r.read_le_u16().unwrap();
-                                if debug { println!("    MOVE ({},{})", x, y); }
-                                obj.x = x;
-                                obj.y = y;
                             },
                             2   /*OD_RES*/ => {
                                 let mut resid = r.read_le_u16().unwrap();
@@ -248,8 +265,6 @@ impl Msg {
                                     let sdt_len = r.read_u8().unwrap() as uint;
                                     let _/*sdt*/ = r.read_exact(sdt_len).unwrap();
                                 }
-                                if debug { println!("    RES {}", resid); }
-                                obj.resid = resid;
                             },
                             3   /*OD_LINBEG*/ => {
                                 /*let s =*/ (r.read_le_i32().unwrap(), r.read_le_i32().unwrap());
@@ -258,7 +273,6 @@ impl Msg {
                             },
                             4   /*OD_LINSTEP*/ => {
                                 let l = r.read_le_i32().unwrap();
-                                if debug { println!("    LINSTEP l={}", l); }
                             },
                             5   /*OD_SPEECH*/ => {
                                 let _/*zo*/ = r.read_le_u16();
@@ -381,26 +395,20 @@ impl Msg {
                             _   /*UNKNOWN*/ => {}
                         }
                     }
-                    receiver_to_viewer.send((id,obj));
+                    obj.push( ObjDataElem{ fl:fl, id:id, frame:frame } );
                 }
-                receiver_to_sender.send(w.unwrap()); // send OBJACKs
+                Msg::OBJDATA( ObjData{ obj : obj } )
             },
             7 /*OBJACK*/ => {
-                if debug { println!("OBJACK !!! client can't receive this !!!"); }
+                Msg::OBJACK(ObjAck)
             },
             8 /*CLOSE*/ => {
-                if debug { println!("CLOSE"); }
-                receiver_to_main.send(());
-                // ??? should we send CLOSE too ???
-                break;
+                Msg::CLOSE(Close)
             },
             _ /*UNKNOWN*/ => {
-                if debug { println!("UNKNOWN !!!"); }
+                Msg::UNKNOWN(mtype)
             }
         }
-
-
-        Msg::UNKNOWN(0)
     }
 }
 
