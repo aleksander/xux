@@ -25,6 +25,7 @@ use serialize::hex::ToHex;
 use openssl::crypto::hash::{SHA256, hash};
 use openssl::ssl::{Sslv23, SslContext, SslStream};
 use std::vec::Vec;
+use std::fmt::{Show, Formatter};
 
 macro_rules! tryio (
     ($fmt:expr $e:expr) => (
@@ -96,22 +97,24 @@ impl Obj {
     }
 }
 
-struct Sess {
-    error : u8,
+struct NewWdg {
+    id : u16,
+    kind : String,
+    parent : u16,
 }
-
-struct Rel {
-    seq : u16,
-    rel : Vec<RelElem>
+struct WdgMsg {
+    id : u16,
+    name : String,
 }
-
-struct NewWdg;
-struct WdgMsg;
 struct DstWdg;
 struct MapIv;
 struct GlobLob;
 struct Paginae;
-struct ResId;
+struct ResId {
+    id : u16,
+    name : String,
+    ver : u16,
+}
 struct Party;
 struct Sfx;
 struct Cattr;
@@ -143,35 +146,34 @@ impl RelElem {
         let mut r = MemReader::new(buf.to_vec());
         match kind {
             0  /*NEWWDG*/ => {
-                let wdg_id = r.read_le_u16().unwrap();
-                let wdg_type = String::from_utf8(r.read_until(0).unwrap()).unwrap();
-                let wdg_parent = r.read_le_u16().unwrap();
+                let id = r.read_le_u16().unwrap();
+                let kind = String::from_utf8(r.read_until(0).unwrap()).unwrap();
+                let parent = r.read_le_u16().unwrap();
                 //pargs = read_list
                 //cargs = read_list
-                RelElem::NEWWDG(NewWdg)
+                RelElem::NEWWDG(NewWdg{id:id,kind:kind,parent:parent})
             },
             1  /*WDGMSG*/ => {
-                let wdg_id = r.read_le_u16().unwrap();
-                let msg_name = String::from_utf8(r.read_until(0).unwrap()).unwrap();
-                if widgets.find(&(wdg_id as uint)).unwrap().as_slice() == "charlist\0"
-                   && msg_name.as_slice() == "add\0" {
-                    let el_type = r.read_u8().unwrap();
-                    if el_type != 2 { println!("{} NOT T_STR", el_type); continue; }
-                    let char_name = String::from_utf8(r.read_until(0).unwrap()).unwrap();
-                    if debug { println!("    add char '{}'", char_name); }
-                    charlist.push(char_name);
-                }
-                RelElem::WDGMSG(WdgMsg)
+                let id = r.read_le_u16().unwrap();
+                let name = String::from_utf8(r.read_until(0).unwrap()).unwrap();
+                //if widgets.find(&(wdg_id as uint)).unwrap().as_slice() == "charlist\0" && msg_name.as_slice() == "add\0" {
+                //    let el_type = r.read_u8().unwrap();
+                //    if el_type != 2 { println!("{} NOT T_STR", el_type); continue; }
+                //    let char_name = String::from_utf8(r.read_until(0).unwrap()).unwrap();
+                //    if debug { println!("    add char '{}'", char_name); }
+                //    charlist.push(char_name);
+                //}
+                RelElem::WDGMSG(WdgMsg{id:id,name:name})
             },
             2  /*DSTWDG*/ => { RelElem::DSTWDG(DstWdg) },
             3  /*MAPIV*/ => { RelElem::MAPIV(MapIv) },
             4  /*GLOBLOB*/ => { RelElem::GLOBLOB(GlobLob) },
             5  /*PAGINAE*/ => { RelElem::PAGINAE(Paginae) },
             6  /*RESID*/ => {
-                let resid = r.read_le_u16().unwrap();
-                let resname = String::from_utf8(r.read_until(0).unwrap()).unwrap();
-                let resver = r.read_le_u16().unwrap();
-                RelElem::RESID(ResId)
+                let id = r.read_le_u16().unwrap();
+                let name = String::from_utf8(r.read_until(0).unwrap()).unwrap();
+                let ver = r.read_le_u16().unwrap();
+                RelElem::RESID(ResId{id:id,name:name,ver:ver})
             },
             7  /*PARTY*/ => { RelElem::PARTY(Party) },
             8  /*SFX*/ => { RelElem::SFX(Sfx) },
@@ -188,15 +190,69 @@ impl RelElem {
     }
 }
 
+struct Sess {
+    error : u8,
+}
+
+impl Show for Sess {
+    fn fmt(&self, f : &mut Formatter) -> std::fmt::Result {
+        write!(f, "SESS error={}", self.error)
+    }
+}
+
+struct Rel {
+    seq : u16,
+    rel : Vec<RelElem>
+}
+
+impl Show for Rel {
+    fn fmt(&self, f : &mut Formatter) -> std::fmt::Result {
+        write!(f, "REL  seq={} ...", self.seq)
+    }
+}
+
 struct Ack {
     seq : u16,
 }
 
+impl Show for Ack {
+    fn fmt(&self, f : &mut Formatter) -> std::fmt::Result {
+        write!(f, "ACK  seq={} ...", self.seq)
+    }
+}
+
 struct Beat;
+
+impl Show for Beat {
+    fn fmt(&self, f : &mut Formatter) -> std::fmt::Result {
+        write!(f, "BEAT ...")
+    }
+}
+
 struct MapReq;
+
+impl Show for MapReq {
+    fn fmt(&self, f : &mut Formatter) -> std::fmt::Result {
+        write!(f, "MAPREQ ...")
+    }
+}
+
 struct MapData;
+
+impl Show for MapData {
+    fn fmt(&self, f : &mut Formatter) -> std::fmt::Result {
+        write!(f, "MAPDATA ...")
+    }
+}
+
 struct ObjData {
     obj : Vec<ObjDataElem>,
+}
+
+impl Show for ObjData {
+    fn fmt(&self, f : &mut Formatter) -> std::fmt::Result {
+        write!(f, "OBJDATA ...")
+    }
 }
 
 struct ObjDataElem {
@@ -206,9 +262,23 @@ struct ObjDataElem {
 }
 
 struct ObjAck;
+
+impl Show for ObjAck {
+    fn fmt(&self, f : &mut Formatter) -> std::fmt::Result {
+        write!(f, "OBJACK ...")
+    }
+}
+
 struct Close;
 
-//#[deriving(Show)]
+impl Show for Close {
+    fn fmt(&self, f : &mut Formatter) -> std::fmt::Result {
+        write!(f, "CLOSE ...")
+    }
+}
+
+
+#[deriving(Show)]
 enum Msg {
     SESS( Sess ),
     REL( Rel ),
@@ -226,7 +296,7 @@ impl Msg {
     fn from_buf (buf:&[u8]) -> Msg {
         let mut r = MemReader::new(buf.to_vec());
         let mtype = r.read_u8().unwrap();
-        match mtype {
+        let res = match mtype {
             0 /*SESS*/ => {
                 Msg::SESS( Sess{ error : r.read_u8().unwrap() } )
             },
@@ -423,7 +493,14 @@ impl Msg {
             _ /*UNKNOWN*/ => {
                 Msg::UNKNOWN(mtype)
             }
+        };
+
+        if !r.eof() {
+            let remains = r.read_to_end().unwrap();
+            println!("                       REMAINS {} bytes", remains.len());
         }
+
+        res
     }
 }
 
@@ -528,6 +605,7 @@ impl Client {
             }
         });
 
+        /*
         let msg_types = [
             "SESS",
             "REL",
@@ -560,7 +638,7 @@ impl Client {
             "OD_CMPMOD",
             "OD_CMPEQU",
             "OD_ICON" ];
-
+        */
     let sess_errors = [
         "OK",
         "AUTH",
@@ -592,16 +670,16 @@ impl Client {
                     continue;
                 }
                 //println!("seceiver: dgram [{}]", buf.slice_to(len).to_hex());
-                let mut r = MemReader::new(buf.slice_to(len).to_vec());
+                //let mut r = MemReader::new(buf.slice_to(len).to_vec());
                 let msg = Msg::from_buf(buf.slice_to(len));
-                let mtype = r.read_u8().unwrap();
-                //if debug { println!("receiver: {}", msg_types[mtype]); }
-                match mtype {
-                    0 /*SESS*/ => {
-                        if debug { println!("SESS"); }
-                        let sess_error = r.read_u8().unwrap() as uint;
-                        if sess_error != 0 {
-                            println!("sess error {}", sess_errors[sess_error]);
+                println!("receiver: {}", msg);
+                match msg {
+                    Msg::SESS(sess) => {
+                        //let sess.error = r.read_u8().unwrap() as uint;
+                        if sess.error != 0 {
+                            //TODO Sess::error(sess.error)
+                            //TODO or add type SessError
+                            println!("sess error {}", sess_errors[sess.error as uint]);
                             receiver_to_main.send(());
                             // ??? should we send CLOSE too ???
                             break;
@@ -609,270 +687,88 @@ impl Client {
                         //connected = true;
                         receiver_to_beater.send(());
                     },
-                    1 /*REL*/ => {
-                        let seq = r.read_le_u16().unwrap();
-                        if debug { println!("REL seq={}", seq); }
-                        let mut rel_count = 0u16;
-                        while !r.eof() {
-                            let rel;
-                            let mut rel_type = r.read_u8().unwrap() as uint;
-                            if (rel_type & 0x80) != 0 {
-                                rel_type &= !0x80;
-                                let rel_len = r.read_le_u16().unwrap() as uint;
-                                rel = r.read_exact(rel_len).unwrap();
-                            } else {
-                                rel = r.read_to_end().unwrap();
-                            }
-                            rel_count += 1;
-
-                            let mut rr = MemReader::new(rel);
-                            match rel_type {
-                                0  /*NEWWDG*/ => {
-                                    let wdg_id = rr.read_le_u16().unwrap();
-                                    let wdg_type = String::from_utf8(rr.read_until(0).unwrap()).unwrap();
-                                    let wdg_parent = rr.read_le_u16().unwrap();
+                    Msg::REL( rel ) => {
+                        //XXX are we handle seq right in the case of overflow ???
+                        receiver_to_sender.send(ack(rel.seq + ((rel.rel.len() as u16) - 1)));
+                        for r in rel.rel.iter() {
+                            match *r {
+                                RelElem::NEWWDG(ref wdg) => {
+                                    //let wdg_id = rr.read_le_u16().unwrap();
+                                    //let wdg_type = String::from_utf8(rr.read_until(0).unwrap()).unwrap();
+                                    //let wdg_parent = rr.read_le_u16().unwrap();
                                     //pargs = read_list
                                     //cargs = read_list
-                                    if debug { println!("  NEWWDG id:{} type:{} parent:{}", wdg_id, wdg_type, wdg_parent); }
-                                    widgets.insert(wdg_id as uint, wdg_type);
+                                    println!("  NEWWDG id:{} type:{} parent:{}", wdg.id, wdg.kind, wdg.parent);
+                                    widgets.insert(wdg.id as uint, wdg.kind.clone()/*FIXME String -> &str*/);
                                 },
-                                1  /*WDGMSG*/ => {
-                                    let wdg_id = rr.read_le_u16().unwrap();
-                                    let msg_name = String::from_utf8(rr.read_until(0).unwrap()).unwrap();
-                                    if debug { println!("  WDGMSG id:{} name:{}", wdg_id, msg_name); }
-                                    if widgets.find(&(wdg_id as uint)).unwrap().as_slice() == "charlist\0" && msg_name.as_slice() == "add\0" {
-                                        let el_type = rr.read_u8().unwrap();
-                                        if el_type != 2 { println!("{} NOT T_STR", el_type); continue; }
-                                        let char_name = String::from_utf8(rr.read_until(0).unwrap()).unwrap();
-                                        if debug { println!("    add char '{}'", char_name); }
-                                        charlist.push(char_name);
+                                RelElem::WDGMSG(ref msg) => {
+                                    //let wdg_id = rr.read_le_u16().unwrap();
+                                    //let msg_name = String::from_utf8(rr.read_until(0).unwrap()).unwrap();
+                                    //if debug { println!("  WDGMSG id:{} name:{}", wdg_id, msg_name); }
+                                    if (widgets.find(&(msg.id as uint)).unwrap().as_slice() == "charlist\0") &&
+                                       (msg.name.as_slice() == "add\0") {
+                                        //FIXME TODO XXX parse widget message remains
+                                        //let el_type = rr.read_u8().unwrap();
+                                        //if el_type != 2 { println!("{} NOT T_STR", el_type); continue; }
+                                        //let char_name = String::from_utf8(rr.read_until(0).unwrap()).unwrap();
+                                        //if debug { println!("    add char '{}'", char_name); }
+                                        charlist.push("FIXME XXX".to_string());
                                     }
                                 },
-                                2  /*DSTWDG*/ => {},
-                                3  /*MAPIV*/ => {},
-                                4  /*GLOBLOB*/ => {},
-                                5  /*PAGINAE*/ => {},
-                                6  /*RESID*/ => {
-                                    let resid = rr.read_le_u16().unwrap();
-                                    let resname = String::from_utf8(rr.read_until(0).unwrap()).unwrap();
-                                    let resver = rr.read_le_u16().unwrap();
-                                    println!("  RESID id:{} name:{} ver:{}", resid, resname, resver);
-                                    resources.insert(resid, resname);
+                                RelElem::DSTWDG(wdg) => {},
+                                RelElem::MAPIV(mapiv) => {},
+                                RelElem::GLOBLOB(globlob) => {},
+                                RelElem::PAGINAE(paginae) => {},
+                                RelElem::RESID(ref res) => {
+                                    //let resid = rr.read_le_u16().unwrap();
+                                    //let resname = String::from_utf8(rr.read_until(0).unwrap()).unwrap();
+                                    //let resver = rr.read_le_u16().unwrap();
+                                    println!("  RESID id:{} name:{} ver:{}", res.id, res.name, res.ver);
+                                    resources.insert(res.id, res.name.clone()/*FIXME String -> &str*/);
                                 },
-                                7  /*PARTY*/ => {},
-                                8  /*SFX*/ => {},
-                                9  /*CATTR*/ => {},
-                                10 /*MUSIC*/ => {},
-                                11 /*TILES*/ => {},
-                                12 /*BUFF*/ => {},
-                                13 /*SESSKEY*/ => {},
-                                _ => {
-                                    println!("\x1b[31m  UNKNOWN {}\x1b[39;49m", rel_type);
+                                RelElem::PARTY(party) => {},
+                                RelElem::SFX(sfx) => {},
+                                RelElem::CATTR(cattr) => {},
+                                RelElem::MUSIC(music) => {},
+                                RelElem::TILES(tiles) => {},
+                                RelElem::BUFF(buff) => {},
+                                RelElem::SESSKEY(sesskey) => {},
+                                RelElem::UNKNOWN(t) => {
+                                    println!("\x1b[31m  UNKNOWN {}\x1b[39;49m", t);
                                 },
                             }
                         }
-                        //XXX are we handle seq right in the case of overflow ???
-                        receiver_to_sender.send(ack(seq + (rel_count - 1)));
                     },
-                    2 /*ACK*/ => {
-                        let seq = r.read_le_u16().unwrap();
-                        if debug { println!("ACK seq: {}", seq); }
+                    Msg::ACK( ack ) => {},
+                    Msg::BEAT( beat ) => {
+                        println!("     !!! client can't receive BEAT !!!");
                     },
-                    3 /*BEAT*/ => {
-                        if debug { println!("BEAT !!! client can't receive this !!!"); }
+                    Msg::MAPREQ( mapreq ) => {
+                        println!("     !!! client can't receive MAPREQ !!!");
                     },
-                    4 /*MAPREQ*/ => {
-                        if debug { println!("MAPREQ !!! client can't receive this !!!"); }
-                    },
-                    5 /*MAPDATA*/ => {
-                        if debug { println!("MAPDATA"); }
-                    },
-                    6 /*OBJDATA*/ => {
-                        if debug { println!("OBJDATA"); }
+                    Msg::MAPDATA( mapdata ) => {},
+                    Msg::OBJDATA( objdata ) => {
                         let mut w = MemWriter::new();
                         w.write_u8(7).unwrap(); //OBJACK writer
-                        while !r.eof() {
-                            /*let fl =*/ r.read_u8().unwrap();
-                            let id = r.read_le_u32().unwrap();
-                            let frame = r.read_le_i32().unwrap();
-                            if debug { println!("  id={} frame={}", id, frame); }
-                            w.write_le_u32(id).unwrap();
-                            w.write_le_i32(frame).unwrap();
+                        for o in objdata.obj.iter() {
+                            w.write_le_u32(o.id).unwrap();
+                            w.write_le_i32(o.frame).unwrap();
                             let mut obj = Obj::new();
-                            obj.frame = frame;
-                            loop {
-                                let t = r.read_u8().unwrap() as uint;
-                                //if debug { if t < objdata_types.len() { println!("    {}", objdata_types[t]); } }
-                                match t {
-                                    0   /*OD_REM*/ => {},
-                                    1   /*OD_MOVE*/ => {
-                                        let (x,y) = (r.read_le_i32().unwrap(), r.read_le_i32().unwrap());
-                                        /*let ia =*/ r.read_le_u16().unwrap();
-                                        if debug { println!("    MOVE ({},{})", x, y); }
-                                        obj.x = x;
-                                        obj.y = y;
-                                    },
-                                    2   /*OD_RES*/ => {
-                                        let mut resid = r.read_le_u16().unwrap();
-                                        if (resid & 0x8000) != 0 {
-                                            resid &= !0x8000;
-                                            let sdt_len = r.read_u8().unwrap() as uint;
-                                            let _/*sdt*/ = r.read_exact(sdt_len).unwrap();
-                                        }
-                                        if debug { println!("    RES {}", resid); }
-                                        obj.resid = resid;
-                                    },
-                                    3   /*OD_LINBEG*/ => {
-                                        /*let s =*/ (r.read_le_i32().unwrap(), r.read_le_i32().unwrap());
-                                        /*let t =*/ (r.read_le_i32().unwrap(), r.read_le_i32().unwrap());
-                                        let _/*c*/ = r.read_le_i32();
-                                    },
-                                    4   /*OD_LINSTEP*/ => {
-                                        let l = r.read_le_i32().unwrap();
-                                        if debug { println!("    LINSTEP l={}", l); }
-                                    },
-                                    5   /*OD_SPEECH*/ => {
-                                        let _/*zo*/ = r.read_le_u16();
-                                        /*let text =*/ String::from_utf8(r.read_until(0).unwrap()).unwrap();
-                                    },
-                                    6   /*OD_COMPOSE*/ => {
-                                        /*let resid =*/ r.read_le_u16().unwrap();
-                                    },
-                                    7   /*OD_DRAWOFF*/ => {
-                                        /*let off =*/ (r.read_le_i32().unwrap(), r.read_le_i32().unwrap());
-                                    },
-                                    8   /*OD_LUMIN*/ => {
-                                        /*let off =*/ (r.read_le_i32().unwrap(), r.read_le_i32().unwrap());
-                                        /*let sz =*/ r.read_le_u16().unwrap();
-                                        /*let str_ =*/ r.read_u8().unwrap();
-                                    },
-                                    9   /*OD_AVATAR*/ => {
-                                        loop {
-                                            let layer = r.read_le_u16().unwrap();
-                                            if layer == 65535 { break; }
-                                        }
-                                    },
-                                    10  /*OD_FOLLOW*/ => {
-                                        let oid = r.read_le_u32().unwrap();
-                                        if oid == 0xff_ff_ff_ff {
-                                            /*let xfres =*/ r.read_le_u16().unwrap();
-                                            /*let xfname =*/ String::from_utf8(r.read_until(0).unwrap()).unwrap();
-                                        }
-                                    },
-                                    11  /*OD_HOMING*/ => {
-                                        let oid = r.read_le_u32().unwrap();
-                                        match oid {
-                                            0xff_ff_ff_ff => {},
-                                            0xff_ff_ff_fe => {
-                                                /*let tgtc =*/ (r.read_le_i32().unwrap(), r.read_le_i32().unwrap());
-                                                /*let v =*/ r.read_le_u16().unwrap();
-                                            },
-                                            _             => {
-                                                /*let tgtc =*/ (r.read_le_i32().unwrap(), r.read_le_i32().unwrap());
-                                                /*let v =*/ r.read_le_u16().unwrap();
-                                            }
-                                        }
-                                    },
-                                    12  /*OD_OVERLAY*/ => {
-                                        /*let olid =*/ r.read_le_i32().unwrap();
-                                        let resid = r.read_le_u16().unwrap();
-                                        if (resid & 0x8000) != 0 {
-                                            let sdt_len = r.read_u8().unwrap() as uint;
-                                            /*let sdt =*/ r.read_exact(sdt_len).unwrap();
-                                        }
-                                    },
-                                    13  /*OD_AUTH*/   => { /* Removed */ },
-                                    14  /*OD_HEALTH*/ => {
-                                        /*let hp =*/ r.read_u8().unwrap();
-                                    },
-                                    15  /*OD_BUDDY*/ => {
-                                        let name = String::from_utf8(r.read_until(0).unwrap()).unwrap();
-                                        if name.len() > 0 {
-                                            /*let group =*/ r.read_u8().unwrap();
-                                            /*let btype =*/ r.read_u8().unwrap();
-                                        }
-                                    },
-                                    16  /*OD_CMPPOSE*/ => {
-                                        let pfl = r.read_u8().unwrap();
-                                        /*let seq =*/ r.read_u8().unwrap();
-                                        if (pfl & 2) != 0 {
-                                            loop {
-                                                let /*mut*/ resid = r.read_le_u16().unwrap();
-                                                if resid == 65535 { break; }
-                                                if (resid & 0x8000) != 0 {
-                                                    /*resid &= !0x8000;*/
-                                                    let sdt_len = r.read_u8().unwrap() as uint;
-                                                    /*let sdt =*/ r.read_exact(sdt_len).unwrap();
-                                                }
-                                            }
-                                        }
-                                        if (pfl & 4) != 0 {
-                                            loop {
-                                                let /*mut*/ resid = r.read_le_u16().unwrap();
-                                                if resid == 65535 { break; }
-                                                if (resid & 0x8000) != 0 {
-                                                    /*resid &= !0x8000;*/
-                                                    let sdt_len = r.read_u8().unwrap() as uint;
-                                                    /*let sdt =*/ r.read_exact(sdt_len).unwrap();
-                                                }
-                                            }
-                                            /*let ttime =*/ r.read_u8().unwrap();
-                                        }
-                                    },
-                                    17  /*OD_CMPMOD*/ => {
-                                        loop {
-                                            let modif = r.read_le_u16().unwrap();
-                                            if modif == 65535 { break; }
-                                            loop {
-                                                let resid = r.read_le_u16().unwrap();
-                                                if resid == 65535 { break; }
-                                            }
-                                        }
-                                    },
-                                    18  /*OD_CMPEQU*/ => {
-                                        loop {
-                                            let h = r.read_u8().unwrap();
-                                            if h == 255 { break; }
-                                            /*let at =*/ String::from_utf8(r.read_until(0).unwrap()).unwrap();
-                                            /*let resid =*/ r.read_le_u16().unwrap();
-                                            if (h & 0x80) != 0 {
-                                                /*let x =*/ r.read_le_u16().unwrap();
-                                                /*let y =*/ r.read_le_u16().unwrap();
-                                                /*let z =*/ r.read_le_u16().unwrap();
-                                            }
-                                        }
-                                    },
-                                    19  /*OD_ICON*/ => {
-                                        let resid = r.read_le_u16().unwrap();
-                                        if resid != 65535 {
-                                            /*let ifl =*/ r.read_u8().unwrap();
-                                        }
-                                    },
-                                    255 /*OD_END*/ => { break; },
-                                    _   /*UNKNOWN*/ => {}
-                                }
-                            }
-                            receiver_to_viewer.send((id,obj));
+                            obj.frame = o.frame;
+                            receiver_to_viewer.send((o.id,obj));
                         }
+                        //TODO receiver_to_sender.send(objdata.ack());
                         receiver_to_sender.send(w.unwrap()); // send OBJACKs
                     },
-                    7 /*OBJACK*/ => {
-                        if debug { println!("OBJACK !!! client can't receive this !!!"); }
-                    },
-                    8 /*CLOSE*/ => {
-                        if debug { println!("CLOSE"); }
+                    Msg::OBJACK( objack ) => {},
+                    Msg::CLOSE( close ) => {
                         receiver_to_main.send(());
                         // ??? should we send CLOSE too ???
                         break;
                     },
-                    _ /*UNKNOWN*/ => {
-                        if debug { println!("UNKNOWN !!!"); }
-                    }
-                }
-
-                if !r.eof() {
-                    let _/*remains*/ = r.read_to_end().unwrap();
-                    //println!("                       REMAINS {} bytes", remains.len());
+                    Msg::UNKNOWN( u8 ) => {
+                        println!("     !!! UNKNOWN !!!");
+                    },
                 }
 
                 //TODO send REL until reply
@@ -973,22 +869,6 @@ impl Client {
 
 
 fn main() {
-    /*let rel_types = [
-        "NEWWDG",
-        "WDGMSG",
-        "DSTWDG",
-        "MAPIV",
-        "GLOBLOB",
-        "PAGINAE",
-        "RESID",
-        "PARTY",
-        "SFX",
-        "CATTR",
-        "MUSIC",
-        "TILES",
-        "BUFF",
-        "SESSKEY" ];*/
-
     //TODO handle keyboard interrupt
 
     let mut client = Client::new("game.salemthegame.com", 1871, 1870); //TODO return Result and match
@@ -997,7 +877,6 @@ fn main() {
         Ok(()) => { println!("success. cookie = [{}]", client.cookie.as_slice().to_hex()); },
         Err(e) => { println!("error. {}: {}", e.source, e.detail.unwrap()); return; }
     };
-
 
     client.connect(); //TODO return Result and match
     client.wait_for_end();
