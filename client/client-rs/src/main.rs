@@ -105,6 +105,21 @@ struct Rel {
     rel : Vec<RelElem>
 }
 
+struct NewWdg;
+struct WdgMsg;
+struct DstWdg;
+struct MapIv;
+struct GlobLob;
+struct Paginae;
+struct ResId;
+struct Party;
+struct Sfx;
+struct Cattr;
+struct Music;
+struct Tiles;
+struct Buff;
+struct SessKey;
+
 enum RelElem {
     NEWWDG(NewWdg),
     WDGMSG(WdgMsg),
@@ -133,41 +148,41 @@ impl RelElem {
                 let wdg_parent = r.read_le_u16().unwrap();
                 //pargs = read_list
                 //cargs = read_list
-                if debug { println!("  NEWWDG id:{} type:{} parent:{}", wdg_id, wdg_type, wdg_parent); }
-                widgets.insert(wdg_id as uint, wdg_type);
+                RelElem::NEWWDG(NewWdg)
             },
             1  /*WDGMSG*/ => {
                 let wdg_id = r.read_le_u16().unwrap();
                 let msg_name = String::from_utf8(r.read_until(0).unwrap()).unwrap();
-                if debug { println!("  WDGMSG id:{} name:{}", wdg_id, msg_name); }
-                if widgets.find(&(wdg_id as uint)).unwrap().as_slice() == "charlist\0" && msg_name.as_slice() == "add\0" {
+                if widgets.find(&(wdg_id as uint)).unwrap().as_slice() == "charlist\0"
+                   && msg_name.as_slice() == "add\0" {
                     let el_type = r.read_u8().unwrap();
                     if el_type != 2 { println!("{} NOT T_STR", el_type); continue; }
                     let char_name = String::from_utf8(r.read_until(0).unwrap()).unwrap();
                     if debug { println!("    add char '{}'", char_name); }
                     charlist.push(char_name);
                 }
+                RelElem::WDGMSG(WdgMsg)
             },
-            2  /*DSTWDG*/ => {},
-            3  /*MAPIV*/ => {},
-            4  /*GLOBLOB*/ => {},
-            5  /*PAGINAE*/ => {},
+            2  /*DSTWDG*/ => { RelElem::DSTWDG(DstWdg) },
+            3  /*MAPIV*/ => { RelElem::MAPIV(MapIv) },
+            4  /*GLOBLOB*/ => { RelElem::GLOBLOB(GlobLob) },
+            5  /*PAGINAE*/ => { RelElem::PAGINAE(Paginae) },
             6  /*RESID*/ => {
                 let resid = r.read_le_u16().unwrap();
                 let resname = String::from_utf8(r.read_until(0).unwrap()).unwrap();
                 let resver = r.read_le_u16().unwrap();
-                println!("  RESID id:{} name:{} ver:{}", resid, resname, resver);
-                resources.insert(resid, resname);
+                RelElem::RESID(ResId)
             },
-            7  /*PARTY*/ => {},
-            8  /*SFX*/ => {},
-            9  /*CATTR*/ => {},
-            10 /*MUSIC*/ => {},
-            11 /*TILES*/ => {},
-            12 /*BUFF*/ => {},
-            13 /*SESSKEY*/ => {},
+            7  /*PARTY*/ => { RelElem::PARTY(Party) },
+            8  /*SFX*/ => { RelElem::SFX(Sfx) },
+            9  /*CATTR*/ => { RelElem::CATTR(Cattr) },
+            10 /*MUSIC*/ => { RelElem::MUSIC(Music) },
+            11 /*TILES*/ => { RelElem::TILES(Tiles) },
+            12 /*BUFF*/ => { RelElem::BUFF(Buff) },
+            13 /*SESSKEY*/ => { RelElem::SESSKEY(SessKey) },
             _ => {
-                println!("\x1b[31m  UNKNOWN {}\x1b[39;49m", rel_type);
+                //println!("\x1b[31m  UNKNOWN {}\x1b[39;49m", rel_type);
+                RelElem::UNKNOWN( kind )
             },
         }
     }
