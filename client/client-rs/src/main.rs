@@ -86,8 +86,8 @@ fn rel_wdgmsg_play (seq: u16, name: &str) -> Vec<u8> {
 
 struct Obj {
     frame:i32,
-    resid:u16,
-    mv:Option<(i32,i32)>,
+    //resid:u16,
+    //mv:Option<(i32,i32)>,
 }
 //impl Obj {
 //    fn new() -> Obj {
@@ -694,7 +694,7 @@ struct Client {
     //sender_from_any: Receiver<Vec<u8>>,  //TODO type OutputBuffer = Vec<u8>
     //receiver_to_sender: Sender<Vec<u8>>, //TODO type OutputBuffer = Vec<u8>
     //beater_to_sender: Sender<Vec<u8>>,
-    receiver_to_main: Sender<()>,
+    //receiver_to_main: Sender<()>,
     main_from_any: Receiver<()>,
     //receiver_to_beater: Sender<()>,
     //beater_from_any: Receiver<()>,
@@ -822,32 +822,32 @@ impl Client {
                                         }
                                     }
                                 },
-                                RelElem::DSTWDG(wdg) => { /*TODO widgets.delete(wdg.id)*/ },
-                                RelElem::MAPIV(mapiv) => {},
-                                RelElem::GLOBLOB(globlob) => {},
-                                RelElem::PAGINAE(paginae) => {},
+                                RelElem::DSTWDG(_) => { /*TODO widgets.delete(wdg.id)*/ },
+                                RelElem::MAPIV(_) => {},
+                                RelElem::GLOBLOB(_) => {},
+                                RelElem::PAGINAE(_) => {},
                                 RelElem::RESID(ref res) => {
                                     resources.insert(res.id, res.name.clone()/*FIXME String -> &str*/);
                                 },
-                                RelElem::PARTY(party) => {},
-                                RelElem::SFX(sfx) => {},
-                                RelElem::CATTR(cattr) => {},
-                                RelElem::MUSIC(music) => {},
-                                RelElem::TILES(tiles) => {},
-                                RelElem::BUFF(buff) => {},
-                                RelElem::SESSKEY(sesskey) => {},
-                                RelElem::UNKNOWN(t) => {},
+                                RelElem::PARTY(_) => {},
+                                RelElem::SFX(_) => {},
+                                RelElem::CATTR(_) => {},
+                                RelElem::MUSIC(_) => {},
+                                RelElem::TILES(_) => {},
+                                RelElem::BUFF(_) => {},
+                                RelElem::SESSKEY(_) => {},
+                                RelElem::UNKNOWN(_) => {},
                             }
                         }
                     },
-                    Msg::ACK( ack ) => {},
-                    Msg::BEAT( beat ) => {
+                    Msg::ACK(_) => {},
+                    Msg::BEAT(_) => {
                         println!("     !!! client can't receive BEAT !!!");
                     },
-                    Msg::MAPREQ( mapreq ) => {
+                    Msg::MAPREQ(_) => {
                         println!("     !!! client can't receive MAPREQ !!!");
                     },
-                    Msg::MAPDATA( mapdata ) => {},
+                    Msg::MAPDATA(_) => {},
                     Msg::OBJDATA( objdata ) => {
                         let mut w = MemWriter::new();
                         w.write_u8(7).unwrap(); //OBJACK writer
@@ -856,18 +856,18 @@ impl Client {
                             w.write_le_i32(o.frame).unwrap();
                             //let mut obj = Obj::new();
                             //obj.frame = o.frame;
-                            receiver_to_viewer.send( (o.id, Obj{frame:o.frame, resid:0/*FIXME*/, mv:Some((0,0))/*FIXME*/}) );
+                            receiver_to_viewer.send( (o.id, Obj{frame:o.frame}) );
                         }
                         //TODO receiver_to_sender.send(objdata.ack());
                         receiver_to_sender.send(w.unwrap()); // send OBJACKs
                     },
-                    Msg::OBJACK( objack ) => {},
-                    Msg::CLOSE( close ) => {
+                    Msg::OBJACK(_) => {},
+                    Msg::CLOSE(_) => {
                         receiver_to_main.send(());
                         // ??? should we send CLOSE too ???
                         break;
                     },
-                    Msg::UNKNOWN( u8 ) => {
+                    Msg::UNKNOWN(_) => {
                         println!("     !!! UNKNOWN !!!");
                     },
                 }
@@ -896,7 +896,7 @@ impl Client {
             //sender_from_any: rx1,
             //receiver_to_sender: tx1.clone(),
             //beater_to_sender: tx1.clone(),
-            receiver_to_main: tx2.clone(),
+            //receiver_to_main: tx2.clone(),
             main_from_any: rx4,
             //receiver_to_beater: tx2.clone(),
             //beater_from_any: rx2,
