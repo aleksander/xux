@@ -85,18 +85,15 @@ fn rel_wdgmsg_play (seq: u16, name: &str) -> Vec<u8> {
 
 
 struct Obj {
-    x:i32,
-    y:i32,
     frame:i32,
     resid:u16,
+    mv:Option<(i32,i32)>,
 }
-
-impl Obj {
-    fn new() -> Obj {
-        Obj{ x:0, y:0, frame:0, resid:0 } 
-    }
-}
-
+//impl Obj {
+//    fn new() -> Obj {
+//        Obj{ x:0, y:0, frame:0, resid:0 } 
+//    }
+//}
 
 #[deriving(Show)]
 struct NewWdg {
@@ -159,24 +156,25 @@ enum RelElem {
     TILES(Tiles),
     BUFF(Buff),
     SESSKEY(SessKey),
-    UNKNOWN( u8 ),
+    UNKNOWN( u8 ), //TODO remove this and use Oprion<Msg> or Result<Msg>
 }
 
+#[allow(non_camel_case_types)]
 #[deriving(Show)]
 enum MsgList {
-    T_INT    (i32),
-    T_STR    (String),
-    T_COORD  ((i32,i32)),
-    T_UINT8  (u8),
-    T_UINT16 (u16),
-    T_COLOR  ((u8,u8,u8,u8)),
-    T_TTOL   /*TODO (here should be sublist)*/,
-    T_INT8   (i8),
-    T_INT16  (i16),
-    T_NIL    /*(this is null)*/,
-    T_BYTES  (Vec<u8>),
-    T_FLOAT32(f32),
-    T_FLOAT64(f64),
+    tINT    (i32),
+    tSTR    (String),
+    tCOORD  ((i32,i32)),
+    tUINT8  (u8),
+    tUINT16 (u16),
+    tCOLOR  ((u8,u8,u8,u8)),
+    tTTOL   /*TODO (here should be sublist)*/,
+    tINT8   (i8),
+    tINT16  (i16),
+    tNIL    /*(this is null)*/,
+    tBYTES  (Vec<u8>),
+    tFLOAT32(f32),
+    tFLOAT64(f64),
 }
 
 fn read_sublist (r:&mut MemReader) /*TODO return Result instead*/ {
@@ -220,52 +218,52 @@ fn read_list (r:&mut MemReader) -> Vec<MsgList> /*TODO return Result instead*/ {
         match t {
             /*T_END    */  0  => { return list; },
             /*T_INT    */  1  => {
-                list.push(MsgList::T_INT( r.read_le_i32().unwrap() ));
+                list.push(MsgList::tINT( r.read_le_i32().unwrap() ));
             },
             /*T_STR    */  2  => {
-                list.push(MsgList::T_STR( String::from_utf8(r.read_until(0).unwrap()).unwrap() ));
+                list.push(MsgList::tSTR( String::from_utf8(r.read_until(0).unwrap()).unwrap() ));
             },
             /*T_COORD  */  3  => {
-                list.push(MsgList::T_COORD( (r.read_le_i32().unwrap(),r.read_le_i32().unwrap()) ));
+                list.push(MsgList::tCOORD( (r.read_le_i32().unwrap(),r.read_le_i32().unwrap()) ));
             },
             /*T_UINT8  */  4  => {
-                list.push(MsgList::T_UINT8( r.read_u8().unwrap() ));
+                list.push(MsgList::tUINT8( r.read_u8().unwrap() ));
             },
             /*T_UINT16 */  5  => {
-                list.push(MsgList::T_UINT16( r.read_le_u16().unwrap() ));
+                list.push(MsgList::tUINT16( r.read_le_u16().unwrap() ));
             },
             /*T_COLOR  */  6  => {
-                list.push(MsgList::T_COLOR( (r.read_u8().unwrap(),
-                                             r.read_u8().unwrap(),
-                                             r.read_u8().unwrap(),
-                                             r.read_u8().unwrap()) ));
+                list.push(MsgList::tCOLOR( (r.read_u8().unwrap(),
+                                            r.read_u8().unwrap(),
+                                            r.read_u8().unwrap(),
+                                            r.read_u8().unwrap()) ));
             },
             /*T_TTOL   */  8  => {
-                read_sublist(r); list.push(MsgList::T_TTOL);
+                read_sublist(r); list.push(MsgList::tTTOL);
             },
             /*T_INT8   */  9  => {
-                list.push(MsgList::T_INT8( r.read_i8().unwrap() ));
+                list.push(MsgList::tINT8( r.read_i8().unwrap() ));
             },
             /*T_INT16  */  10 => {
-                list.push(MsgList::T_INT16( r.read_le_i16().unwrap() ));
+                list.push(MsgList::tINT16( r.read_le_i16().unwrap() ));
             },
             /*T_NIL    */  12 => {
-                list.push(MsgList::T_NIL);
+                list.push(MsgList::tNIL);
             },
             /*T_BYTES  */  14 => {
                 let len = r.read_u8().unwrap();
                 if (len & 128) != 0 {
                     let len = r.read_le_i32().unwrap(); /* WHY NOT u32 ??? */
-                    list.push(MsgList::T_BYTES( r.read_exact(len as uint).unwrap() ));
+                    list.push(MsgList::tBYTES( r.read_exact(len as uint).unwrap() ));
                 } else {
-                    list.push(MsgList::T_BYTES( r.read_exact(len as uint).unwrap() ));
+                    list.push(MsgList::tBYTES( r.read_exact(len as uint).unwrap() ));
                 }
             },
             /*T_FLOAT32*/  15 => {
-                list.push(MsgList::T_FLOAT32( r.read_le_f32().unwrap() ));
+                list.push(MsgList::tFLOAT32( r.read_le_f32().unwrap() ));
             },
             /*T_FLOAT64*/  16 => {
-                list.push(MsgList::T_FLOAT64( r.read_le_f64().unwrap() ));
+                list.push(MsgList::tFLOAT64( r.read_le_f64().unwrap() ));
             },
             /*UNKNOWN*/    _  => {
                 println!("    !!! UNKNOWN LIST ELEMENT !!!");
@@ -292,15 +290,6 @@ impl RelElem {
                 let id = r.read_le_u16().unwrap();
                 let name = String::from_utf8(r.read_until(0).unwrap()).unwrap();
                 let args = read_list(&mut r);
-
-                //TODO FIXME XXX if widgets.find(&(wdg_id as uint)).unwrap().as_slice() == "charlist\0"
-                //                  && msg_name.as_slice() == "add\0" {
-                //    let el_type = r.read_u8().unwrap();
-                //    if el_type != 2 { println!("{} NOT T_STR", el_type); continue; }
-                //    let char_name = String::from_utf8(r.read_until(0).unwrap()).unwrap();
-                //    if debug { println!("    add char '{}'", char_name); }
-                //    charlist.push(char_name);
-                //}
                 RelElem::WDGMSG( WdgMsg{ id:id, name:name, args:args } )
             },
             2  /*DSTWDG*/ => {
@@ -332,8 +321,31 @@ impl RelElem {
 }
 
 #[deriving(Show)]
+enum SessError {
+    OK,
+    AUTH,
+    BUSY,
+    CONN,
+    PVER,
+    EXPR,
+    UNKNOWN(u8), //TODO remove this and use Oprion<Msg> or Result<Msg>
+}
+impl SessError {
+    fn new(t:u8) -> SessError {
+        match t {
+            0 => { SessError::OK },
+            1 => { SessError::AUTH },
+            2 => { SessError::BUSY },
+            3 => { SessError::CONN },
+            4 => { SessError::PVER },
+            5 => { SessError::EXPR },
+            _ => { SessError::UNKNOWN(t) },
+        }
+    }
+}
+#[deriving(Show)]
 struct Sess {
-    error : u8,
+    err : SessError,
 }
 struct Rel {
     seq : u16,
@@ -354,19 +366,21 @@ struct Beat;
 struct MapReq;
 #[deriving(Show)]
 struct MapData;
+#[deriving(Show)]
 struct ObjData {
     obj : Vec<ObjDataElem>,
 }
-impl Show for ObjData {
-    fn fmt(&self, f : &mut Formatter) -> std::fmt::Result {
-        write!(f, "OBJDATA ...")
-    }
-}
+//impl Show for ObjData {
+//    fn fmt(&self, f : &mut Formatter) -> std::fmt::Result {
+//        write!(f, "OBJDATA ...")
+//    }
+//}
 #[deriving(Show)]
 struct ObjDataElem {
     fl    : u8,
     id    : u32,
     frame : i32,
+    prop  : Vec<ObjProp>,
 }
 #[deriving(Show)]
 struct ObjAck;
@@ -384,7 +398,210 @@ enum Msg {
     OBJDATA( ObjData ),
     OBJACK( ObjAck ),
     CLOSE( Close ),
-    UNKNOWN( u8 ),
+    UNKNOWN( u8 ), //TODO remove this and use Oprion<Msg> or Result<Msg>
+}
+
+#[allow(non_camel_case_types)]
+#[deriving(Show)]
+enum ObjProp {
+    odREM,
+    odMOVE((i32,i32),u16),
+    odRES(u16),
+    odLINBEG((i32,i32),(i32,i32),i32),
+    odLINSTEP(i32),
+    odSPEECH(u16,String),
+    odCOMPOSE(u16),
+    odDRAWOFF((i32,i32)),
+    odLUMIN((i32,i32),u16,u8),
+    odAVATAR(Vec<u16>),
+    odFOLLOW(u32),
+    odHOMING,
+    odOVERLAY,
+    odAUTH,
+    odHEALTH,
+    odBUDDY,
+    odCMPPOSE,
+    odCMPMOD,
+    odCMPEQU,
+    odICON,
+}
+impl ObjProp {
+    fn from_buf (r:&mut MemReader) -> Option<ObjProp> /*TODO return Result<Option<ObjProp>>*/ {
+        let t = r.read_u8().unwrap() as uint;
+        match t {
+            0   /*OD_REM*/ => {
+                Some(ObjProp::odREM)
+            },
+            1   /*OD_MOVE*/ => {
+                let xy = (r.read_le_i32().unwrap(), r.read_le_i32().unwrap());
+                let ia = r.read_le_u16().unwrap();
+                Some(ObjProp::odMOVE(xy,ia))
+            },
+            2   /*OD_RES*/ => {
+                let mut resid = r.read_le_u16().unwrap();
+                if (resid & 0x8000) != 0 {
+                    resid &= !0x8000;
+                    let sdt_len = r.read_u8().unwrap() as uint;
+                    let _/*sdt*/ = r.read_exact(sdt_len).unwrap();
+                }
+                Some(ObjProp::odRES(resid))
+            },
+            3   /*OD_LINBEG*/ => {
+                let s = (r.read_le_i32().unwrap(), r.read_le_i32().unwrap());
+                let t = (r.read_le_i32().unwrap(), r.read_le_i32().unwrap());
+                let c = r.read_le_i32().unwrap();
+                Some(ObjProp::odLINBEG(s,t,c))
+            },
+            4   /*OD_LINSTEP*/ => {
+                let l = r.read_le_i32().unwrap();
+                Some(ObjProp::odLINSTEP(l))
+            },
+            5   /*OD_SPEECH*/ => {
+                let zo = r.read_le_u16().unwrap();
+                let text = String::from_utf8(r.read_until(0).unwrap()).unwrap();
+                Some(ObjProp::odSPEECH(zo,text))
+            },
+            6   /*OD_COMPOSE*/ => {
+                let resid = r.read_le_u16().unwrap();
+                Some(ObjProp::odCOMPOSE(resid))
+            },
+            7   /*OD_DRAWOFF*/ => {
+                let off = (r.read_le_i32().unwrap(), r.read_le_i32().unwrap());
+                Some(ObjProp::odDRAWOFF(off))
+            },
+            8   /*OD_LUMIN*/ => {
+                let off = (r.read_le_i32().unwrap(), r.read_le_i32().unwrap());
+                let sz = r.read_le_u16().unwrap();
+                let str_ = r.read_u8().unwrap();
+                Some(ObjProp::odLUMIN(off,sz,str_))
+            },
+            9   /*OD_AVATAR*/ => {
+                let mut layers = Vec::new();
+                loop {
+                    let layer = r.read_le_u16().unwrap();
+                    if layer == 65535 {
+                        break;
+                    }
+                    layers.push(layer);
+                }
+                Some(ObjProp::odAVATAR(layers))
+            },
+            10  /*OD_FOLLOW*/ => {
+                let oid = r.read_le_u32().unwrap();
+                if oid == 0xff_ff_ff_ff {
+                    /*let xfres =*/ r.read_le_u16().unwrap();
+                    /*let xfname =*/ String::from_utf8(r.read_until(0).unwrap()).unwrap();
+                }
+                Some(ObjProp::odFOLLOW(oid))
+            },
+            11  /*OD_HOMING*/ => {
+                let oid = r.read_le_u32().unwrap();
+                match oid {
+                    0xff_ff_ff_ff => {},
+                    0xff_ff_ff_fe => {
+                        /*let tgtc =*/ (r.read_le_i32().unwrap(), r.read_le_i32().unwrap());
+                        /*let v =*/ r.read_le_u16().unwrap();
+                    },
+                    _             => {
+                        /*let tgtc =*/ (r.read_le_i32().unwrap(), r.read_le_i32().unwrap());
+                        /*let v =*/ r.read_le_u16().unwrap();
+                    }
+                }
+                Some(ObjProp::odHOMING)
+            },
+            12  /*OD_OVERLAY*/ => {
+                /*let olid =*/ r.read_le_i32().unwrap();
+                let resid = r.read_le_u16().unwrap();
+                if (resid & 0x8000) != 0 {
+                    let sdt_len = r.read_u8().unwrap() as uint;
+                    /*let sdt =*/ r.read_exact(sdt_len).unwrap();
+                }
+                Some(ObjProp::odOVERLAY)
+            },
+            13  /*OD_AUTH*/   => {
+                /* Removed */
+                Some(ObjProp::odAUTH)
+            },
+            14  /*OD_HEALTH*/ => {
+                /*let hp =*/ r.read_u8().unwrap();
+                Some(ObjProp::odHEALTH)
+            },
+            15  /*OD_BUDDY*/ => {
+                let name = String::from_utf8(r.read_until(0).unwrap()).unwrap();
+                if name.len() > 0 {
+                    /*let group =*/ r.read_u8().unwrap();
+                    /*let btype =*/ r.read_u8().unwrap();
+                }
+                Some(ObjProp::odBUDDY)
+            },
+            16  /*OD_CMPPOSE*/ => {
+                let pfl = r.read_u8().unwrap();
+                /*let seq =*/ r.read_u8().unwrap();
+                if (pfl & 2) != 0 {
+                    loop {
+                        let /*mut*/ resid = r.read_le_u16().unwrap();
+                        if resid == 65535 { break; }
+                        if (resid & 0x8000) != 0 {
+                            /*resid &= !0x8000;*/
+                            let sdt_len = r.read_u8().unwrap() as uint;
+                            /*let sdt =*/ r.read_exact(sdt_len).unwrap();
+                        }
+                    }
+                }
+                if (pfl & 4) != 0 {
+                    loop {
+                        let /*mut*/ resid = r.read_le_u16().unwrap();
+                        if resid == 65535 { break; }
+                        if (resid & 0x8000) != 0 {
+                            /*resid &= !0x8000;*/
+                            let sdt_len = r.read_u8().unwrap() as uint;
+                            /*let sdt =*/ r.read_exact(sdt_len).unwrap();
+                        }
+                    }
+                    /*let ttime =*/ r.read_u8().unwrap();
+                }
+                Some(ObjProp::odCMPPOSE)
+            },
+            17  /*OD_CMPMOD*/ => {
+                loop {
+                    let modif = r.read_le_u16().unwrap();
+                    if modif == 65535 { break; }
+                    loop {
+                        let resid = r.read_le_u16().unwrap();
+                        if resid == 65535 { break; }
+                    }
+                }
+                Some(ObjProp::odCMPMOD)
+            },
+            18  /*OD_CMPEQU*/ => {
+                loop {
+                    let h = r.read_u8().unwrap();
+                    if h == 255 { break; }
+                    /*let at =*/ String::from_utf8(r.read_until(0).unwrap()).unwrap();
+                    /*let resid =*/ r.read_le_u16().unwrap();
+                    if (h & 0x80) != 0 {
+                        /*let x =*/ r.read_le_u16().unwrap();
+                        /*let y =*/ r.read_le_u16().unwrap();
+                        /*let z =*/ r.read_le_u16().unwrap();
+                    }
+                }
+                Some(ObjProp::odCMPEQU)
+            },
+            19  /*OD_ICON*/ => {
+                let resid = r.read_le_u16().unwrap();
+                if resid != 65535 {
+                    /*let ifl =*/ r.read_u8().unwrap();
+                }
+                Some(ObjProp::odICON)
+            },
+            255 /*OD_END*/ => {
+                None
+            },
+            _   /*UNKNOWN*/ => {
+                None /*TODO return error*/
+            }
+        }
+    }
 }
 
 impl Msg {
@@ -393,7 +610,7 @@ impl Msg {
         let mtype = r.read_u8().unwrap();
         let res = match mtype {
             0 /*SESS*/ => {
-                Msg::SESS( Sess{ error : r.read_u8().unwrap() } )
+                Msg::SESS( Sess{ err : SessError::new(r.read_u8().unwrap()) } )
             },
             1 /*REL*/ => {
                 let seq = r.read_le_u16().unwrap();
@@ -430,152 +647,14 @@ impl Msg {
                     let fl = r.read_u8().unwrap();
                     let id = r.read_le_u32().unwrap();
                     let frame = r.read_le_i32().unwrap();
+                    let mut prop = Vec::new();
                     loop {
-                        let t = r.read_u8().unwrap() as uint;
-                        match t {
-                            0   /*OD_REM*/ => {},
-                            1   /*OD_MOVE*/ => {
-                                let (x,y) = (r.read_le_i32().unwrap(), r.read_le_i32().unwrap());
-                                /*let ia =*/ r.read_le_u16().unwrap();
-                            },
-                            2   /*OD_RES*/ => {
-                                let mut resid = r.read_le_u16().unwrap();
-                                if (resid & 0x8000) != 0 {
-                                    resid &= !0x8000;
-                                    let sdt_len = r.read_u8().unwrap() as uint;
-                                    let _/*sdt*/ = r.read_exact(sdt_len).unwrap();
-                                }
-                            },
-                            3   /*OD_LINBEG*/ => {
-                                /*let s =*/ (r.read_le_i32().unwrap(), r.read_le_i32().unwrap());
-                                /*let t =*/ (r.read_le_i32().unwrap(), r.read_le_i32().unwrap());
-                                let _/*c*/ = r.read_le_i32();
-                            },
-                            4   /*OD_LINSTEP*/ => {
-                                let l = r.read_le_i32().unwrap();
-                            },
-                            5   /*OD_SPEECH*/ => {
-                                let _/*zo*/ = r.read_le_u16();
-                                /*let text =*/ String::from_utf8(r.read_until(0).unwrap()).unwrap();
-                            },
-                            6   /*OD_COMPOSE*/ => {
-                                /*let resid =*/ r.read_le_u16().unwrap();
-                            },
-                            7   /*OD_DRAWOFF*/ => {
-                                /*let off =*/ (r.read_le_i32().unwrap(), r.read_le_i32().unwrap());
-                            },
-                            8   /*OD_LUMIN*/ => {
-                                /*let off =*/ (r.read_le_i32().unwrap(), r.read_le_i32().unwrap());
-                                /*let sz =*/ r.read_le_u16().unwrap();
-                                /*let str_ =*/ r.read_u8().unwrap();
-                            },
-                            9   /*OD_AVATAR*/ => {
-                                loop {
-                                    let layer = r.read_le_u16().unwrap();
-                                    if layer == 65535 { break; }
-                                }
-                            },
-                            10  /*OD_FOLLOW*/ => {
-                                let oid = r.read_le_u32().unwrap();
-                                if oid == 0xff_ff_ff_ff {
-                                    /*let xfres =*/ r.read_le_u16().unwrap();
-                                    /*let xfname =*/ String::from_utf8(r.read_until(0).unwrap()).unwrap();
-                                }
-                            },
-                            11  /*OD_HOMING*/ => {
-                                let oid = r.read_le_u32().unwrap();
-                                match oid {
-                                    0xff_ff_ff_ff => {},
-                                    0xff_ff_ff_fe => {
-                                        /*let tgtc =*/ (r.read_le_i32().unwrap(), r.read_le_i32().unwrap());
-                                        /*let v =*/ r.read_le_u16().unwrap();
-                                    },
-                                    _             => {
-                                        /*let tgtc =*/ (r.read_le_i32().unwrap(), r.read_le_i32().unwrap());
-                                        /*let v =*/ r.read_le_u16().unwrap();
-                                    }
-                                }
-                            },
-                            12  /*OD_OVERLAY*/ => {
-                                /*let olid =*/ r.read_le_i32().unwrap();
-                                let resid = r.read_le_u16().unwrap();
-                                if (resid & 0x8000) != 0 {
-                                    let sdt_len = r.read_u8().unwrap() as uint;
-                                    /*let sdt =*/ r.read_exact(sdt_len).unwrap();
-                                }
-                            },
-                            13  /*OD_AUTH*/   => { /* Removed */ },
-                            14  /*OD_HEALTH*/ => {
-                                /*let hp =*/ r.read_u8().unwrap();
-                            },
-                            15  /*OD_BUDDY*/ => {
-                                let name = String::from_utf8(r.read_until(0).unwrap()).unwrap();
-                                if name.len() > 0 {
-                                    /*let group =*/ r.read_u8().unwrap();
-                                    /*let btype =*/ r.read_u8().unwrap();
-                                }
-                            },
-                            16  /*OD_CMPPOSE*/ => {
-                                let pfl = r.read_u8().unwrap();
-                                /*let seq =*/ r.read_u8().unwrap();
-                                if (pfl & 2) != 0 {
-                                    loop {
-                                        let /*mut*/ resid = r.read_le_u16().unwrap();
-                                        if resid == 65535 { break; }
-                                        if (resid & 0x8000) != 0 {
-                                            /*resid &= !0x8000;*/
-                                            let sdt_len = r.read_u8().unwrap() as uint;
-                                            /*let sdt =*/ r.read_exact(sdt_len).unwrap();
-                                        }
-                                    }
-                                }
-                                if (pfl & 4) != 0 {
-                                    loop {
-                                        let /*mut*/ resid = r.read_le_u16().unwrap();
-                                        if resid == 65535 { break; }
-                                        if (resid & 0x8000) != 0 {
-                                            /*resid &= !0x8000;*/
-                                            let sdt_len = r.read_u8().unwrap() as uint;
-                                            /*let sdt =*/ r.read_exact(sdt_len).unwrap();
-                                        }
-                                    }
-                                    /*let ttime =*/ r.read_u8().unwrap();
-                                }
-                            },
-                            17  /*OD_CMPMOD*/ => {
-                                loop {
-                                    let modif = r.read_le_u16().unwrap();
-                                    if modif == 65535 { break; }
-                                    loop {
-                                        let resid = r.read_le_u16().unwrap();
-                                        if resid == 65535 { break; }
-                                    }
-                                }
-                            },
-                            18  /*OD_CMPEQU*/ => {
-                                loop {
-                                    let h = r.read_u8().unwrap();
-                                    if h == 255 { break; }
-                                    /*let at =*/ String::from_utf8(r.read_until(0).unwrap()).unwrap();
-                                    /*let resid =*/ r.read_le_u16().unwrap();
-                                    if (h & 0x80) != 0 {
-                                        /*let x =*/ r.read_le_u16().unwrap();
-                                        /*let y =*/ r.read_le_u16().unwrap();
-                                        /*let z =*/ r.read_le_u16().unwrap();
-                                    }
-                                }
-                            },
-                            19  /*OD_ICON*/ => {
-                                let resid = r.read_le_u16().unwrap();
-                                if resid != 65535 {
-                                    /*let ifl =*/ r.read_u8().unwrap();
-                                }
-                            },
-                            255 /*OD_END*/ => { break; },
-                            _   /*UNKNOWN*/ => {}
+                        match ObjProp::from_buf(&mut r) {
+                            Some(p) => { prop.push(p) },
+                            None => { break },
                         }
                     }
-                    obj.push( ObjDataElem{ fl:fl, id:id, frame:frame } );
+                    obj.push( ObjDataElem{ fl:fl, id:id, frame:frame, prop:prop } );
                 }
                 Msg::OBJDATA( ObjData{ obj : obj } )
             },
@@ -666,47 +745,22 @@ impl Client {
         let viewer_from_any = rx3;
         let mut objects = HashMap::new();
         spawn(proc() {
-            /*
-            sdl2::init(sdl2::INIT_EVERYTHING);
-            let window = match Window::new("xxx", PosCentered, PosCentered, 640, 480, OPENGL) {
-                Ok(window) => window,
-                Err(err) => fail!("failed to create window: {}", err)
-            };
-            window.show();
-            'event : loop {
-                match poll_event() {
-                    QuitEvent(_) => break 'event,
-                    NoEvent => continue,
-                    event => println!("event: {}", event),
-                }
-            }
-            sdl2::quit();
-            */
-
             let (id,obj):(u32,Obj) = viewer_from_any.recv();
             objects.insert(id,obj);
-            let mut minx = obj.x;
-            let mut miny = obj.y;
-            let mut maxx = obj.x;
-            let mut maxy = obj.y;
+            //let mut minx = obj.x;
+            //let mut miny = obj.y;
+            //let mut maxx = obj.x;
+            //let mut maxy = obj.y;
             loop {
                 //TODO while(try_recv)
                 let (id,obj):(u32,Obj) = viewer_from_any.recv();
                 objects.insert(id,obj);
-                if obj.x < minx { minx = obj.x; }
-                if obj.y < miny { miny = obj.y; }
-                if obj.x > maxx { maxx = obj.x; }
-                if obj.y > maxy { maxy = obj.y; }
+                //if obj.x < minx { minx = obj.x; }
+                //if obj.y < miny { miny = obj.y; }
+                //if obj.x > maxx { maxx = obj.x; }
+                //if obj.y > maxy { maxy = obj.y; }
             }
         });
-
-        let sess_errors = [
-            "OK",
-            "AUTH",
-            "BUSY",
-            "CONN",
-            "PVER",
-            "EXPR" ];
 
         // receiver
         let mut udp_rx = sock.clone();
@@ -721,7 +775,7 @@ impl Client {
             let mut resources = HashMap::new();
             widgets.insert(0, "root".to_string());
             loop {
-                let (len,addr) = udp_rx.recv_from(buf.as_mut_slice()).unwrap();
+                let (len,addr) = udp_rx.recv_from(buf.as_mut_slice()).ok().expect("failed to recv_from");
                 //FIXME connect the socket
                 if addr != host_addr {
                     println!("wrong host: {}", addr);
@@ -731,16 +785,18 @@ impl Client {
                 println!("receiver: {}", msg);
                 match msg {
                     Msg::SESS(sess) => {
-                        if sess.error != 0 {
-                            //TODO enum SessError { ... }
-                            println!("sess error {}", sess_errors[sess.error as uint]);
-                            receiver_to_main.send(());
-                            // ??? should we send CLOSE too ???
-                            break;
+                        match sess.err {
+                            SessError::OK => {},
+                            _ => {
+                                receiver_to_main.send(());
+                                // ??? should we send CLOSE too ???
+                                break;
+                            }
                         }
                         receiver_to_beater.send(());
                     },
                     Msg::REL( rel ) => {
+                        //TODO do not process duplicates, but ACK only
                         //XXX are we handle seq right in the case of overflow ???
                         receiver_to_sender.send(ack(rel.seq + ((rel.rel.len() as u16) - 1)));
                         for r in rel.rel.iter() {
@@ -750,11 +806,20 @@ impl Client {
                                     widgets.insert(wdg.id as uint, wdg.kind.clone()/*FIXME String -> &str*/);
                                 },
                                 RelElem::WDGMSG(ref msg) => {
-                                    if (widgets.get(&(msg.id as uint)).unwrap().as_slice() == "charlist\0") &&
-                                       (msg.name.as_slice() == "add\0") {
-                                        //let char_name = String::from_utf8(rr.read_until(0).unwrap()).unwrap();
-                                        println!("    add char '{}'", "FIXME XXX"/*FIXME char_name*/);
-                                        charlist.push("FIXME XXX".to_string());
+                                    //TODO match against widget.type and message.type
+                                    match widgets.get(&(msg.id as uint)) {
+                                        None => {},
+                                        Some(c) => {
+                                            if (c.as_slice() == "charlist\0") && (msg.name.as_slice() == "add\0") {
+                                                match msg.args[0] {
+                                                    MsgList::tSTR(ref char_name) => {
+                                                        println!("    add char '{}'", char_name);
+                                                        charlist.push(char_name.clone()/*FIXME rewrite without cloning*/);
+                                                    },
+                                                    _ => {}
+                                                }
+                                            }
+                                        }
                                     }
                                 },
                                 RelElem::DSTWDG(wdg) => { /*TODO widgets.delete(wdg.id)*/ },
@@ -789,9 +854,9 @@ impl Client {
                         for o in objdata.obj.iter() {
                             w.write_le_u32(o.id).unwrap();
                             w.write_le_i32(o.frame).unwrap();
-                            let mut obj = Obj::new();
-                            obj.frame = o.frame;
-                            receiver_to_viewer.send((o.id,obj));
+                            //let mut obj = Obj::new();
+                            //obj.frame = o.frame;
+                            receiver_to_viewer.send( (o.id, Obj{frame:o.frame, resid:0/*FIXME*/, mv:Some((0,0))/*FIXME*/}) );
                         }
                         //TODO receiver_to_sender.send(objdata.ack());
                         receiver_to_sender.send(w.unwrap()); // send OBJACKs
@@ -809,8 +874,8 @@ impl Client {
 
                 //TODO send REL until reply
                 if charlist.len() > 0 {
-                    println!("send play '{}' FIXME!!!", charlist[0]);
-                    //receiver_to_sender.send(rel_wdgmsg_play(0, charlist[0].as_slice()));
+                    println!("send play '{}'", charlist[0]);
+                    receiver_to_sender.send(rel_wdgmsg_play(0, charlist[0].as_slice()));
                     charlist.clear();
                 }
             }
