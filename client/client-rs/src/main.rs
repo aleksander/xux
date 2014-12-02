@@ -4,7 +4,7 @@ extern crate openssl;
 extern crate serialize;
 
 extern crate sdl2;
-extern crate native;
+//extern crate native;
 //use sdl2::video::{Window, PosCentered, OPENGL};
 //use sdl2::event::{QuitEvent, NoEvent, poll_event};
 
@@ -22,8 +22,9 @@ use std::collections::hash_map::HashMap;
 use std::str;
 use std::time::Duration;
 use serialize::hex::ToHex;
-use openssl::crypto::hash::{SHA256, hash};
-use openssl::ssl::{Sslv23, SslContext, SslStream};
+use openssl::crypto::hash::HashType;
+use openssl::crypto::hash::hash;
+use openssl::ssl::{SslMethod, SslContext, SslStream};
 use std::vec::Vec;
 use std::fmt::{Show, Formatter};
 
@@ -52,20 +53,20 @@ fn sess (name: &str, cookie: &[u8]) -> Vec<u8> {
     w.write_u8(0).unwrap();
     w.write_le_u16(32).unwrap(); // cookie length
     w.write(cookie).unwrap(); // cookie
-    w.unwrap()
+    w.into_inner()
 }
 
 fn ack (seq: u16) -> Vec<u8> {
     let mut w = MemWriter::new();
     w.write_u8(2).unwrap(); //ACK
     w.write_le_u16(seq).unwrap();
-    w.unwrap()
+    w.into_inner()
 }
 
 fn beat () -> Vec<u8> {
     let mut w = MemWriter::new();
     w.write_u8(3).unwrap(); //BEAT
-    w.unwrap()
+    w.into_inner()
 }
 
 fn rel_wdgmsg_play (seq: u16, name: &str) -> Vec<u8> {
@@ -80,14 +81,14 @@ fn rel_wdgmsg_play (seq: u16, name: &str) -> Vec<u8> {
     w.write_u8(2).unwrap(); // list element type T_STR
     w.write(name.as_bytes()).unwrap(); // element
     w.write_u8(0).unwrap();
-    w.unwrap()
+    w.into_inner()
 }
 
 
 struct Obj {
-    frame:i32,
-    //resid:u16,
-    //mv:Option<(i32,i32)>,
+    //frame:i32,
+    resid : u16,
+    xy : (i32,i32),
 }
 //impl Obj {
 //    fn new() -> Obj {
@@ -713,7 +714,7 @@ impl Client {
 
         let (tx1,rx1) = channel(); // any -> sender (packet to send)
         let (tx2,rx2) = channel(); // any -> beater (wakeup signal)
-        let (tx3,rx3) = channel(); // any -> viewer (new object)
+        let (tx3,rx3) = channel(); // any -> viewer (objects data)
         let (tx4,rx4) = channel(); // any -> main   (exit signal)
 
         // sender
@@ -745,20 +746,28 @@ impl Client {
         let viewer_from_any = rx3;
         let mut objects = HashMap::new();
         spawn(proc() {
-            let (id,obj):(u32,Obj) = viewer_from_any.recv();
-            objects.insert(id,obj);
-            //let mut minx = obj.x;
-            //let mut miny = obj.y;
-            //let mut maxx = obj.x;
-            //let mut maxy = obj.y;
             loop {
                 //TODO while(try_recv)
-                let (id,obj):(u32,Obj) = viewer_from_any.recv();
-                objects.insert(id,obj);
-                //if obj.x < minx { minx = obj.x; }
-                //if obj.y < miny { miny = obj.y; }
-                //if obj.x > maxx { maxx = obj.x; }
-                //if obj.y > maxy { maxy = obj.y; }
+                let objdata:ObjData = viewer_from_any.recv();
+                for o in objdata.obj.iter() {
+                    if !objects.contains_key(&o.id) {
+                        objects.insert(o.id, Obj{resid:0, xy:(0,0)});
+                    }
+                    match objects.get_mut(&o.id) {
+                        Some(obj) => {
+                            //TODO check for o.frame vs obj.frame
+                            for prop in o.prop.iter() {
+                                match *prop {
+                                    ObjProp::odREM => { /*FIXME objects.remove(&o.id); break;*/ },
+                                    ObjProp::odMOVE(xy,_) => { obj.xy = xy; },
+                                    ObjProp::odRES(resid) => { obj.resid = resid; },
+                                    _ => {},
+                                }
+                            }
+                        },
+                        None => { /*thats cant be*/ },
+                    };
+                }
             }
         });
 
@@ -842,10 +851,10 @@ impl Client {
                     },
                     Msg::ACK(_) => {},
                     Msg::BEAT(_) => {
-                        println!("     !!! client can't receive BEAT !!!");
+                        println!("     !!! client must not receive BEAT !!!");
                     },
                     Msg::MAPREQ(_) => {
-                        println!("     !!! client can't receive MAPREQ !!!");
+                        println!("     !!! client must not receive MAPREQ !!!");
                     },
                     Msg::MAPDATA(_) => {},
                     Msg::OBJDATA( objdata ) => {
@@ -854,12 +863,10 @@ impl Client {
                         for o in objdata.obj.iter() {
                             w.write_le_u32(o.id).unwrap();
                             w.write_le_i32(o.frame).unwrap();
-                            //let mut obj = Obj::new();
-                            //obj.frame = o.frame;
-                            receiver_to_viewer.send( (o.id, Obj{frame:o.frame}) );
                         }
-                        //TODO receiver_to_sender.send(objdata.ack());
-                        receiver_to_sender.send(w.unwrap()); // send OBJACKs
+                        //TODO receiver_to_sender.send(objdata.to_buf());
+                        receiver_to_sender.send(w.into_inner()); // send OBJACKs
+                        receiver_to_viewer.send(objdata);
                     },
                     Msg::OBJACK(_) => {},
                     Msg::CLOSE(_) => {
@@ -915,7 +922,7 @@ impl Client {
         println!("authorize {} @ {}", user, self.auth_addr);
         //TODO add method connect(SocketAddr) to TcpStream
         let stream = tryio!("tcp.connect" TcpStream::connect(self.auth_addr));
-        let mut stream = SslStream::new(&SslContext::new(Sslv23).unwrap(), stream).unwrap();
+        let mut stream = SslStream::new(&SslContext::new(SslMethod::Sslv23).unwrap(), stream).unwrap();
 
         // send 'pw' command
         // TODO form buffer and send all with one call
@@ -925,7 +932,7 @@ impl Client {
         stream.write_u8(0).unwrap();
         stream.write(user.as_bytes()).unwrap();
         stream.write_u8(0).unwrap();
-        let pass_hash = hash(SHA256, pass.as_bytes());
+        let pass_hash = hash(HashType::SHA256, pass.as_bytes());
         assert!(pass_hash.len() == 32);
         stream.write(pass_hash.as_slice()).unwrap();
         stream.flush().unwrap();
