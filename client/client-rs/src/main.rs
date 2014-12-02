@@ -367,15 +367,14 @@ struct Beat;
 struct MapReq;
 #[deriving(Show)]
 struct MapData;
-#[deriving(Show)]
 struct ObjData {
     obj : Vec<ObjDataElem>,
 }
-//impl Show for ObjData {
-//    fn fmt(&self, f : &mut Formatter) -> std::fmt::Result {
-//        write!(f, "OBJDATA ...")
-//    }
-//}
+impl Show for ObjData {
+    fn fmt(&self, f : &mut Formatter) -> std::fmt::Result {
+        write!(f, "OBJDATA")
+    }
+}
 #[deriving(Show)]
 struct ObjDataElem {
     fl    : u8,
@@ -866,6 +865,9 @@ impl Client {
                         }
                         //TODO receiver_to_sender.send(objdata.to_buf());
                         receiver_to_sender.send(w.into_inner()); // send OBJACKs
+                        for o in objdata.obj.iter() {
+                            println!("    {}", o);
+                        }
                         receiver_to_viewer.send(objdata);
                     },
                     Msg::OBJACK(_) => {},
