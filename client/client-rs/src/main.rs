@@ -142,6 +142,7 @@ struct Buff;
 struct SessKey;
 
 #[deriving(Show)]
+//TODO replace with plain struct variants
 enum RelElem {
     NEWWDG(NewWdg),
     WDGMSG(WdgMsg),
@@ -162,6 +163,7 @@ enum RelElem {
 
 #[allow(non_camel_case_types)]
 #[deriving(Show)]
+//TODO replace with plain struct variants
 enum MsgList {
     tINT    (i32),
     tSTR    (String),
@@ -388,6 +390,7 @@ struct ObjAck;
 struct Close;
 
 #[deriving(Show)]
+//TODO replace with plain struct variants
 enum Msg {
     SESS( Sess ),
     REL( Rel ),
@@ -403,6 +406,7 @@ enum Msg {
 
 #[allow(non_camel_case_types)]
 #[deriving(Show)]
+//TODO replace with plain struct variants
 enum ObjProp {
     odREM,
     odMOVE((i32,i32),u16),
