@@ -693,10 +693,17 @@ struct Client {
     //receiver_to_beater: Sender<()>,
     //beater_from_any: Receiver<()>,
     //receiver_to_viewer: Sender<(u32,Obj)>,
-    //viewer_from_any: Receiver<(u32,Obj)>,
+    viewer_from_any: Receiver<ObjData>,
     //objects: HashMap<u32,Obj>,
     //resources: HashMap<u16,String>,
     //widgets: HashMap<uint,String>,
+    control: Receiver<Control>,
+}
+
+#[deriving(Show)]
+enum Control {
+    Dump,
+    Quit,
 }
 
 impl Client {
@@ -708,17 +715,42 @@ impl Client {
         let (tx1,rx1) = channel(); // any -> sender (packet to send)
         let (tx2,rx2) = channel(); // any -> beater (wakeup signal)
         let (tx3,rx3) = channel(); // any -> viewer (objects data)
-        let (tx4,rx4) = channel(); // any -> main   (exit signal)
+        let (tx4,rx4) = channel(); // any -> main   (exit signal) // TODO remove ???
+        let (tx5,rx5) = channel(); // any -> main   (control messages)
 
         // control socket reader
+        let reader_to_main = tx4.clone();
+        let control_tx = tx5.clone();
         spawn(proc() {
-            let path = Path::new("/tmp/socket");
-            let stream = UnixListener::bind(&path);
-            for mut client in stream.listen().incoming() {
-                loop {
-                    match client.read_byte() {
-                        Ok(b) => { println!("reader: read: {}", b); },
-                        Err(e) => { println!("reader: error: {}", e); break; },
+            'outer : loop {
+                let path = Path::new("/tmp/socket");
+                let stream = UnixListener::bind(&path);
+                for mut client in stream.listen().incoming() {
+                    loop {
+                        match client.read_byte() {
+                            Ok(b) => { 
+                                println!("reader: read: {}", b);
+                                match b {
+                                    b'e' | b'q' => {
+                                        println!("reader: exit requested");
+                                        reader_to_main.send(());
+                                        control_tx.send(Control::Quit);
+                                        break 'outer;
+                                    },
+                                    b'o' => {
+                                        println!("reader: objects dump requested");
+                                        control_tx.send(Control::Dump);
+                                        //TODO dump objects to socket (another thread with socket clone ???)
+                                    },
+                                    _ => {},
+                                }
+                                client.write_u8(b);
+                            },
+                            Err(e) => {
+                                println!("reader: error: {}", e);
+                                break;
+                            },
+                        }
                     }
                 }
             }
@@ -750,33 +782,33 @@ impl Client {
         });
 
         // viewer
-        let viewer_from_any = rx3;
-        let mut objects = HashMap::new();
-        spawn(proc() {
-            loop {
-                //TODO while(try_recv)
-                let objdata:ObjData = viewer_from_any.recv();
-                for o in objdata.obj.iter() {
-                    if !objects.contains_key(&o.id) {
-                        objects.insert(o.id, Obj{resid:0, xy:(0,0)});
-                    }
-                    match objects.get_mut(&o.id) {
-                        Some(obj) => {
-                            //TODO check for o.frame vs obj.frame
-                            for prop in o.prop.iter() {
-                                match *prop {
-                                    ObjProp::odREM => { /*FIXME objects.remove(&o.id); break;*/ },
-                                    ObjProp::odMOVE(xy,_) => { obj.xy = xy; },
-                                    ObjProp::odRES(resid) => { obj.resid = resid; },
-                                    _ => {},
-                                }
-                            }
-                        },
-                        None => { /*thats cant be*/ },
-                    };
-                }
-            }
-        });
+        //let viewer_from_any = rx3;
+        //let mut objects = HashMap::new();
+        //spawn(proc() {
+        //    loop {
+        //        //TODO while(try_recv)
+        //        let objdata:ObjData = viewer_from_any.recv();
+        //        for o in objdata.obj.iter() {
+        //            if !objects.contains_key(&o.id) {
+        //                objects.insert(o.id, Obj{resid:0, xy:(0,0)});
+        //            }
+        //            match objects.get_mut(&o.id) {
+        //                Some(obj) => {
+        //                    //TODO check for o.frame vs obj.frame
+        //                    for prop in o.prop.iter() {
+        //                        match *prop {
+        //                            ObjProp::odREM => { /*FIXME objects.remove(&o.id); break;*/ },
+        //                            ObjProp::odMOVE(xy,_) => { obj.xy = xy; },
+        //                            ObjProp::odRES(resid) => { obj.resid = resid; },
+        //                            _ => {},
+        //                        }
+        //                    }
+        //                },
+        //                None => { /*thats cant be*/ },
+        //            };
+        //        }
+        //    }
+        //});
 
         // receiver
         let mut udp_rx = sock.clone();
@@ -918,11 +950,12 @@ impl Client {
             //receiver_to_beater: tx2.clone(),
             //beater_from_any: rx2,
             //receiver_to_viewer: tx3.clone(),
-            //viewer_from_any: rx3,
+            viewer_from_any: rx3,
 
             //objects: HashMap::new(),
             //resources: HashMap::new(),
             //widgets: HashMap::new(),
+            control: rx5,
         }
     }
 
@@ -979,9 +1012,9 @@ impl Client {
         self.main_to_sender.send(sess(self.user.as_slice(), self.cookie.as_slice()));
     }
 
-    fn wait_for_end (&self) {
-        self.main_from_any.recv();
-    }
+    //fn wait_for_end (&self) {
+    //    self.main_from_any.recv();
+    //}
 }
 
 
@@ -997,7 +1030,50 @@ fn main() {
     };
 
     client.connect(); //TODO return Result and match
-    client.wait_for_end();
+
+    //client.wait_for_end();
+
+    let mut objects = HashMap::new();
+    let exit_signal = client.main_from_any;
+    let object_rx = client.viewer_from_any;
+    let control_rx = client.control;
+    loop {
+        //TODO while(try_recv)
+
+        select! (
+            () = exit_signal.recv() => {
+                //XXX maybe we dont need it any more ???
+            },
+            objdata = object_rx.recv() => {
+                for o in objdata.obj.iter() {
+                    if !objects.contains_key(&o.id) {
+                        objects.insert(o.id, Obj{resid:0, xy:(0,0)});
+                    }
+                    match objects.get_mut(&o.id) {
+                        Some(obj) => {
+                            //TODO check for o.frame vs obj.frame
+                            for prop in o.prop.iter() {
+                                match *prop {
+                                    ObjProp::odREM => { /*FIXME objects.remove(&o.id); break;*/ },
+                                    ObjProp::odMOVE(xy,_) => { obj.xy = xy; },
+                                    ObjProp::odRES(resid) => { obj.resid = resid; },
+                                    _ => {},
+                                }
+                            }
+                        },
+                        None => { /*thats cant be*/ },
+                    };
+                }
+            },
+            control = control_rx.recv() => {
+                println!("MAIN: {}", control);
+            }
+        )
+
+
+
+
+    }
 }
 
 
