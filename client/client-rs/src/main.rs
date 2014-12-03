@@ -837,7 +837,12 @@ impl Client {
                             SessError::OK => {},
                             _ => {
                                 receiver_to_main.send(());
-                                // ??? should we send CLOSE too ???
+                                //XXX ??? should we send CLOSE too ???
+                                //FIXME
+                                //  receiver: SESS(Sess { err: BUSY })
+                                //  task '<unnamed>' panicked at 'receiving on a closed channel', ...
+                                //  task '<main>' panicked at 'receiving on a closed channel', ...
+                                //  task '<unnamed>' panicked at 'receiving on a closed channel',
                                 break;
                             }
                         }
@@ -1011,10 +1016,6 @@ impl Client {
         //TODO get username from server responce, not from auth username
         self.main_to_sender.send(sess(self.user.as_slice(), self.cookie.as_slice()));
     }
-
-    //fn wait_for_end (&self) {
-    //    self.main_from_any.recv();
-    //}
 }
 
 
@@ -1067,6 +1068,18 @@ fn main() {
             },
             control = control_rx.recv() => {
                 println!("MAIN: {}", control);
+                match control {
+                    Control::Dump => {
+                        for o in objects.values() {
+                            //TODO client.control_socket.write(o);
+                            let (x,y) = o.xy;
+                            //TODO find resid in resids and print its name
+                            let resid = o.resid;
+                            println!("({:7},{:7}) {}", x, y, resid);
+                        }
+                    },
+                    _ => {}
+                }
             }
         )
 
