@@ -3,17 +3,11 @@
 extern crate openssl;
 extern crate serialize;
 
-extern crate sdl2;
-//extern crate native;
-//use sdl2::video::{Window, PosCentered, OPENGL};
-//use sdl2::event::{QuitEvent, NoEvent, poll_event};
-
 use std::io::Writer;
 use std::io::MemWriter;
 use std::io::net::tcp::TcpStream;
 use std::io::net::udp::UdpSocket;
 use std::io::net::ip::Ipv4Addr;
-//use std::io::net::ip::IpAddr;
 use std::io::net::ip::SocketAddr;
 use std::io::net::addrinfo::get_host_addresses;
 use std::io::MemReader;
@@ -27,6 +21,8 @@ use openssl::crypto::hash::hash;
 use openssl::ssl::{SslMethod, SslContext, SslStream};
 use std::vec::Vec;
 use std::fmt::{Show, Formatter};
+use std::io::net::pipe::UnixListener;
+use std::io::{Listener, Acceptor};
 
 macro_rules! tryio (
     ($fmt:expr $e:expr) => (
@@ -86,15 +82,9 @@ fn rel_wdgmsg_play (seq: u16, name: &str) -> Vec<u8> {
 
 
 struct Obj {
-    //frame:i32,
     resid : u16,
     xy : (i32,i32),
 }
-//impl Obj {
-//    fn new() -> Obj {
-//        Obj{ x:0, y:0, frame:0, resid:0 } 
-//    }
-//}
 
 #[deriving(Show)]
 struct NewWdg {
@@ -719,6 +709,20 @@ impl Client {
         let (tx2,rx2) = channel(); // any -> beater (wakeup signal)
         let (tx3,rx3) = channel(); // any -> viewer (objects data)
         let (tx4,rx4) = channel(); // any -> main   (exit signal)
+
+        // control socket reader
+        spawn(proc() {
+            let path = Path::new("/tmp/socket");
+            let stream = UnixListener::bind(&path);
+            for mut client in stream.listen().incoming() {
+                loop {
+                    match client.read_byte() {
+                        Ok(b) => { println!("reader: read: {}", b); },
+                        Err(e) => { println!("reader: error: {}", e); break; },
+                    }
+                }
+            }
+        });
 
         // sender
         let sender_from_any = rx1;
