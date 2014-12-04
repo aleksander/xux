@@ -408,25 +408,42 @@ enum ObjProp {
     odDRAWOFF((i32,i32)),
     odLUMIN((i32,i32),u16,u8),
     odAVATAR(Vec<u16>),
-    odFOLLOW(odFOLLOW_),
+    odFOLLOW(odFOLLOW),
     odHOMING(odHOMING),
-    odOVERLAY,
+    odOVERLAY(u16),
     odAUTH,
-    odHEALTH,
+    odHEALTH(u8),
     odBUDDY(odBUDDY),
     odCMPPOSE,
     odCMPMOD,
     odCMPEQU,
     odICON(odICON),
 }
+#[allow(non_camel_case_types)]
 #[deriving(Show)]
-enum odFOLLOW_ { Stop, To(u32) }
+enum odFOLLOW {
+    Stop,
+    To(u32,u16,String),
+}
+#[allow(non_camel_case_types)]
 #[deriving(Show)]
-enum odHOMING { New, Change, Delete }
+enum odHOMING {
+    New((i32,i32),u16),
+    Change((i32,i32),u16),
+    Delete,
+}
+#[allow(non_camel_case_types)]
 #[deriving(Show)]
-enum odBUDDY { Update, Delete }
+enum odBUDDY {
+    Update(String,u8,u8),
+    Delete,
+}
+#[allow(non_camel_case_types)]
 #[deriving(Show)]
-enum odICON { Set, Del }
+enum odICON {
+    Set(u16),
+    Del,
+}
 
 impl ObjProp {
     fn from_buf (r:&mut MemReader) -> Option<ObjProp> /*TODO return Result<Option<ObjProp>>*/ {
@@ -493,10 +510,11 @@ impl ObjProp {
                 let oid = r.read_le_u32().unwrap();
                 if oid == 0xff_ff_ff_ff {
                     Some(ObjProp::odFOLLOW(odFOLLOW::Stop))
+                } else {
+                    let xfres = r.read_le_u16().unwrap();
+                    let xfname = String::from_utf8(r.read_until(0).unwrap()).unwrap();
+                    Some(ObjProp::odFOLLOW(odFOLLOW::To(oid,xfres,xfname)))
                 }
-                let xfres = r.read_le_u16().unwrap();
-                let xfname = String::from_utf8(r.read_until(0).unwrap()).unwrap();
-                Some(ObjProp::odFOLLOW(odFOLLOW::To(oid,xfres,xfname)))
             },
             11  /*OD_HOMING*/ => {
                 let oid = r.read_le_u32().unwrap();
@@ -541,10 +559,11 @@ impl ObjProp {
                 //          MOST PROBABLY we will crash here because 2 more readings.
                 if name.len() == 0 {
                     Some(ObjProp::odBUDDY(odBUDDY::Delete))
+                } else {
+                    let group = r.read_u8().unwrap();
+                    let btype = r.read_u8().unwrap();
+                    Some(ObjProp::odBUDDY(odBUDDY::Update(name,group,btype)))
                 }
-                let group = r.read_u8().unwrap();
-                let btype = r.read_u8().unwrap();
-                Some(ObjProp::odBUDDY(odBUDDY::Update(name,group,btype)))
             },
             16  /*OD_CMPPOSE*/ => {
                 let pfl = r.read_u8().unwrap();
@@ -603,9 +622,10 @@ impl ObjProp {
                 let resid = r.read_le_u16().unwrap();
                 if resid == 65535 {
                     Some(ObjProp::odICON(odICON::Del))
+                } else {
+                    /*let ifl =*/ r.read_u8().unwrap();
+                    Some(ObjProp::odICON(odICON::Set(resid)))
                 }
-                /*let ifl =*/ r.read_u8().unwrap();
-                Some(ObjProp::odICON(odICON::Set(resid)))
             },
             255 /*OD_END*/ => {
                 None
