@@ -147,8 +147,7 @@ enum RelElem {
     MUSIC(Music),
     TILES(Tiles),
     BUFF(Buff),
-    SESSKEY(SessKey),
-    UNKNOWN( u8 ), //TODO remove this and use Oprion<Msg> or Result<Msg>
+    SESSKEY(SessKey)
 }
 
 #[allow(non_camel_case_types)]
@@ -176,29 +175,29 @@ fn read_sublist (r:&mut MemReader) /*TODO return Result instead*/ {
         if r.eof() { return; }
         let t = r.read_u8().unwrap();
         match t {
-        /*T_END    */  0  => { if deep == 0 { return; } else { deep -= 1; } },
-        /*T_INT    */  1  => { r.read_le_i32().unwrap(); },
-        /*T_STR    */  2  => { r.read_until(0).unwrap(); },
-        /*T_COORD  */  3  => { r.read_le_i32().unwrap(); r.read_le_i32().unwrap(); },
-        /*T_UINT8  */  4  => { r.read_u8().unwrap(); },
-        /*T_UINT16 */  5  => { r.read_le_u16().unwrap(); },
-        /*T_COLOR  */  6  => { r.read_u8().unwrap(); r.read_u8().unwrap(); r.read_u8().unwrap(); r.read_u8().unwrap(); },
-        /*T_TTOL   */  8  => { deep += 1; },
-        /*T_INT8   */  9  => { r.read_i8().unwrap(); },
-        /*T_INT16  */  10 => { r.read_le_i16().unwrap(); },
-        /*T_NIL    */  12 => { },
-        /*T_BYTES  */  14 => {
-            let len = r.read_u8().unwrap();
-            if (len & 128) != 0 {
-                let len = r.read_le_i32().unwrap(); /* WHY NOT u32 ??? */
-                r.read_exact(len as uint).unwrap();
-            } else {
-                r.read_exact(len as uint).unwrap();
-            }
-        },
-        /*T_FLOAT32*/  15 => { r.read_le_f32().unwrap(); },
-        /*T_FLOAT64*/  16 => { r.read_le_f64().unwrap(); },
-                       _  => { return; /*TODO return Error instead*/ },
+            /*T_END    */  0  => { if deep == 0 { return; } else { deep -= 1; } },
+            /*T_INT    */  1  => { r.read_le_i32().unwrap(); },
+            /*T_STR    */  2  => { r.read_until(0).unwrap(); },
+            /*T_COORD  */  3  => { r.read_le_i32().unwrap(); r.read_le_i32().unwrap(); },
+            /*T_UINT8  */  4  => { r.read_u8().unwrap(); },
+            /*T_UINT16 */  5  => { r.read_le_u16().unwrap(); },
+            /*T_COLOR  */  6  => { r.read_u8().unwrap(); r.read_u8().unwrap(); r.read_u8().unwrap(); r.read_u8().unwrap(); },
+            /*T_TTOL   */  8  => { deep += 1; },
+            /*T_INT8   */  9  => { r.read_i8().unwrap(); },
+            /*T_INT16  */  10 => { r.read_le_i16().unwrap(); },
+            /*T_NIL    */  12 => { },
+            /*T_BYTES  */  14 => {
+                let len = r.read_u8().unwrap();
+                if (len & 128) != 0 {
+                    let len = r.read_le_i32().unwrap(); /* WHY NOT u32 ??? */
+                    r.read_exact(len as uint).unwrap();
+                } else {
+                    r.read_exact(len as uint).unwrap();
+                }
+            },
+            /*T_FLOAT32*/  15 => { r.read_le_f32().unwrap(); },
+            /*T_FLOAT64*/  16 => { r.read_le_f64().unwrap(); },
+                           _  => { return; /*TODO return Error instead*/ },
         }
     }
 }
@@ -267,48 +266,47 @@ fn read_list (r:&mut MemReader) -> Vec<MsgList> /*TODO return Result instead*/ {
 }
 
 impl RelElem {
-    fn from_buf (kind:u8, buf:&[u8]) -> RelElem {
+    // TODO in the case of Err return Error with backtrace instaed of String
+    fn from_buf (kind:u8, buf:&[u8]) -> Result<RelElem,String> {
+        //TODO remove MemReader, use buf itself (because new Vec implementation have Reader/Writer traits implemented)
         let mut r = MemReader::new(buf.to_vec());
         //XXX RemoteUI.java +53
         match kind {
-            0  /*NEWWDG*/ => {
+            0  /*NEWWDG*/  => {
                 let id = r.read_le_u16().unwrap();
                 let kind = String::from_utf8(r.read_until(0).unwrap()).unwrap();
                 let parent = r.read_le_u16().unwrap();
                 let pargs = read_list(&mut r);
                 let cargs = read_list(&mut r);
-                RelElem::NEWWDG( NewWdg{ id:id, kind:kind, parent:parent, pargs:pargs, cargs:cargs } )
+                Ok( RelElem::NEWWDG( NewWdg{ id:id, kind:kind, parent:parent, pargs:pargs, cargs:cargs } ) )
             },
-            1  /*WDGMSG*/ => {
+            1  /*WDGMSG*/  => {
                 let id = r.read_le_u16().unwrap();
                 let name = String::from_utf8(r.read_until(0).unwrap()).unwrap();
                 let args = read_list(&mut r);
-                RelElem::WDGMSG( WdgMsg{ id:id, name:name, args:args } )
+                Ok( RelElem::WDGMSG( WdgMsg{ id:id, name:name, args:args } ) )
             },
-            2  /*DSTWDG*/ => {
+            2  /*DSTWDG*/  => {
                 let id = r.read_le_u16().unwrap();
-                RelElem::DSTWDG( DstWdg{ id:id } )
+                Ok( RelElem::DSTWDG( DstWdg{ id:id } ) )
             },
-            3  /*MAPIV*/ => { RelElem::MAPIV(MapIv) },
-            4  /*GLOBLOB*/ => { RelElem::GLOBLOB(GlobLob) },
-            5  /*PAGINAE*/ => { RelElem::PAGINAE(Paginae) },
-            6  /*RESID*/ => {
+            3  /*MAPIV*/   => { Ok( RelElem::MAPIV(MapIv) ) },
+            4  /*GLOBLOB*/ => { Ok( RelElem::GLOBLOB(GlobLob) ) },
+            5  /*PAGINAE*/ => { Ok( RelElem::PAGINAE(Paginae) ) },
+            6  /*RESID*/   => {
                 let id = r.read_le_u16().unwrap();
                 let name = String::from_utf8(r.read_until(0).unwrap()).unwrap();
                 let ver = r.read_le_u16().unwrap();
-                RelElem::RESID( ResId{ id:id, name:name, ver:ver } )
+                Ok( RelElem::RESID( ResId{ id:id, name:name, ver:ver } ) )
             },
-            7  /*PARTY*/ => { RelElem::PARTY(Party) },
-            8  /*SFX*/ => { RelElem::SFX(Sfx) },
-            9  /*CATTR*/ => { RelElem::CATTR(Cattr) },
-            10 /*MUSIC*/ => { RelElem::MUSIC(Music) },
-            11 /*TILES*/ => { RelElem::TILES(Tiles) },
-            12 /*BUFF*/ => { RelElem::BUFF(Buff) },
-            13 /*SESSKEY*/ => { RelElem::SESSKEY(SessKey) },
-            _ => {
-                //println!("\x1b[31m  UNKNOWN {}\x1b[39;49m", rel_type);
-                RelElem::UNKNOWN( kind )
-            },
+            7  /*PARTY*/   => { Ok( RelElem::PARTY(Party) ) },
+            8  /*SFX*/     => { Ok( RelElem::SFX(Sfx) ) },
+            9  /*CATTR*/   => { Ok( RelElem::CATTR(Cattr) ) },
+            10 /*MUSIC*/   => { Ok( RelElem::MUSIC(Music) ) },
+            11 /*TILES*/   => { Ok( RelElem::TILES(Tiles) ) },
+            12 /*BUFF*/    => { Ok( RelElem::BUFF(Buff) ) },
+            13 /*SESSKEY*/ => { Ok( RelElem::SESSKEY(SessKey) ) },
+            _  /*UNKNOWN*/ => { Err( format!("unknown REL type {}", kind) ) },
         }
     }
 }
@@ -321,7 +319,7 @@ enum SessError {
     CONN,
     PVER,
     EXPR,
-    UNKNOWN(u8), //TODO remove this and use Oprion<Msg> or Result<Msg>
+    UNKNOWN(u8)
 }
 impl SessError {
     fn new(t:u8) -> SessError {
@@ -658,7 +656,7 @@ impl Message {
                     } else {
                         rel_buf = r.read_to_end().unwrap();
                     }
-                    rel_vec.push(RelElem::from_buf(rel_type, rel_buf.as_slice()));
+                    rel_vec.push(RelElem::from_buf(rel_type, rel_buf.as_slice()).unwrap());
                 }
                 Ok( Message::REL( Rel{ seq : seq, rel : rel_vec } ) )
             },
@@ -915,7 +913,6 @@ impl Client {
                                 RelElem::TILES(_) => {},
                                 RelElem::BUFF(_) => {},
                                 RelElem::SESSKEY(_) => {},
-                                RelElem::UNKNOWN(_) => {},
                             }
                         }
                     },
@@ -1048,6 +1045,9 @@ enum Data {
 fn main() {
     //TODO handle keyboard interrupt
     //TODO macro to create named thread
+    //TODO replace all unwraps with normal error handling
+    //TODO ADD tests:
+    //          Message::from_buf(vec![...any random sequence...]);
 
     let mut client = Client::new("game.salemthegame.com", 1871, 1870); //TODO return Result and match
 
