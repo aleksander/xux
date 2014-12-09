@@ -381,7 +381,7 @@ struct Close;
 
 #[deriving(Show)]
 //TODO replace with plain struct variants
-enum Msg {
+enum Message {
     SESS( Sess ),
     REL( Rel ),
     ACK( Ack ),
@@ -391,7 +391,6 @@ enum Msg {
     OBJDATA( ObjData ),
     OBJACK( ObjAck ),
     CLOSE( Close ),
-    UNKNOWN( u8 ), //TODO remove this and use Oprion<Msg> or Result<Msg>
 }
 
 #[allow(non_camel_case_types)]
@@ -637,13 +636,14 @@ impl ObjProp {
     }
 }
 
-impl Msg {
-    fn from_buf (buf:&[u8]) -> Msg {
+impl Message {
+    //TODO return Error with stack trace on Err instead of String
+    fn from_buf (buf:&[u8]) -> Result<Message,String> {
         let mut r = MemReader::new(buf.to_vec());
         let mtype = r.read_u8().unwrap();
         let res = match mtype {
             0 /*SESS*/ => {
-                Msg::SESS( Sess{ err : SessError::new(r.read_u8().unwrap()) } )
+                Ok( Message::SESS( Sess{ err : SessError::new(r.read_u8().unwrap()) } ) )
             },
             1 /*REL*/ => {
                 let seq = r.read_le_u16().unwrap();
@@ -660,19 +660,19 @@ impl Msg {
                     }
                     rel_vec.push(RelElem::from_buf(rel_type, rel_buf.as_slice()));
                 }
-                Msg::REL( Rel{ seq : seq, rel : rel_vec } )
+                Ok( Message::REL( Rel{ seq : seq, rel : rel_vec } ) )
             },
             2 /*ACK*/ => {
-                Msg::ACK( Ack{ seq : r.read_le_u16().unwrap() } )
+                Ok( Message::ACK( Ack{ seq : r.read_le_u16().unwrap() } ) )
             },
             3 /*BEAT*/ => {
-                Msg::BEAT(Beat)
+                Ok( Message::BEAT(Beat) )
             },
             4 /*MAPREQ*/ => {
-                Msg::MAPREQ(MapReq)
+                Ok( Message::MAPREQ(MapReq) )
             },
             5 /*MAPDATA*/ => {
-                Msg::MAPDATA(MapData)
+                Ok( Message::MAPDATA(MapData) )
             },
             6 /*OBJDATA*/ => {
                 let mut obj = Vec::new();
@@ -689,16 +689,16 @@ impl Msg {
                     }
                     obj.push( ObjDataElem{ fl:fl, id:id, frame:frame, prop:prop } );
                 }
-                Msg::OBJDATA( ObjData{ obj : obj } )
+                Ok( Message::OBJDATA( ObjData{ obj : obj } ) )
             },
             7 /*OBJACK*/ => {
-                Msg::OBJACK(ObjAck)
+                Ok( Message::OBJACK(ObjAck) )
             },
             8 /*CLOSE*/ => {
-                Msg::CLOSE(Close)
+                Ok( Message::CLOSE(Close) )
             },
             _ /*UNKNOWN*/ => {
-                Msg::UNKNOWN(mtype)
+                Err( format!("unknown message type {}", mtype) )
             }
         };
 
@@ -851,10 +851,13 @@ impl Client {
                     println!("wrong host: {}", addr);
                     continue;
                 }
-                let msg = Msg::from_buf(buf.slice_to(len));
+                let msg = match Message::from_buf(buf.slice_to(len)) {
+                    Ok(msg) => { msg },
+                    Err(err) => { println!("message parse error: {}", err); continue; },
+                };
                 println!("receiver: {}", msg);
                 match msg {
-                    Msg::SESS(sess) => {
+                    Message::SESS(sess) => {
                         match sess.err {
                             SessError::OK => {},
                             _ => {
@@ -870,7 +873,7 @@ impl Client {
                         }
                         receiver_to_beater.send(());
                     },
-                    Msg::REL( rel ) => {
+                    Message::REL( rel ) => {
                         //TODO do not process duplicates, but ACK only
                         //XXX are we handle seq right in the case of overflow ???
                         receiver_to_sender.send(ack(rel.seq + ((rel.rel.len() as u16) - 1)));
@@ -916,11 +919,11 @@ impl Client {
                             }
                         }
                     },
-                    Msg::ACK(_)     => {},
-                    Msg::BEAT(_)    => { println!("     !!! client must not receive BEAT !!!"); },
-                    Msg::MAPREQ(_)  => { println!("     !!! client must not receive MAPREQ !!!"); },
-                    Msg::MAPDATA(_) => {},
-                    Msg::OBJDATA( objdata ) => {
+                    Message::ACK(_)     => {},
+                    Message::BEAT(_)    => { println!("     !!! client must not receive BEAT !!!"); },
+                    Message::MAPREQ(_)  => { println!("     !!! client must not receive MAPREQ !!!"); },
+                    Message::MAPDATA(_) => {},
+                    Message::OBJDATA( objdata ) => {
                         let mut w = MemWriter::new();
                         w.write_u8(7).unwrap(); //OBJACK writer
                         for o in objdata.obj.iter() {
@@ -934,13 +937,12 @@ impl Client {
                         }
                         receiver_to_viewer.send(Data::Obj(objdata));
                     },
-                    Msg::OBJACK(_)  => {},
-                    Msg::CLOSE(_)   => {
+                    Message::OBJACK(_)  => {},
+                    Message::CLOSE(_)   => {
                         receiver_to_main.send(());
                         // ??? should we send CLOSE too ???
                         break;
                     },
-                    Msg::UNKNOWN(_) => { println!("     !!! UNKNOWN !!!"); },
                 }
 
                 //TODO send REL until reply
