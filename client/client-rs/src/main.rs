@@ -636,26 +636,29 @@ impl ObjProp {
 
 impl Message {
     //TODO return Error with stack trace on Err instead of String
+    //TODO get Vec not &[]. return Vec in the case of error
     fn from_buf (buf:&[u8]) -> Result<Message,String> {
+        //TODO remove MemReader because Vec now have Reader trait
         let mut r = MemReader::new(buf.to_vec());
-        let mtype = r.read_u8().unwrap();
+        let mtype = r.read_u8().ok().expect("msg.type");
         let res = match mtype {
             0 /*SESS*/ => {
-                Ok( Message::SESS( Sess{ err : SessError::new(r.read_u8().unwrap()) } ) )
+                //TODO ??? Ok(Message::sess(err))
+                //     impl Message { fn sess (err: u8) -> Message::SESS { ... } }
+                Ok( Message::SESS( Sess{ err : SessError::new(r.read_u8().ok().expect("msg.sess.err")) } ) )
             },
             1 /*REL*/ => {
                 let seq = r.read_le_u16().unwrap();
                 let mut rel_vec = Vec::new();
                 while !r.eof() {
-                    let rel_buf;
                     let mut rel_type = r.read_u8().unwrap();
-                    if (rel_type & 0x80) != 0 {
+                    let rel_buf = if (rel_type & 0x80) != 0 {
                         rel_type &= !0x80;
                         let rel_len = r.read_le_u16().unwrap();
-                        rel_buf = r.read_exact(rel_len as uint).unwrap();
+                        r.read_exact(rel_len as uint).unwrap()
                     } else {
-                        rel_buf = r.read_to_end().unwrap();
-                    }
+                        r.read_to_end().unwrap()
+                    };
                     rel_vec.push(RelElem::from_buf(rel_type, rel_buf.as_slice()).unwrap());
                 }
                 Ok( Message::REL( Rel{ seq : seq, rel : rel_vec } ) )
@@ -1047,7 +1050,11 @@ fn main() {
     //TODO macro to create named thread
     //TODO replace all unwraps with normal error handling
     //TODO ADD tests:
-    //          Message::from_buf(vec![...any random sequence...]);
+    //        for i in range(0u8, 255) {
+    //            let mut v = Vec::new();
+    //            v.push(i);
+    //            println!("{}", Message::from_buf(v.as_slice()));
+    //        }
 
     let mut client = Client::new("game.salemthegame.com", 1871, 1870); //TODO return Result and match
 
