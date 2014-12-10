@@ -13,6 +13,7 @@ use std::io::net::addrinfo::get_host_addresses;
 use std::io::MemReader;
 use std::io::timer;
 use std::collections::hash_map::HashMap;
+use std::collections::hash_set::HashSet;
 use std::str;
 use std::time::Duration;
 use serialize::hex::ToHex;
@@ -77,6 +78,14 @@ fn rel_wdgmsg_play (seq: u16, name: &str) -> Vec<u8> {
     w.write_u8(2).unwrap(); // list element type T_STR
     w.write(name.as_bytes()).unwrap(); // element
     w.write_u8(0).unwrap();
+    w.into_inner()
+}
+
+fn mapreq (x:i32, y:i32) -> Vec<u8> {
+    let mut w = MemWriter::new();
+    w.write_u8(4).unwrap(); // MAPREQ
+    w.write_le_i32(x).unwrap(); // x
+    w.write_le_i32(y).unwrap(); // y
     w.into_inner()
 }
 
@@ -958,7 +967,7 @@ impl Client {
                         //TODO receiver_to_sender.send(objdata.to_buf());
                         receiver_to_sender.send(w.into_inner()); // send OBJACKs
                         for o in objdata.obj.iter() {
-                            println!("      {}", o);
+                            println!("    {}", o);
                         }
                         receiver_to_viewer.send(Data::Obj(objdata));
                     },
@@ -1060,6 +1069,13 @@ impl Client {
         //TODO get username from server responce, not from auth username
         self.main_to_sender.send(sess(self.user.as_slice(), self.cookie.as_slice()));
     }
+
+    fn mapreq (&self, x:i32, y:i32) {
+        //TODO send until reply
+        //TODO replace with client.send(Message::MapReq::new(x,y).to_buf())
+        //     or client.send(Message::mapreq(x,y).to_buf())
+        self.main_to_sender.send(mapreq(x,y));
+    }
 }
 
 
@@ -1093,6 +1109,7 @@ fn main() {
 
     let mut objects = HashMap::new();
     let mut resources = HashMap::new();
+    let mut grids = HashSet::new();
     let exit_signal = client.main_from_any;
     let object_rx = client.viewer_from_any;
     let control_rx = client.control_rx;
@@ -1128,6 +1145,16 @@ fn main() {
                             },
                             None => { /*thats cant be*/ },
                         };
+                    }
+                    for o in objects.values() {
+                        let (x,y) = o.xy;
+                        let gx:i32 = x / 100;
+                        let gy:i32 = y / 100;
+                        if !grids.contains(&(gx,gy)) {
+                            //client.mapreq(gx,gy);
+                            client.main_to_sender.send(mapreq(gx,gy));
+                            grids.insert((gx,gy));
+                        }
                     }
                 },
             },
