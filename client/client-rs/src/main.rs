@@ -124,8 +124,20 @@ struct Sfx;
 struct Cattr;
 #[deriving(Show)]
 struct Music;
+struct Tiles {
+    tiles : Vec<TilesElem>
+}
+impl Show for Tiles {
+    fn fmt(&self, f : &mut Formatter) -> std::fmt::Result {
+        write!(f, "    TILES")
+    }
+}
 #[deriving(Show)]
-struct Tiles;
+struct TilesElem {
+    id : u8,
+    name : String,
+    ver : u16,
+}
 #[deriving(Show)]
 struct Buff;
 #[deriving(Show)]
@@ -303,7 +315,16 @@ impl RelElem {
             8  /*SFX*/     => { Ok( RelElem::SFX(Sfx) ) },
             9  /*CATTR*/   => { Ok( RelElem::CATTR(Cattr) ) },
             10 /*MUSIC*/   => { Ok( RelElem::MUSIC(Music) ) },
-            11 /*TILES*/   => { Ok( RelElem::TILES(Tiles) ) },
+            11 /*TILES*/   => {
+                let mut tiles = Vec::new();
+                while !r.eof() {
+                    let id = r.read_u8().unwrap();
+                    let name = String::from_utf8(r.read_until(0).unwrap()).unwrap();
+                    let ver = r.read_le_u16().unwrap();
+                    tiles.push(TilesElem{ id:id, name:name, ver:ver });
+                }
+                Ok( RelElem::TILES(Tiles{ tiles:tiles }) )
+            },
             12 /*BUFF*/    => { Ok( RelElem::BUFF(Buff) ) },
             13 /*SESSKEY*/ => { Ok( RelElem::SESSKEY(SessKey) ) },
             _  /*UNKNOWN*/ => { Err( format!("unknown REL type {}", kind) ) },
@@ -638,7 +659,7 @@ impl Message {
     //TODO return Error with stack trace on Err instead of String
     //TODO get Vec not &[]. return Vec in the case of error
     fn from_buf (buf:&[u8]) -> Result<Message,String> {
-        //TODO remove MemReader because Vec now have Reader trait
+        //TODO remove MemReader when Vec got Reader trait
         let mut r = MemReader::new(buf.to_vec());
         let mtype = r.read_u8().ok().expect("msg.type");
         let res = match mtype {
@@ -913,7 +934,11 @@ impl Client {
                                 RelElem::SFX(_) => {},
                                 RelElem::CATTR(_) => {},
                                 RelElem::MUSIC(_) => {},
-                                RelElem::TILES(_) => {},
+                                RelElem::TILES(ref tiles) => {
+                                    for tile in tiles.tiles.iter() {
+                                        println!("      {}", tile);
+                                    }
+                                },
                                 RelElem::BUFF(_) => {},
                                 RelElem::SESSKEY(_) => {},
                             }
@@ -933,14 +958,13 @@ impl Client {
                         //TODO receiver_to_sender.send(objdata.to_buf());
                         receiver_to_sender.send(w.into_inner()); // send OBJACKs
                         for o in objdata.obj.iter() {
-                            println!("    {}", o);
+                            println!("      {}", o);
                         }
                         receiver_to_viewer.send(Data::Obj(objdata));
                     },
                     Message::OBJACK(_)  => {},
                     Message::CLOSE(_)   => {
                         receiver_to_main.send(());
-                        // ??? should we send CLOSE too ???
                         break;
                     },
                 }
