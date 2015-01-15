@@ -1,4 +1,4 @@
-#![feature(macro_rules)]
+#![feature(int_uint)]
 
 extern crate openssl;
 extern crate serialize;
@@ -24,7 +24,10 @@ use std::vec::Vec;
 use std::fmt::{Show, Formatter};
 use std::io::net::pipe::UnixListener;
 use std::io::{Listener, Acceptor};
+use std::thread::Thread;
+use std::sync::mpsc::{Sender, Receiver, channel};
 
+/*
 macro_rules! tryio (
     ($fmt:expr $e:expr) => (
         match $e {
@@ -33,6 +36,7 @@ macro_rules! tryio (
         }
     )
 )
+*/
 
 struct Error {
     source: &'static str,
@@ -95,7 +99,7 @@ struct Obj {
     xy : (i32,i32),
 }
 
-#[deriving(Show)]
+#[derive(Show)]
 struct NewWdg {
     id : u16,
     kind : String,
@@ -103,35 +107,35 @@ struct NewWdg {
     pargs : Vec<MsgList>,
     cargs : Vec<MsgList>,
 }
-#[deriving(Show)]
+#[derive(Show)]
 struct WdgMsg {
     id : u16,
     name : String,
     args : Vec<MsgList>,
 }
-#[deriving(Show)]
+#[derive(Show)]
 struct DstWdg {
     id : u16,
 }
-#[deriving(Show)]
+#[derive(Show)]
 struct MapIv;
-#[deriving(Show)]
+#[derive(Show)]
 struct GlobLob;
-#[deriving(Show)]
+#[derive(Show)]
 struct Paginae;
-#[deriving(Show)]
+#[derive(Show)]
 struct ResId {
     id : u16,
     name : String,
     ver : u16,
 }
-#[deriving(Show)]
+#[derive(Show)]
 struct Party;
-#[deriving(Show)]
+#[derive(Show)]
 struct Sfx;
-#[deriving(Show)]
+#[derive(Show)]
 struct Cattr;
-#[deriving(Show)]
+#[derive(Show)]
 struct Music;
 struct Tiles {
     tiles : Vec<TilesElem>
@@ -141,18 +145,18 @@ impl Show for Tiles {
         write!(f, "    TILES")
     }
 }
-#[deriving(Show)]
+#[derive(Show)]
 struct TilesElem {
     id : u8,
     name : String,
     ver : u16,
 }
-#[deriving(Show)]
+#[derive(Show)]
 struct Buff;
-#[deriving(Show)]
+#[derive(Show)]
 struct SessKey;
 
-#[deriving(Show)]
+#[derive(Show)]
 //TODO replace with plain struct variants
 enum RelElem {
     NEWWDG(NewWdg),
@@ -172,7 +176,7 @@ enum RelElem {
 }
 
 #[allow(non_camel_case_types)]
-#[deriving(Show)]
+#[derive(Show)]
 //TODO replace with plain struct variants
 enum MsgList {
     tINT    (i32),
@@ -341,7 +345,7 @@ impl RelElem {
     }
 }
 
-#[deriving(Show)]
+#[derive(Show)]
 enum SessError {
     OK,
     AUTH,
@@ -364,7 +368,7 @@ impl SessError {
         }
     }
 }
-#[deriving(Show)]
+#[derive(Show)]
 struct Sess {
     err : SessError,
 }
@@ -377,15 +381,15 @@ impl Show for Rel {
         write!(f, "REL seq={}", self.seq)
     }
 }
-#[deriving(Show)]
+#[derive(Show)]
 struct Ack {
     seq : u16,
 }
-#[deriving(Show)]
+#[derive(Show)]
 struct Beat;
-#[deriving(Show)]
+#[derive(Show)]
 struct MapReq;
-#[deriving(Show)]
+#[derive(Show)]
 struct MapData;
 struct ObjData {
     obj : Vec<ObjDataElem>,
@@ -395,19 +399,19 @@ impl Show for ObjData {
         write!(f, "OBJDATA")
     }
 }
-#[deriving(Show)]
+#[derive(Show)]
 struct ObjDataElem {
     fl    : u8,
     id    : u32,
     frame : i32,
     prop  : Vec<ObjProp>,
 }
-#[deriving(Show)]
+#[derive(Show)]
 struct ObjAck;
-#[deriving(Show)]
+#[derive(Show)]
 struct Close;
 
-#[deriving(Show)]
+#[derive(Show)]
 //TODO replace with plain struct variants
 enum Message {
     SESS( Sess ),
@@ -422,7 +426,7 @@ enum Message {
 }
 
 #[allow(non_camel_case_types)]
-#[deriving(Show)]
+#[derive(Show)]
 //TODO replace with plain struct variants
 enum ObjProp {
     odREM,
@@ -447,26 +451,26 @@ enum ObjProp {
     odICON(odICON),
 }
 #[allow(non_camel_case_types)]
-#[deriving(Show)]
+#[derive(Show)]
 enum odFOLLOW {
     Stop,
     To(u32,u16,String),
 }
 #[allow(non_camel_case_types)]
-#[deriving(Show)]
+#[derive(Show)]
 enum odHOMING {
     New((i32,i32),u16),
     Change((i32,i32),u16),
     Delete,
 }
 #[allow(non_camel_case_types)]
-#[deriving(Show)]
+#[derive(Show)]
 enum odBUDDY {
     Update(String,u8,u8),
     Delete,
 }
 #[allow(non_camel_case_types)]
-#[deriving(Show)]
+#[derive(Show)]
 enum odICON {
     Set(u16),
     Del,
@@ -703,6 +707,9 @@ impl Message {
                 Ok( Message::MAPREQ(MapReq) )
             },
             5 /*MAPDATA*/ => {
+                let pktid = r.read_le_i32();
+                let off = r.read_le_u16();
+                let len = r.read_le_u16();
                 Ok( Message::MAPDATA(MapData) )
             },
             6 /*OBJDATA*/ => {
@@ -771,7 +778,7 @@ struct Client {
     control_tx: Sender<String>,
 }
 
-#[deriving(Show)]
+#[derive(Show)]
 enum Control {
     Dump,
     Quit,
@@ -794,7 +801,7 @@ impl Client {
         let reader_to_main = tx4.clone();
         let control_to_main = tx5.clone();
         let control_from_main = rx6;
-        spawn(proc() {
+        Thread::spawn(move || {
             let path = Path::new("/tmp/socket");
             let socket = UnixListener::bind(&path);
             let mut listener = socket.listen();
@@ -804,9 +811,9 @@ impl Client {
             // through another channel(which is constant)
             let mut stream_tx = stream.clone();
             // control stream TX
-            spawn(proc() {
+            Thread::spawn(move || {
                 loop {
-                    let s:String = control_from_main.recv();
+                    let s:String = control_from_main.recv().unwrap();
                     stream_tx.write_line(s.as_slice()).unwrap();
                     stream_tx.flush().unwrap();
                 }
@@ -843,9 +850,9 @@ impl Client {
         let sender_from_any = rx1;
         let mut udp_tx = sock.clone();
         let host_addr = SocketAddr {ip: host_ip, port: port};
-        spawn(proc() {
+        Thread::spawn(move || {
             loop {
-                let buf: Vec<u8> = sender_from_any.recv();
+                let buf: Vec<u8> = sender_from_any.recv().unwrap();
                 println!("sender: send {} bytes", buf.len());
                 udp_tx.send_to(buf.as_slice(), host_addr).unwrap();
             }
@@ -854,7 +861,7 @@ impl Client {
         // beater
         let beater_from_any = rx2;
         let beater_to_sender = tx1.clone();
-        spawn(proc() {
+        Thread::spawn(move || {
             beater_from_any.recv();
             //send BEAT every 5 sec
             loop {
@@ -870,8 +877,8 @@ impl Client {
         let receiver_to_beater = tx2.clone();
         let receiver_to_sender = tx1.clone();
         let receiver_to_viewer = tx3.clone();
-        spawn(proc() {
-            let mut buf = [0u8, ..65535];
+        Thread::spawn(move || {
+            let mut buf = [0u8; 65535];
             let mut charlist = Vec::new();
             let mut widgets = HashMap::new();
             widgets.insert(0, "root".to_string());
@@ -886,7 +893,7 @@ impl Client {
                     Ok(msg) => { msg },
                     Err(err) => { println!("message parse error: {}", err); continue; },
                 };
-                println!("receiver: {}", msg);
+                println!("receiver: {:?}", msg);
                 match msg {
                     Message::SESS(sess) => {
                         match sess.err {
@@ -909,7 +916,7 @@ impl Client {
                         //XXX are we handle seq right in the case of overflow ???
                         receiver_to_sender.send(ack(rel.seq + ((rel.rel.len() as u16) - 1)));
                         for r in rel.rel.iter() {
-                            println!("    {}", r);
+                            println!("    {:?}", r);
                             match *r {
                                 RelElem::NEWWDG(ref wdg) => {
                                     widgets.insert(wdg.id as uint, wdg.kind.clone()/*FIXME String -> &str*/);
@@ -945,7 +952,7 @@ impl Client {
                                 RelElem::MUSIC(_) => {},
                                 RelElem::TILES(ref tiles) => {
                                     for tile in tiles.tiles.iter() {
-                                        println!("      {}", tile);
+                                        println!("      {:?}", tile);
                                     }
                                 },
                                 RelElem::BUFF(_) => {},
@@ -967,7 +974,7 @@ impl Client {
                         //TODO receiver_to_sender.send(objdata.to_buf());
                         receiver_to_sender.send(w.into_inner()); // send OBJACKs
                         for o in objdata.obj.iter() {
-                            println!("    {}", o);
+                            println!("    {:?}", o);
                         }
                         receiver_to_viewer.send(Data::Obj(objdata));
                     },
@@ -1022,7 +1029,8 @@ impl Client {
         //self.pass = pass;
         println!("authorize {} @ {}", user, self.auth_addr);
         //TODO add method connect(SocketAddr) to TcpStream
-        let stream = tryio!("tcp.connect" TcpStream::connect(self.auth_addr));
+        //let stream = tryio!("tcp.connect" TcpStream::connect(self.auth_addr));
+        let stream = TcpStream::connect(self.auth_addr);
         let mut stream = SslStream::new(&SslContext::new(SslMethod::Sslv23).unwrap(), stream).unwrap();
 
         // send 'pw' command
@@ -1117,14 +1125,14 @@ fn main() {
         //TODO while(try_recv)
 
         select! (
-            () = exit_signal.recv() => {
-                //XXX maybe we dont need it any more ???
-            },
+            //() = exit_signal.recv() => {
+            //    //XXX maybe we dont need it any more ???
+            //},
             data = object_rx.recv() => match data {
-                Data::Res(res) => {
+                Ok(Data::Res(res)) => {
                     resources.insert(res.id, res.name.clone()/*FIXME String -> &str*/);
                 },
-                Data::Obj(objdata) => {
+                Ok(Data::Obj(objdata)) => {
                     //TODO parse objdata in network thread and send here more normalized objects
                     for o in objdata.obj.iter() {
                         if !objects.contains_key(&o.id) {
@@ -1148,8 +1156,8 @@ fn main() {
                     }
                     for o in objects.values() {
                         let (x,y) = o.xy;
-                        let gx:i32 = x / 100;
-                        let gy:i32 = y / 100;
+                        let gx:i32 = x / 1100;
+                        let gy:i32 = y / 1100;
                         if !grids.contains(&(gx,gy)) {
                             //client.mapreq(gx,gy);
                             client.main_to_sender.send(mapreq(gx,gy));
@@ -1157,11 +1165,12 @@ fn main() {
                         }
                     }
                 },
+                _ => {}
             },
             control = control_rx.recv() => {
-                println!("MAIN: {}", control);
+                println!("MAIN: {:?}", control);
                 match control {
-                    Control::Dump => {
+                    Ok(Control::Dump) => {
                         for o in objects.values() {
                             let (x,y) = o.xy;
                             let resid = o.resid;
