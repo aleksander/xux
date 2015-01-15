@@ -707,9 +707,13 @@ impl Message {
                 Ok( Message::MAPREQ(MapReq) )
             },
             5 /*MAPDATA*/ => {
-                let pktid = r.read_le_i32();
-                let off = r.read_le_u16();
-                let len = r.read_le_u16();
+                let pktid = r.read_le_i32().unwrap();
+                let off = r.read_le_u16().unwrap();
+                let len = r.read_le_u16().unwrap();
+                println!("    pktid={} off={} len={}", pktid, off, len);
+                if (off == 0) {
+                    println!("      coord=({}, {})", r.read_le_i32().unwrap(), r.read_le_i32().unwrap());
+                }
                 Ok( Message::MAPDATA(MapData) )
             },
             6 /*OBJDATA*/ => {
