@@ -1,7 +1,7 @@
 #![feature(int_uint)]
 
 extern crate openssl;
-extern crate serialize;
+extern crate "rustc-serialize" as rustc_serialize;
 
 use std::io::Writer;
 use std::io::MemWriter;
@@ -16,7 +16,7 @@ use std::collections::hash_map::HashMap;
 use std::collections::hash_set::HashSet;
 use std::str;
 use std::time::Duration;
-use serialize::hex::ToHex;
+use rustc_serialize::hex::ToHex;
 use openssl::crypto::hash::HashType;
 use openssl::crypto::hash::hash;
 use openssl::ssl::{SslMethod, SslContext, SslStream};
@@ -389,8 +389,18 @@ struct Ack {
 struct Beat;
 #[derive(Show)]
 struct MapReq;
-#[derive(Show)]
-struct MapData;
+//#[derive(Show)]
+struct MapData {
+    pktid : i32,
+    off   : u16,
+    len   : u16,
+    buf   : Vec<u8>,
+}
+impl Show for MapData {
+    fn fmt(&self, f : &mut Formatter) -> std::fmt::Result {
+        write!(f, "MAPDATA pktid:{} offset:{} len:{} buf:[..{}]", self.pktid, self.off, self.len, self.buf.len())
+    }
+}
 struct ObjData {
     obj : Vec<ObjDataElem>,
 }
@@ -710,11 +720,17 @@ impl Message {
                 let pktid = r.read_le_i32().unwrap();
                 let off = r.read_le_u16().unwrap();
                 let len = r.read_le_u16().unwrap();
-                println!("    pktid={} off={} len={}", pktid, off, len);
-                if (off == 0) {
-                    println!("      coord=({}, {})", r.read_le_i32().unwrap(), r.read_le_i32().unwrap());
-                }
-                Ok( Message::MAPDATA(MapData) )
+                let buf = r.read_to_end().unwrap();
+                //println!("    pktid={} off={} len={}", pktid, off, len);
+                //if (off == 0) {
+                //    println!("      coord=({}, {})", r.read_le_i32().unwrap(), r.read_le_i32().unwrap());
+                //    println!("      mmname=\"{}\"", r.read_until(0).unwrap());
+                //    loop {
+                //        let pidx = r.read_u8().unwrap();
+                //        if pidx == 255 break;
+                //    }
+                //}
+                Ok( Message::MAPDATA( MapData{ pktid:pktid, off:off, len:len, buf:buf } ) )
             },
             6 /*OBJDATA*/ => {
                 let mut obj = Vec::new();

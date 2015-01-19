@@ -4,10 +4,13 @@ name = "client-rs"
 version = "0.0.1"
 authors = ["Aleksander Usov <aleksander.usov@gmail.com>"]
 
+[dependencies]
+rustc-serialize = "0.2.8"
+
 [dependencies.openssl]
 git = "git://github.com/sfackler/rust-openssl"
 
 #[dependencies.sdl2]
 #git = "https://github.com/AngryLawyer/rust-sdl2"
-
+#
 
