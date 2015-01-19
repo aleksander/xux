@@ -12,6 +12,8 @@ use std::io::net::ip::SocketAddr;
 use std::io::net::addrinfo::get_host_addresses;
 use std::io::MemReader;
 use std::io::timer;
+use std::io::fs;
+use std::io::fs::PathExtensions;
 use std::collections::hash_map::HashMap;
 use std::collections::hash_set::HashSet;
 use std::str;
@@ -291,7 +293,7 @@ fn read_list (r:&mut MemReader) -> Vec<MsgList> /*TODO return Result instead*/ {
 }
 
 impl RelElem {
-    // TODO in the case of Err return Error with backtrace instaed of String
+    // TODO in the case of Err return Error with backtrace instead of String
     fn from_buf (kind:u8, buf:&[u8]) -> Result<RelElem,String> {
         //TODO remove MemReader, use buf itself (because new Vec implementation have Reader/Writer traits implemented)
         let mut r = MemReader::new(buf.to_vec());
@@ -389,7 +391,6 @@ struct Ack {
 struct Beat;
 #[derive(Show)]
 struct MapReq;
-//#[derive(Show)]
 struct MapData {
     pktid : i32,
     off   : u16,
@@ -823,6 +824,9 @@ impl Client {
         let control_from_main = rx6;
         Thread::spawn(move || {
             let path = Path::new("/tmp/socket");
+            if path.exists() {
+                fs::unlink(&path);
+            }
             let socket = UnixListener::bind(&path);
             let mut listener = socket.listen();
             let mut stream = listener.accept();
