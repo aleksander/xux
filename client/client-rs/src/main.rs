@@ -1362,6 +1362,7 @@ fn main() {
     //            v.push(i);
     //            println!("{}", Message::from_buf(v.as_slice()));
     //        }
+    //TODO FIXME add username/password prompt, remove plain text username/password from sources
 
     /* TODO
     Ok(Control::Dump) => {
