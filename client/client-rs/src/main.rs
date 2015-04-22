@@ -9,25 +9,14 @@ extern crate byteorder;
 #[macro_use]
 extern crate log;
 
-//use std::old_io::Writer;
-//use std::old_io::MemWriter;
 use std::net::tcp;
 use std::net::tcp::TcpStream;
 use std::net::udp::UdpSocket;
-//use std::old_io::net::ip::Ipv4Addr;
 use std::net::SocketAddr;
-//use std::old_io::net::addrinfo::get_host_addresses;
-//use std::old_io::Reader;
-//use std::old_io::MemReader;
-//use std::old_io::Buffer;
-//use std::old_io::timer;
-//use std::old_io::fs;
-//use std::old_io::fs::PathExtensions;
 use std::collections::hash_map::HashMap;
 use std::collections::hash_set::HashSet;
 use std::collections::LinkedList;
 use std::str;
-//use std::time::Duration;
 use rustc_serialize::hex::ToHex;
 use openssl::crypto::hash::Type;
 use openssl::crypto::hash::hash;
@@ -35,26 +24,12 @@ use openssl::ssl::{SslMethod, SslContext, SslStream};
 use std::vec::Vec;
 use std::fmt::Debug;
 use std::fmt::Formatter;
-//use std::old_io::net::pipe::UnixListener;
-//use std::old_io::{Listener, Acceptor};
-//use std::thread::Thread;
-//use std::sync::mpsc::{Sender, Receiver, channel};
 use std::io::Cursor;
 use byteorder::{LittleEndian, BigEndian, ReadBytesExt, WriteBytesExt};
 use std::io::Read;
+use std::io::BufRead;
 use std::io::Write;
 use std::io::ErrorKind;
-
-/*
-macro_rules! tryio (
-    ($fmt:expr $e:expr) => (
-        match $e {
-            Ok(e) => e,
-            Err(e) => return Err(Error{source:$fmt, detail:e.detail})
-        }
-    )
-)
-*/
 
 struct Error {
     source: &'static str,
@@ -161,75 +136,78 @@ enum MsgList {
     tFLOAT64(f64),
 }
 
-trait ReadUntil : std::io::Read {
-    fn read_until (&mut self) -> Result<String,Error> {
-        for i in 0..self.len() {
-            if self[i] == 0 {
-                self[..i].from_utf()
-            }
-        }
-    }
-}
+type le = LittleEndian;
 
-fn read_sublist (buf : &[u8]) /*TODO return Result instead*/ {
-    let r = Cursor::new(buf);
-    let mut deep = 0us;
+fn read_sublist (r : std::io::cursor::Cursor<&[u8]> /*buf : &[u8]*/) /*TODO return Result instead*/ {
+    //let r = Cursor::new(buf);
+    let mut deep = 0;
     loop {
         //if r.len() == 0 { return; }
         let t = match r.read_u8() {
             Ok(b) => {b}
             Err(e) => {return;}
         };
-        type le = LittleEndian;
+        let tmp = Vec::new();
         match t {
             /*T_END    */  0  => { if deep == 0 { return; } else { deep -= 1; } },
             /*T_INT    */  1  => { r.read_i32::<le>().unwrap(); },
-            /*T_STR    */  2  => { r.read_until(0).unwrap(); },
-            /*T_COORD  */  3  => { r.read_le_i32().unwrap(); r.read_le_i32().unwrap(); },
+            /*T_STR    */  2  => { r.read_until(0, &mut tmp).unwrap(); },
+            /*T_COORD  */  3  => { r.read_i32::<le>().unwrap(); r.read_i32::<le>().unwrap(); },
             /*T_UINT8  */  4  => { r.read_u8().unwrap(); },
-            /*T_UINT16 */  5  => { r.read_le_u16().unwrap(); },
+            /*T_UINT16 */  5  => { r.read_u16::<le>().unwrap(); },
             /*T_COLOR  */  6  => { r.read_u8().unwrap(); r.read_u8().unwrap(); r.read_u8().unwrap(); r.read_u8().unwrap(); },
             /*T_TTOL   */  8  => { deep += 1; },
             /*T_INT8   */  9  => { r.read_i8().unwrap(); },
-            /*T_INT16  */  10 => { r.read_le_i16().unwrap(); },
+            /*T_INT16  */  10 => { r.read_i16::<le>().unwrap(); },
             /*T_NIL    */  12 => { },
             /*T_BYTES  */  14 => {
                 let len = r.read_u8().unwrap();
                 if (len & 128) != 0 {
-                    let len = r.read_le_i32().unwrap(); /* WHY NOT u32 ??? */
-                    r.read_exact(len as usize).unwrap();
+                    let len = r.read_i32::<le>().unwrap(); /* WHY NOT u32 ??? */
+                    let bytes = vec![0; len as usize];
+                    let b = r.read(&mut bytes).unwrap();
+                    assert_eq!(b, len as usize);
                 } else {
-                    r.read_exact(len as usize).unwrap();
+                    let bytes = vec![0; len as usize];
+                    let b = r.read(&mut bytes).unwrap();
+                    assert_eq!(b, len as usize);
                 }
             },
-            /*T_FLOAT32*/  15 => { r.read_le_f32().unwrap(); },
-            /*T_FLOAT64*/  16 => { r.read_le_f64().unwrap(); },
+            /*T_FLOAT32*/  15 => { r.read_f32::<le>().unwrap(); },
+            /*T_FLOAT64*/  16 => { r.read_f64::<le>().unwrap(); },
                            _  => { return; /*TODO return Error instead*/ },
         }
     }
 }
 
-fn read_list (r : &[u8]) -> Vec<MsgList> /*TODO return Result instead*/ {
+fn read_list (buf : &[u8]) -> Vec<MsgList> /*TODO return Result instead*/ {
+    let r = Cursor::new(buf);
     let mut list = Vec::new();
     loop {
-        if r.eof() { return list; }
-        let t = r.read_u8().unwrap();
+        //if r.eof() { return list; }
+        //let t = r.read_u8().unwrap();
+        let t = match r.read_u8() {
+            Ok(b) => {b}
+            Err(e) => {return list;}
+        };
         match t {
             /*T_END    */  0  => { return list; },
             /*T_INT    */  1  => {
-                list.push(MsgList::tINT( r.read_le_i32().unwrap() ));
+                list.push(MsgList::tINT( r.read_i32::<le>().unwrap() ));
             },
             /*T_STR    */  2  => {
-                list.push(MsgList::tSTR( String::from_utf8(r.read_until(0).unwrap()).unwrap() ));
+                let tmp = Vec::new();
+                r.read_until(0, &mut tmp).unwrap();
+                list.push(MsgList::tSTR( String::from_utf8(tmp).unwrap() ));
             },
             /*T_COORD  */  3  => {
-                list.push(MsgList::tCOORD( (r.read_le_i32().unwrap(),r.read_le_i32().unwrap()) ));
+                list.push(MsgList::tCOORD( (r.read_i32::<le>().unwrap(),r.read_i32::<le>().unwrap()) ));
             },
             /*T_UINT8  */  4  => {
                 list.push(MsgList::tUINT8( r.read_u8().unwrap() ));
             },
             /*T_UINT16 */  5  => {
-                list.push(MsgList::tUINT16( r.read_le_u16().unwrap() ));
+                list.push(MsgList::tUINT16( r.read_u16::<le>().unwrap() ));
             },
             /*T_COLOR  */  6  => {
                 list.push(MsgList::tCOLOR( (r.read_u8().unwrap(),
@@ -244,7 +222,7 @@ fn read_list (r : &[u8]) -> Vec<MsgList> /*TODO return Result instead*/ {
                 list.push(MsgList::tINT8( r.read_i8().unwrap() ));
             },
             /*T_INT16  */  10 => {
-                list.push(MsgList::tINT16( r.read_le_i16().unwrap() ));
+                list.push(MsgList::tINT16( r.read_i16::<le>().unwrap() ));
             },
             /*T_NIL    */  12 => {
                 list.push(MsgList::tNIL);
@@ -252,17 +230,23 @@ fn read_list (r : &[u8]) -> Vec<MsgList> /*TODO return Result instead*/ {
             /*T_BYTES  */  14 => {
                 let len = r.read_u8().unwrap();
                 if (len & 128) != 0 {
-                    let len = r.read_le_i32().unwrap(); /* WHY NOT u32 ??? */
-                    list.push(MsgList::tBYTES( r.read_exact(len as usize).unwrap() ));
+                    let len = r.read_i32::<le>().unwrap(); /* WHY NOT u32 ??? */
+                    let bytes = vec![0; len as usize];
+                    let b = r.read(&mut bytes).unwrap();
+                    assert_eq!(b, len as usize);
+                    list.push(MsgList::tBYTES( bytes ));
                 } else {
-                    list.push(MsgList::tBYTES( r.read_exact(len as usize).unwrap() ));
+                    let bytes = vec![0; len as usize];
+                    let b = r.read(&mut bytes).unwrap();
+                    assert_eq!(b, len as usize);
+                    list.push(MsgList::tBYTES( bytes ));
                 }
             },
             /*T_FLOAT32*/  15 => {
-                list.push(MsgList::tFLOAT32( r.read_le_f32().unwrap() ));
+                list.push(MsgList::tFLOAT32( r.read_f32::<le>().unwrap() ));
             },
             /*T_FLOAT64*/  16 => {
-                list.push(MsgList::tFLOAT64( r.read_le_f64().unwrap() ));
+                list.push(MsgList::tFLOAT64( r.read_f64::<le>().unwrap() ));
             },
             /*UNKNOWN*/    _  => {
                 println!("    !!! UNKNOWN LIST ELEMENT !!!");
@@ -280,30 +264,34 @@ impl RelElem {
         //XXX RemoteUI.java +53
         match kind {
             0  /*NEWWDG*/  => {
-                let id = try!(r.read_le_u16());
-                let kind = String::from_utf8(try!(r.read_until(0))).unwrap();
-                let parent = try!(r.read_le_u16());
+                let id = try!(r.read_u16::<le>());
+                let kind = {
+                    let tmp = Vec::new();
+                    r.read_until(0, &mut tmp).unwrap();
+                    String::from_utf8(tmp).unwrap()
+                };
+                let parent = try!(r.read_u16::<le>());
                 let pargs = read_list(&mut r);
                 let cargs = read_list(&mut r);
                 Ok( RelElem::NEWWDG( NewWdg{ id:id, kind:kind, parent:parent, pargs:pargs, cargs:cargs } ) )
             },
             1  /*WDGMSG*/  => {
-                let id = try!(r.read_le_u16());
+                let id = try!(r.read_u16::<le>());
                 let name = String::from_utf8(try!(r.read_until(0))).unwrap();
                 let args = read_list(&mut r);
                 Ok( RelElem::WDGMSG( WdgMsg{ id:id, name:name, args:args } ) )
             },
             2  /*DSTWDG*/  => {
-                let id = try!(r.read_le_u16());
+                let id = try!(r.read_u16::<le>());
                 Ok( RelElem::DSTWDG( DstWdg{ id:id } ) )
             },
             3  /*MAPIV*/   => { Ok( RelElem::MAPIV(MapIv) ) },
             4  /*GLOBLOB*/ => { Ok( RelElem::GLOBLOB(GlobLob) ) },
             5  /*PAGINAE*/ => { Ok( RelElem::PAGINAE(Paginae) ) },
             6  /*RESID*/   => {
-                let id = try!(r.read_le_u16());
+                let id = try!(r.read_u16::<le>());
                 let name = String::from_utf8(try!(r.read_until(0))).unwrap();
-                let ver = try!(r.read_le_u16());
+                let ver = try!(r.read_u16::<le>());
                 Ok( RelElem::RESID( ResId{ id:id, name:name, ver:ver } ) )
             },
             7  /*PARTY*/   => { Ok( RelElem::PARTY(Party) ) },
@@ -315,7 +303,7 @@ impl RelElem {
                 while !r.eof() {
                     let id = try!(r.read_u8());
                     let name = String::from_utf8(try!(r.read_until(0))).unwrap();
-                    let ver = try!(r.read_le_u16());
+                    let ver = try!(r.read_u16::<le>());
                     tiles.push(TilesElem{ id:id, name:name, ver:ver });
                 }
                 Ok( RelElem::TILES(Tiles{ tiles:tiles }) )
@@ -515,12 +503,12 @@ impl ObjProp {
                 Ok(Some(ObjProp::odREM))
             },
             1   /*OD_MOVE*/ => {
-                let xy = (try!(r.read_le_i32()), try!(r.read_le_i32()));
-                let ia = try!(r.read_le_u16());
+                let xy = (try!(r.read_i32::<le>()), try!(r.read_i32::<le>()));
+                let ia = try!(r.read_u16::<le>());
                 Ok(Some(ObjProp::odMOVE(xy,ia)))
             },
             2   /*OD_RES*/ => {
-                let mut resid = try!(r.read_le_u16());
+                let mut resid = try!(r.read_u16::<le>());
                 if (resid & 0x8000) != 0 {
                     resid &= !0x8000;
                     let sdt_len = try!(r.read_u8()) as usize;
@@ -529,38 +517,38 @@ impl ObjProp {
                 Ok(Some(ObjProp::odRES(resid)))
             },
             3   /*OD_LINBEG*/ => {
-                let s = (try!(r.read_le_i32()), try!(r.read_le_i32()));
-                let t = (try!(r.read_le_i32()), try!(r.read_le_i32()));
-                let c = try!(r.read_le_i32());
+                let s = (try!(r.read_i32::<le>()), try!(r.read_i32::<le>()));
+                let t = (try!(r.read_i32::<le>()), try!(r.read_i32::<le>()));
+                let c = try!(r.read_i32::<le>());
                 Ok(Some(ObjProp::odLINBEG(s,t,c)))
             },
             4   /*OD_LINSTEP*/ => {
-                let l = try!(r.read_le_i32());
+                let l = try!(r.read_i32::<le>());
                 Ok(Some(ObjProp::odLINSTEP(l)))
             },
             5   /*OD_SPEECH*/ => {
-                let zo = try!(r.read_le_u16());
+                let zo = try!(r.read_u16::<le>());
                 let text = String::from_utf8(try!(r.read_until(0))).unwrap();
                 Ok(Some(ObjProp::odSPEECH(zo,text)))
             },
             6   /*OD_COMPOSE*/ => {
-                let resid = try!(r.read_le_u16());
+                let resid = try!(r.read_u16::<le>());
                 Ok(Some(ObjProp::odCOMPOSE(resid)))
             },
             7   /*OD_DRAWOFF*/ => {
-                let off = (try!(r.read_le_i32()), try!(r.read_le_i32()));
+                let off = (try!(r.read_i32::<le>()), try!(r.read_i32::<le>()));
                 Ok(Some(ObjProp::odDRAWOFF(off)))
             },
             8   /*OD_LUMIN*/ => {
-                let off = (try!(r.read_le_i32()), try!(r.read_le_i32()));
-                let sz = try!(r.read_le_u16());
+                let off = (try!(r.read_i32::<le>()), try!(r.read_i32::<le>()));
+                let sz = try!(r.read_u16::<le>());
                 let str_ = try!(r.read_u8());
                 Ok(Some(ObjProp::odLUMIN(off,sz,str_)))
             },
             9   /*OD_AVATAR*/ => {
                 let mut layers = Vec::new();
                 loop {
-                    let layer = try!(r.read_le_u16());
+                    let layer = try!(r.read_u16::<le>());
                     if layer == 65535 {
                         break;
                     }
@@ -569,36 +557,36 @@ impl ObjProp {
                 Ok(Some(ObjProp::odAVATAR(layers)))
             },
             10  /*OD_FOLLOW*/ => {
-                let oid = try!(r.read_le_u32());
+                let oid = try!(r.read_u32::<le>());
                 if oid == 0xff_ff_ff_ff {
                     Ok(Some(ObjProp::odFOLLOW(odFOLLOW::Stop)))
                 } else {
-                    let xfres = try!(r.read_le_u16());
+                    let xfres = try!(r.read_u16::<le>());
                     let xfname = String::from_utf8(try!(r.read_until(0))).unwrap();
                     Ok(Some(ObjProp::odFOLLOW(odFOLLOW::To(oid,xfres,xfname))))
                 }
             },
             11  /*OD_HOMING*/ => {
-                let oid = try!(r.read_le_u32());
+                let oid = try!(r.read_u32::<le>());
                 match oid {
                     0xff_ff_ff_ff => {
                         Ok(Some(ObjProp::odHOMING(odHOMING::Delete)))
                     },
                     0xff_ff_ff_fe => {
-                        let tgtc = (try!(r.read_le_i32()), try!(r.read_le_i32()));
-                        let v = try!(r.read_le_u16());
+                        let tgtc = (try!(r.read_i32::<le>()), try!(r.read_i32::<le>()));
+                        let v = try!(r.read_u16::<le>());
                         Ok(Some(ObjProp::odHOMING(odHOMING::Change(tgtc,v))))
                     },
                     _             => {
-                        let tgtc = (try!(r.read_le_i32()), try!(r.read_le_i32()));
-                        let v = try!(r.read_le_u16());
+                        let tgtc = (try!(r.read_i32::<le>()), try!(r.read_i32::<le>()));
+                        let v = try!(r.read_u16::<le>());
                         Ok(Some(ObjProp::odHOMING(odHOMING::New(tgtc,v))))
                     }
                 }
             },
             12  /*OD_OVERLAY*/ => {
-                /*let olid =*/ try!(r.read_le_i32());
-                let resid = try!(r.read_le_u16());
+                /*let olid =*/ try!(r.read_i32::<le>());
+                let resid = try!(r.read_u16::<le>());
                 if resid != 65535 {
                     if (resid & 0x8000) != 0 {
                         let sdt_len = try!(r.read_u8()) as usize;
@@ -632,7 +620,7 @@ impl ObjProp {
                 /*let seq =*/ try!(r.read_u8());
                 if (pfl & 2) != 0 {
                     loop {
-                        let /*mut*/ resid = try!(r.read_le_u16());
+                        let /*mut*/ resid = try!(r.read_u16::<le>());
                         if resid == 65535 { break; }
                         if (resid & 0x8000) != 0 {
                             /*resid &= !0x8000;*/
@@ -643,7 +631,7 @@ impl ObjProp {
                 }
                 if (pfl & 4) != 0 {
                     loop {
-                        let /*mut*/ resid = try!(r.read_le_u16());
+                        let /*mut*/ resid = try!(r.read_u16::<le>());
                         if resid == 65535 { break; }
                         if (resid & 0x8000) != 0 {
                             /*resid &= !0x8000;*/
@@ -657,10 +645,10 @@ impl ObjProp {
             },
             17  /*OD_CMPMOD*/ => {
                 loop {
-                    let modif = try!(r.read_le_u16());
+                    let modif = try!(r.read_u16::<le>());
                     if modif == 65535 { break; }
                     loop {
-                        let resid = try!(r.read_le_u16());
+                        let resid = try!(r.read_u16::<le>());
                         if resid == 65535 { break; }
                     }
                 }
@@ -671,17 +659,17 @@ impl ObjProp {
                     let h = try!(r.read_u8());
                     if h == 255 { break; }
                     /*let at =*/ String::from_utf8(try!(r.read_until(0))).unwrap();
-                    /*let resid =*/ try!(r.read_le_u16());
+                    /*let resid =*/ try!(r.read_u16::<le>());
                     if (h & 0x80) != 0 {
-                        /*let x =*/ try!(r.read_le_u16());
-                        /*let y =*/ try!(r.read_le_u16());
-                        /*let z =*/ try!(r.read_le_u16());
+                        /*let x =*/ try!(r.read_u16::<le>());
+                        /*let y =*/ try!(r.read_u16::<le>());
+                        /*let z =*/ try!(r.read_u16::<le>());
                     }
                 }
                 Ok(Some(ObjProp::odCMPEQU))
             },
             19  /*OD_ICON*/ => {
-                let resid = try!(r.read_le_u16());
+                let resid = try!(r.read_u16::<le>());
                 if resid == 65535 {
                     Ok(Some(ObjProp::odICON(odICON::Del)))
                 } else {
@@ -713,13 +701,13 @@ impl Message {
                 Ok( Message::S_SESS( sSess{ err : SessError::new(try!(r.read_u8())) } ) )
             },
             1 /*REL*/ => {
-                let seq = try!(r.read_le_u16());
+                let seq = try!(r.read_u16::<le>());
                 let mut rel_vec = Vec::new();
                 while !r.eof() {
                     let mut rel_type = try!(r.read_u8());
                     let rel_buf = if (rel_type & 0x80) != 0 {
                         rel_type &= !0x80;
-                        let rel_len = try!(r.read_le_u16());
+                        let rel_len = try!(r.read_u16::<le>());
                         try!(r.read_exact(rel_len as usize))
                     } else {
                         try!(r.read_to_end())
@@ -729,7 +717,7 @@ impl Message {
                 Ok( Message::REL( Rel{ seq : seq, rel : rel_vec } ) )
             },
             2 /*ACK*/ => {
-                Ok( Message::ACK( Ack{ seq : try!(r.read_le_u16()) } ) )
+                Ok( Message::ACK( Ack{ seq : try!(r.read_u16::<le>()) } ) )
             },
             3 /*BEAT*/ => {
                 Ok( Message::BEAT )
@@ -738,13 +726,13 @@ impl Message {
                 Ok( Message::MAPREQ( MapReq { x:0, y:0 } /*FIXME should read x,y from buf*/ ) )
             },
             5 /*MAPDATA*/ => {
-                let pktid = try!(r.read_le_i32());
-                let off = try!(r.read_le_u16());
-                let len = try!(r.read_le_u16());
+                let pktid = try!(r.read_i32::<le>());
+                let off = try!(r.read_u16::<le>());
+                let len = try!(r.read_u16::<le>());
                 let buf = try!(r.read_to_end());
                 //println!("    pktid={} off={} len={}", pktid, off, len);
                 //if (off == 0) {
-                //    println!("      coord=({}, {})", r.read_le_i32().unwrap(), r.read_le_i32().unwrap());
+                //    println!("      coord=({}, {})", r.read_i32::<le>().unwrap(), r.read_i32::<le>().unwrap());
                 //    println!("      mmname=\"{}\"", r.read_until(0).unwrap());
                 //    loop {
                 //        let pidx = r.read_u8().unwrap();
@@ -757,8 +745,8 @@ impl Message {
                 let mut obj = Vec::new();
                 while !r.eof() {
                     let fl = try!(r.read_u8());
-                    let id = try!(r.read_le_u32());
-                    let frame = try!(r.read_le_i32());
+                    let id = try!(r.read_u32::<le>());
+                    let frame = try!(r.read_i32::<le>());
                     let mut prop = Vec::new();
                     loop {
                         match try!(ObjProp::from_buf(&mut r)) {
@@ -817,13 +805,13 @@ impl Message {
 
 
 //            1 /*REL*/ => {
-//                let seq = try!(r.read_le_u16());
+//                let seq = try!(r.read_u16::<le>());
 //                let mut rel_vec = Vec::new();
 //                while !r.eof() {
 //                    let mut rel_type = try!(r.read_u8());
 //                    let rel_buf = if (rel_type & 0x80) != 0 {
 //                        rel_type &= !0x80;
-//  FIXME                 let rel_len = try!(r.read_le_u16());
+//  FIXME                 let rel_len = try!(r.read_u16::<le>());
 //                        try!(r.read_exact(rel_len as usize))
 //                    } else {
 //                        try!(r.read_to_end())

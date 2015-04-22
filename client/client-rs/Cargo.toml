@@ -5,17 +5,21 @@ version = "0.0.0"
 authors = ["Aleksander Usov <aleksander.usov@gmail.com>"]
 
 [dependencies]
-rustc-serialize = "0.3.12"
+#rustc-serialize = "0.3.12"
+rustc-serialize = "*"
 byteorder = "*"
+openssl = "*"
+mio = "*"
 
-[dependencies.openssl]
+#[dependencies.openssl]
 #openssl = "0.5.5"
-git = "git://github.com/sfackler/rust-openssl"
+#git = "git://github.com/sfackler/rust-openssl"
 
-[dependencies.mio]
+#[dependencies.mio]
 #git = "https://github.com/AngryLawyer/rust-sdl2"
 #mio = "0.3.0"
 #git = "https://github.com/carllerche/mio"
 #git = "https://github.com/fhartwig/mio.git"
-git = "https://github.com/aleksander/mio.git"
-branch = "fixups"
+
+#git = "https://github.com/aleksander/mio.git"
+#branch = "fixups"
