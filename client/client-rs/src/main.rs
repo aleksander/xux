@@ -4,18 +4,22 @@
 extern crate openssl;
 extern crate rustc_serialize;
 extern crate mio;
+extern crate byteorder;
 
 #[macro_use]
 extern crate log;
 
-use std::old_io::Writer;
-use std::old_io::MemWriter;
+//use std::old_io::Writer;
+//use std::old_io::MemWriter;
+use std::net::tcp;
 use std::net::tcp::TcpStream;
 use std::net::udp::UdpSocket;
 //use std::old_io::net::ip::Ipv4Addr;
 use std::net::SocketAddr;
-use std::old_io::net::addrinfo::get_host_addresses;
-use std::old_io::MemReader;
+//use std::old_io::net::addrinfo::get_host_addresses;
+//use std::old_io::Reader;
+//use std::old_io::MemReader;
+//use std::old_io::Buffer;
 //use std::old_io::timer;
 //use std::old_io::fs;
 //use std::old_io::fs::PathExtensions;
@@ -35,6 +39,11 @@ use std::fmt::Formatter;
 //use std::old_io::{Listener, Acceptor};
 //use std::thread::Thread;
 //use std::sync::mpsc::{Sender, Receiver, channel};
+use std::io::Cursor;
+use byteorder::{LittleEndian, BigEndian, ReadBytesExt, WriteBytesExt};
+use std::io::Read;
+use std::io::Write;
+use std::io::ErrorKind;
 
 /*
 macro_rules! tryio (
@@ -152,14 +161,29 @@ enum MsgList {
     tFLOAT64(f64),
 }
 
-fn read_sublist (r:&mut MemReader) /*TODO return Result instead*/ {
+trait ReadUntil : std::io::Read {
+    fn read_until (&mut self) -> Result<String,Error> {
+        for i in 0..self.len() {
+            if self[i] == 0 {
+                self[..i].from_utf()
+            }
+        }
+    }
+}
+
+fn read_sublist (buf : &[u8]) /*TODO return Result instead*/ {
+    let r = Cursor::new(buf);
     let mut deep = 0us;
     loop {
-        if r.eof() { return; }
-        let t = r.read_u8().unwrap();
+        //if r.len() == 0 { return; }
+        let t = match r.read_u8() {
+            Ok(b) => {b}
+            Err(e) => {return;}
+        };
+        type le = LittleEndian;
         match t {
             /*T_END    */  0  => { if deep == 0 { return; } else { deep -= 1; } },
-            /*T_INT    */  1  => { r.read_le_i32().unwrap(); },
+            /*T_INT    */  1  => { r.read_i32::<le>().unwrap(); },
             /*T_STR    */  2  => { r.read_until(0).unwrap(); },
             /*T_COORD  */  3  => { r.read_le_i32().unwrap(); r.read_le_i32().unwrap(); },
             /*T_UINT8  */  4  => { r.read_u8().unwrap(); },
@@ -185,7 +209,7 @@ fn read_sublist (r:&mut MemReader) /*TODO return Result instead*/ {
     }
 }
 
-fn read_list (r:&mut MemReader) -> Vec<MsgList> /*TODO return Result instead*/ {
+fn read_list (r : &[u8]) -> Vec<MsgList> /*TODO return Result instead*/ {
     let mut list = Vec::new();
     loop {
         if r.eof() { return list; }
@@ -250,9 +274,9 @@ fn read_list (r:&mut MemReader) -> Vec<MsgList> /*TODO return Result instead*/ {
 
 impl RelElem {
     // TODO in the case of Err return Error with backtrace instead of String
-    fn from_buf (kind:u8, buf:&[u8]) -> std::old_io::IoResult<RelElem> {
+    fn from_buf (kind:u8, buf:&[u8]) -> Result<RelElem,Error> {
         //TODO remove MemReader, use buf itself
-        let mut r = MemReader::new(buf.to_vec());
+        let r = buf;
         //XXX RemoteUI.java +53
         match kind {
             0  /*NEWWDG*/  => {
@@ -298,15 +322,16 @@ impl RelElem {
             },
             12 /*BUFF*/    => { Ok( RelElem::BUFF(Buff) ) },
             13 /*SESSKEY*/ => { Ok( RelElem::SESSKEY(SessKey) ) },
-            _  /*UNKNOWN*/ => {
-                Err( std::old_io::IoError {
-                    kind: std::old_io::IoErrorKind::NoProgress,
-                    desc: "unknown REL type",
-                    detail: Some(format!("{}", kind)),
-                } )
-            },
+            _  /*UNKNOWN*/ => { Err( std::io::Error::new( std::io::ErrorKind::NotFound, "unknown REL type") ) },
         }
     }
+    fn to_buf (&self) -> Result<&[u8],Error> {
+        //TODO FIXME to be implemented
+        Ok(&[])
+    }
+    //fn wdgmsg (id, name, args) {
+    //    RelElem::WDGMSG( WdgMsg{ id:id, name:name, args:args } )
+    //}
 }
 
 #[derive(Debug)]
@@ -345,6 +370,14 @@ struct Rel {
     seq : u16,
     rel : Vec<RelElem>
 }
+impl Rel {
+    fn new (seq:u16) -> Rel {
+        Rel{ seq:seq, rel:Vec::new() }
+    }
+    fn append (&self, elem:RelElem) {
+        self.rel.push(elem);
+    }
+}
 impl Debug for Rel {
     fn fmt(&self, f : &mut Formatter) -> std::fmt::Result {
         write!(f, "REL seq={}", self.seq)
@@ -357,7 +390,10 @@ struct Ack {
 #[derive(Debug)]
 struct Beat;
 #[derive(Debug)]
-struct MapReq;
+struct MapReq {
+    x : i32,
+    y : i32,
+}
 struct MapData {
     pktid : i32,
     off   : u16,
@@ -385,7 +421,23 @@ struct ObjDataElem {
     prop  : Vec<ObjProp>,
 }
 #[derive(Debug)]
-struct ObjAck;
+struct ObjAck {
+    obj : Vec<ObjAckElem>,
+}
+impl ObjAck {
+    fn new (objdata: ObjData) -> ObjAck {
+        let objack = ObjAck{ obj : Vec::new() };
+        for o in objdata.obj.iter() {
+            objack.obj.push(ObjAckElem{ id : o.id, frame : o.frame});
+        }
+        objack
+    }
+}
+#[derive(Debug)]
+struct ObjAckElem {
+    id : u32,
+    frame : i32,
+}
 #[derive(Debug)]
 struct Close;
 
@@ -456,7 +508,7 @@ enum odICON {
 }
 
 impl ObjProp {
-    fn from_buf (r:&mut MemReader) -> std::old_io::IoResult<Option<ObjProp>> {
+    fn from_buf (r : &[u8]) -> Result<Option<ObjProp>,Error> {
         let t = try!(r.read_u8()) as usize;
         match t {
             0   /*OD_REM*/ => {
@@ -647,12 +699,12 @@ impl ObjProp {
     }
 }
 
+//use std::old_io::IoErrorKind;
+
 impl Message {
     //TODO return Error with stack trace on Err instead of String
     //TODO get Vec not &[]. return Vec in the case of error
-    fn from_buf (buf:&mut std::old_io::Reader) -> std::old_io::IoResult<Message> {
-        //TODO remove MemReader, use buf directly
-        let mut r = MemReader::new(try!(buf.read_to_end()));
+    fn from_buf (r : &[u8]) -> Result<Message,Error> {
         let mtype = try!(r.read_u8());
         let res = match mtype {
             0 /*SESS*/ => {
@@ -683,7 +735,7 @@ impl Message {
                 Ok( Message::BEAT )
             },
             4 /*MAPREQ*/ => {
-                Ok( Message::MAPREQ(MapReq) )
+                Ok( Message::MAPREQ( MapReq { x:0, y:0 } /*FIXME should read x,y from buf*/ ) )
             },
             5 /*MAPDATA*/ => {
                 let pktid = try!(r.read_le_i32());
@@ -719,18 +771,13 @@ impl Message {
                 Ok( Message::OBJDATA( ObjData{ obj : obj } ) )
             },
             7 /*OBJACK*/ => {
-                Ok( Message::OBJACK(ObjAck) )
+                //TODO FIXME parse ObjAck instead of empty return
+                Ok( Message::OBJACK(ObjAck{obj:Vec::new()}) )
             },
             8 /*CLOSE*/ => {
                 Ok( Message::CLOSE(Close) )
             },
-            _ /*UNKNOWN*/ => {
-                Err( std::old_io::IoError {
-                    kind: std::old_io::IoErrorKind::NoProgress,
-                    desc: "unknown message type",
-                    detail: Some(format!("{}", mtype)),
-                } )
-            }
+            _ /*UNKNOWN*/ => { Err( std::io::Error::new( std::io::ErrorKind::NotFound, "unknown message type" ) ) }
         };
 
         if !r.eof() {
@@ -741,13 +788,14 @@ impl Message {
         res
     }
 
-    fn to_buf (&self) -> std::old_io::IoResult<Vec<u8>> {
-        let mut w = MemWriter::new();
+    fn to_buf (&self) -> Result<Vec<u8>,Error> {
+        //type write_le_u16 = Vec<u8>::write_u16::<LittleEndian>;
+        let mut w = vec![];
         match *self {
             // !!! this is client session message, not server !!!
             Message::C_SESS(sess) => /*(name: &str, cookie: &[u8]) -> Vec<u8>*/ {
                 try!(w.write_u8(0)); // SESS
-                try!(w.write_le_u16(2)); // unknown
+                try!(w.write_u16::<LittleEndian>(2)); // unknown
                 try!(w.write("Salem".as_bytes())); // proto
                 try!(w.write_u8(0));
                 try!(w.write_le_u16(34)); // version
@@ -811,8 +859,18 @@ impl Message {
                 try!(w.write_le_i32(mapreq.y)); // y
                 Ok(w.into_inner())
             }
+            Message::OBJACK(objack) => {
+                //type write_le_u32 = Vec::write_u32<LittleEndian>;
+                let mut w = vec![];
+                w.write_u8(7).unwrap(); //OBJACK writer
+                for o in objack.obj.iter() {
+                    w.write_le_u32(o.id).unwrap();
+                    w.write_le_i32(o.frame).unwrap();
+                }
+                Ok(w.into_inner())
+            }
             _ => {
-                Err(/*...*/)
+                Err(std::io::Error::new(ErrorKind::NotFound, "unknown message type"))
             }
         }
     }
@@ -966,30 +1024,44 @@ impl Client {
         }
     }
 
-    fn authorize (&mut self, user: &'static str, pass: &str, ip: std::old_io::net::ip::IpAddr, port: u16) -> Result<(), Error> {
+    fn authorize (&mut self, user: &'static str, pass: &str, ip: std::net::ip::IpAddr, port: u16) -> Result<(), Error> {
         self.user = user;
         //self.pass = pass;
-        let auth_addr: SocketAddr = SocketAddr {ip: ip, port: port};
+        //let auth_addr: SocketAddr = SocketAddr {ip: ip, port: port};
+        let auth_addr = SocketAddr::new(ip, port);
         println!("authorize {} @ {}", user, auth_addr);
         //TODO add method connect(SocketAddr) to TcpStream
         //let stream = tryio!("tcp.connect" TcpStream::connect(self.auth_addr));
-        let stream = TcpStream::connect(auth_addr);
-        let mut stream = SslStream::new(&SslContext::new(SslMethod::Sslv23).unwrap(), stream).unwrap();
+        let stream = TcpStream::connect(auth_addr).unwrap();
+        let context = SslContext::new(SslMethod::Sslv23).unwrap();
+        let mut stream = SslStream::new(&context, stream).unwrap();
 
         // send 'pw' command
-        // TODO form buffer and send all with one call
-        // TODO tryio!(stream.write(Msg::pw(params...)));
-        stream.write_be_u16((3+user.as_bytes().len()+1+32) as u16).unwrap();
-        stream.write("pw".as_bytes()).unwrap();
-        stream.write_u8(0).unwrap();
-        stream.write(user.as_bytes()).unwrap();
-        stream.write_u8(0).unwrap();
+        let user = user.as_bytes();
+        let buf_len = (3 + user.len() + 1 + 32) as u16;
+        let buf: Vec<u8> = Vec::with_capacity((2 + buf_len) as usize);
+        buf.write_u16::<BigEndian>(buf_len).unwrap();
+        buf.push_all("pw".as_bytes());
+        buf.push(0);
+        buf.push_all(user);
+        buf.push(0);
         let pass_hash = hash(Type::SHA256, pass.as_bytes());
         assert!(pass_hash.len() == 32);
-        stream.write(pass_hash.as_slice()).unwrap();
+        buf.push_all(pass_hash.as_slice());
+        stream.write(buf.as_slice()).unwrap();
         stream.flush().unwrap();
-        let length = stream.read_be_u16().ok().expect("read error");
-        let msg = stream.read_exact(length as usize).ok().expect("read error");
+
+        let mut buf = vec![0,0];
+        let len = stream.read(buf.as_mut_slice()).ok().expect("read error");
+        if len != 2 { return Err(Error{source:"bytes read != 2",detail:None}); }
+        //TODO replace byteorder crate with endian crate ???
+        let mut rdr = Cursor::new(buf);
+        let len = rdr.read_u16::<BigEndian>().unwrap();
+
+        let mut msg: Vec<u8> = Vec::with_capacity(len as usize);
+        msg.resize(len as usize, 0);
+        let len2 = stream.read(msg.as_mut_slice()).ok().expect("read error");
+        if len2 != len as usize { return Err(Error{source:"len2 != len",detail:None}); }
         println!("msg='{}'", str::from_utf8(msg.as_slice()).unwrap());
         //println!("msg='{}'", msg.as_slice().to_hex());
         if msg.len() < "ok\0\0".len() {
@@ -998,18 +1070,30 @@ impl Client {
 
         // send 'cookie' command
         if (msg[0] == ('o' as u8)) && (msg[1] == ('k' as u8)) {
-            // TODO form buffer and send all with one call
             // TODO tryio!(stream.write(Msg::cookie(params...)));
-            stream.write_be_u16(("cookie".as_bytes().len()+1) as u16).unwrap();
-            stream.write("cookie".as_bytes()).unwrap();
-            stream.write_u8(0u8).unwrap();
+            let buf_len = ("cookie".as_bytes().len() + 1) as u16;
+            let buf: Vec<u8> = Vec::with_capacity((2 + buf_len) as usize);
+            buf.write_u16::<BigEndian>(buf_len).unwrap();
+            buf.push_all("cookie".as_bytes());
+            buf.push(0);
+            stream.write(buf.as_slice()).unwrap();
             stream.flush().unwrap();
-            let length = stream.read_be_u16().ok().expect("read error");
-            let msg = stream.read_exact(length as usize).ok().expect("read error");
+
+            let mut buf = vec![0,0];
+            let len = stream.read(buf.as_mut_slice()).ok().expect("read error");
+            if len != 2 { return Err(Error{source:"bytes read != 2",detail:None}); }
+            //TODO replace byteorder crate with endian crate ???
+            let mut rdr = Cursor::new(buf);
+            let len = rdr.read_u16::<BigEndian>().unwrap();
+
+            let mut msg: Vec<u8> = Vec::with_capacity(len as usize);
+            msg.resize(len as usize, 0);
+            let len2 = stream.read(msg.as_mut_slice()).ok().expect("read error");
+            if len2 != len as usize { return Err(Error{source:"len2 != len",detail:None}); }
             //println!("msg='{}'", str::from_utf8(msg.as_slice()).unwrap());
             println!("msg='{}'", msg.as_slice().to_hex());
             //TODO check cookie length
-            self.cookie = msg.slice_from(3).to_vec();
+            self.cookie = msg[3..].to_vec();
             return Ok(());
         }
         return Err(Error{source:"'cookie' command unexpected answer", detail:Some(String::from_utf8(msg).unwrap())});
@@ -1019,8 +1103,11 @@ impl Client {
         /*TODO*/
     }
 
-    fn enqueue_to_send (&self, buf:Vec<u8>, tx_buf:&mut LinkedList<Vec<u8>>) {
-        tx_buf.push_front(buf);
+    fn enqueue_to_send (&self, msg: Message, tx_buf:&mut LinkedList<Vec<u8>>) {
+        match msg.to_buf() {
+            Ok(buf) => { tx_buf.push_front(buf); },
+            Err(e) => { println!("enqueue error: {}", e); },
+        }
     }
 
     /*
@@ -1033,8 +1120,8 @@ impl Client {
         /*TODO*/
     }
 
-    fn dispatch_message (&mut self, buf:&mut std::old_io::Reader, tx_buf:&mut LinkedList<Vec<u8>>) {
-        let msg = match Message::from_buf(buf) {
+    fn dispatch_message (&mut self, buf:&[u8], tx_buf:&mut LinkedList<Vec<u8>>) {
+        let msg = match Message::from_buf(&mut buf) {
             Ok(msg) => { msg },
             Err(err) => { println!("message parse error: {}", err); return; },
         };
@@ -1059,7 +1146,7 @@ impl Client {
             Message::REL( rel ) => {
                 //TODO do not process duplicates, but ACK only
                 //XXX are we handle seq right in the case of overflow ???
-                self.enqueue_to_send(Message::ACK(rel.seq + ((rel.rel.len() as u16) - 1)), tx_buf);
+                self.enqueue_to_send(Message::ACK(Ack{seq : rel.seq + ((rel.rel.len() as u16) - 1)}), tx_buf);
                 for r in rel.rel.iter() {
                     println!("    {:?}", r);
                     match *r {
@@ -1105,18 +1192,12 @@ impl Client {
                 }
             },
             Message::ACK(_)     => {},
-            Message::BEAT(_)    => { println!("     !!! client must not receive BEAT !!!"); },
+            Message::BEAT    => { println!("     !!! client must not receive BEAT !!!"); },
             Message::MAPREQ(_)  => { println!("     !!! client must not receive MAPREQ !!!"); },
             Message::MAPDATA(_) => {},
             Message::OBJDATA( objdata ) => {
-                let mut w = MemWriter::new();
-                w.write_u8(7).unwrap(); //OBJACK writer
-                for o in objdata.obj.iter() {
-                    w.write_le_u32(o.id).unwrap();
-                    w.write_le_i32(o.frame).unwrap();
-                }
                 //TODO receiver_to_sender.send(objdata.to_buf());
-                self.enqueue_to_send(w.into_inner(), tx_buf); // send OBJACKs
+                self.enqueue_to_send(Message::OBJACK(ObjAck::new(objdata)), tx_buf); // send OBJACKs
                 for o in objdata.obj.iter() {
                     println!("    {:?}", o);
                 }
@@ -1138,7 +1219,7 @@ impl Client {
                                 }
                             }
                         },
-                        None => { error!("thats cant be"); },
+                        None => unreachable!(),
                     };
                 }
                 for o in self.objects.values() {
@@ -1160,7 +1241,16 @@ impl Client {
         //TODO send REL until reply
         if self.charlist.len() > 0 {
             println!("send play '{}'", self.charlist[0]);
-            self.enqueue_to_send(Message::REL(0, self.charlist[0].as_slice()), tx_buf);
+            let char_name = self.charlist[0].as_slice();
+            //FIXME sequence is ALWAYS ZERO!! get sequence from client
+            let rel = Rel{seq:0, rel:Vec::new()};
+            let id : u16 = 3; //FIXME get widget id by name
+            let name : String = "play".to_string();
+            let args : Vec<MsgList> = Vec::new();
+            args.push(MsgList::tSTR(self.charlist[0]));
+            let elem = RelElem::WDGMSG(WdgMsg{ id : id, name : name, args : args });
+            rel.rel.push(elem);
+            self.enqueue_to_send(Message::REL(rel), tx_buf);
             self.charlist.clear();
         }
     }
@@ -1168,14 +1258,14 @@ impl Client {
     fn connect (&self, tx_buf:&mut LinkedList<Vec<u8>>) {
         //TODO send SESS until reply
         //TODO get username from server responce, not from auth username
-        self.enqueue_to_send(Message::C_SESS(self.user.as_slice(), self.cookie.as_slice()), tx_buf);
+        self.enqueue_to_send(Message::C_SESS(cSess{login:self.user.to_string(), cookie:self.cookie}), tx_buf);
     }
 
     fn mapreq (&self, x:i32, y:i32, tx_buf:&mut LinkedList<Vec<u8>>) {
         //TODO send until reply
         //TODO replace with client.send(Message::MapReq::new(x,y).to_buf())
         //     or client.send(Message::mapreq(x,y).to_buf())
-        self.enqueue_to_send(Message::MAPREQ(x,y), tx_buf);
+        self.enqueue_to_send(Message::MAPREQ(MapReq{x:x,y:y}), tx_buf);
     }
 
 }
@@ -1197,17 +1287,17 @@ fn main() {
     //use mio::event::{READABLE,WRITABLE,LEVEL};
 
     struct UdpHandler<'a> {
-        sock: mio::net::udp::UdpSocket,
-        rx_buf: mio::buf::RingBuf,
+        sock: mio::nonblock::NonBlock<mio::net::udp::UdpSocket>,
+        addr: std::net::SocketAddr,
         tx_buf: LinkedList<Vec<u8>>,
         client: &'a mut Client,
         start: bool,
     }
     impl<'a> UdpHandler<'a> {
-        fn new(sock: mio::net::udp::UdpSocket, client:&'a mut Client) -> UdpHandler<'a> {
+        fn new(sock: mio::nonblock::NonBlock<mio::net::udp::UdpSocket>, client:&'a mut Client, addr: std::net::SocketAddr) -> UdpHandler<'a> {
             UdpHandler {
                 sock: sock,
-                rx_buf: mio::buf::RingBuf::new(65535),
+                addr: addr,
                 tx_buf: LinkedList::new(),
                 client: client,
                 start: true,
@@ -1215,23 +1305,27 @@ fn main() {
         }
     }
     const CLIENT: mio::Token = mio::Token(0);
-    impl<'a> mio::Handler<usize, ()> for UdpHandler<'a> {
-        fn readable(&mut self, _/*event_loop*/: &mut ClientEventLoop, token: mio::Token, _: mio::event::ReadHint) {
+    impl<'a> mio::Handler for UdpHandler<'a> {
+        type Timeout = usize;
+        type Message = ();
+        fn readable(&mut self, _/*event_loop*/: &mut mio::EventLoop<UdpHandler>, token: mio::Token, _: mio::event::ReadHint) {
             //use mio::buf::Buf;
             match token {
                 CLIENT => {
-                    self.sock.read(&mut self.rx_buf.writer()).unwrap();
+                    let rx_buf = mio::buf::RingBuf::new(65535);
+                    self.sock.recv_from(&mut rx_buf).unwrap();
                     let mut client: &mut Client = self.client;
+                    let buf: &[u8] = mio::buf::Buf::bytes(&rx_buf);
                     //XXX inspect why borrow checker error if I call self.client.dispatch_message
                     //TODO let out:Vec<Buf> = client.dispatch(); send_all(out);
-                    client.dispatch_message(&mut self.rx_buf.reader(), &mut self.tx_buf);
+                    client.dispatch_message(buf, &mut self.tx_buf);
                     //assert!(str::from_utf8(self.rx_buf.reader().bytes()).unwrap() == self.msg);
                     //event_loop.shutdown();
                 },
                 _ => ()
             }
         }
-        fn writable(&mut self, _: &mut ClientEventLoop, token: mio::Token) {
+        fn writable(&mut self, _: &mut mio::EventLoop<UdpHandler>, token: mio::Token) {
             use mio::buf::Buf;
             match token {
                 CLIENT => {
@@ -1243,9 +1337,8 @@ fn main() {
                         Some(data) => {
                             let mut buf = mio::buf::SliceBuf::wrap(data.as_slice());
                             //TODO parse and print message
-                            println!("TX: {:?}", Message::from_buf(buf));
-                            //                                     ^^^- this implements Reader. why this error???
-                            self.sock.write(&mut buf).unwrap();
+                            //TODO println!("TX: {:?}", Message::from_buf(buf));
+                            self.sock.send_to(&mut buf, &self.addr).unwrap();
                             self.start = false;
                         },
                         None => {}
@@ -1256,15 +1349,24 @@ fn main() {
         }
     }
     //TODO every 5 seconds >>> Client::enqueue_to_send(beat());
-    let server_ip = get_host_addresses("game.salemthegame.com").unwrap()[0];
-    let addr = mio::net::SockAddr::InetAddr(server_ip, 1870);
-    let sock = mio::net::udp::UdpSocket::v4().unwrap();
-    type ClientEventLoop = mio::EventLoop<usize, ()>;
-    let mut event_loop = mio::EventLoop::new().unwrap();
+    //let server_ip = get_host_addresses("game.salemthegame.com").unwrap()[0];
+    let hostname = "game.salemthegame.com";
+    let server_ip = match std::net::lookup_host(hostname) {
+        Ok(ips) => {
+            ips.next().expect("host has None ip").unwrap().ip()
+        },
+        Err(e) => {
+            println!("couldn't resolve {}: {}", hostname, e);
+            return;
+        }
+    };
+    //FIXME let addr = mio::net::SockAddr::InetAddr(server_ip, 1870);
+    let any = str::FromStr::from_str("0.0.0.0:0").unwrap();
+    let sock = mio::net::udp::bind(&any).unwrap();
+    //type ClientEventLoop = mio::EventLoop<usize>;
     println!("connect to {}", server_ip);
-    sock.connect(&addr).unwrap();
+    //FIXME sock.connect(&addr).unwrap();
     sock.set_reuseaddr(true).ok().expect("set_reuseaddr");
-    event_loop.register_opt(&sock, CLIENT, READABLE|WRITABLE, LEVEL).ok().expect("loop.register_opt");
 
     //TODO return Result and match
     let mut client = Client::new(/*"game.salemthegame.com", 1871, 1870*/);
@@ -1279,11 +1381,16 @@ fn main() {
         }
     };
 
-    let mut handler = UdpHandler::new(sock, &mut client);
+    
+    let mut handler = UdpHandler::new(sock, &mut client, std::net::lookup_host(hostname).unwrap().next().expect("host has None ip").unwrap());
     handler.client.connect(&mut handler.tx_buf); //TODO return Result and match
 
     info!("run event loop");
-    event_loop.run(handler).ok().expect("Failed to run the event loop");
+    let mut event_loop = mio::EventLoop::new().unwrap();
+    event_loop.register_opt(&sock, CLIENT, mio::Interest::readable() |
+                                           mio::Interest::writable(),
+                                           mio::PollOpt::level()).ok().expect("loop.register_opt");
+    event_loop.run(&mut handler).ok().expect("Failed to run the event loop");
 
     //client.wait_for_end();
 
