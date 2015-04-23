@@ -31,6 +31,7 @@ use std::io::BufRead;
 use std::io::Write;
 use std::io::ErrorKind;
 
+#[derive(Debug)]
 struct Error {
     source: &'static str,
     detail: Option<String>,
@@ -146,7 +147,7 @@ enum MsgList {
 
 type le = LittleEndian;
 
-fn read_sublist (r : std::io::cursor::Cursor<&[u8]> /*buf : &[u8]*/) /*TODO return Result instead*/ {
+fn read_sublist (r : &std::io::cursor::Cursor<&[u8]> /*buf : &[u8]*/) /*TODO return Result instead*/ {
     //let r = Cursor::new(buf);
     let mut deep = 0;
     loop {
@@ -188,8 +189,8 @@ fn read_sublist (r : std::io::cursor::Cursor<&[u8]> /*buf : &[u8]*/) /*TODO retu
     }
 }
 
-fn read_list (buf : &[u8]) -> Vec<MsgList> /*TODO return Result instead*/ {
-    let r = Cursor::new(buf);
+fn read_list (r : &std::io::cursor::Cursor<&[u8]>) -> Vec<MsgList> /*TODO return Result instead*/ {
+    //let r = Cursor::new(buf);
     let mut list = Vec::new();
     loop {
         //if r.eof() { return list; }
@@ -267,8 +268,7 @@ fn read_list (buf : &[u8]) -> Vec<MsgList> /*TODO return Result instead*/ {
 impl RelElem {
     // TODO in the case of Err return Error with backtrace instead of String
     fn from_buf (kind:u8, buf:&[u8]) -> Result<RelElem,Error> {
-        //TODO remove MemReader, use buf itself
-        let r = buf;
+        let r = Cursor::new(buf);
         //XXX RemoteUI.java +53
         match kind {
             0  /*NEWWDG*/  => {
@@ -519,7 +519,8 @@ enum odICON {
 }
 
 impl ObjProp {
-    fn from_buf (r : &[u8]) -> Result<Option<ObjProp>,Error> {
+    fn from_buf (r : &std::io::cursor::Cursor<&[u8]>) -> Result<Option<ObjProp>,Error> {
+        //let r = Cursor::new(buf);
         let t = try!(r.read_u8()) as usize;
         match t {
             0   /*OD_REM*/ => {
@@ -743,7 +744,8 @@ impl ObjProp {
 impl Message {
     //TODO return Error with stack trace on Err instead of String
     //TODO get Vec not &[]. return Vec in the case of error
-    fn from_buf (r : &[u8]) -> Result<Message,Error> {
+    fn from_buf (buf : &[u8]) -> Result<Message,Error> {
+        let r = Cursor::new(buf);
         let mtype = try!(r.read_u8());
         let res = match mtype {
             0 /*SESS*/ => {
@@ -763,9 +765,15 @@ impl Message {
                     let rel_buf = if (rel_type & 0x80) != 0 {
                         rel_type &= !0x80;
                         let rel_len = try!(r.read_u16::<le>());
-                        try!(r.read_exact(rel_len as usize))
+                        let tmp = vec![0; rel_len as usize];
+                        let b = r.read(&mut tmp).unwrap();
+                        assert_eq!(b, rel_len as usize);
+                        tmp
+                        //try!(r.read_exact(rel_len as usize))
                     } else {
-                        try!(r.read_to_end())
+                        let tmp = Vec::new();
+                        try!(r.read_to_end(&mut tmp));
+                        tmp
                     };
                     rel_vec.push(try!(RelElem::from_buf(rel_type, rel_buf.as_slice())));
                 }
@@ -784,7 +792,8 @@ impl Message {
                 let pktid = try!(r.read_i32::<le>());
                 let off = try!(r.read_u16::<le>());
                 let len = try!(r.read_u16::<le>());
-                let buf = try!(r.read_to_end());
+                let buf = Vec::new();
+                try!(r.read_to_end(&mut buf));
                 //println!("    pktid={} off={} len={}", pktid, off, len);
                 //if (off == 0) {
                 //    println!("      coord=({}, {})", r.read_i32::<le>().unwrap(), r.read_i32::<le>().unwrap());
@@ -798,8 +807,11 @@ impl Message {
             },
             6 /*OBJDATA*/ => {
                 let mut obj = Vec::new();
-                while !r.eof() {
-                    let fl = try!(r.read_u8());
+                loop {
+                    let fl = match r.read_u8() {
+                        Ok(b) => {b}
+                        Err(e) => {break;}
+                    };
                     let id = try!(r.read_u32::<le>());
                     let frame = try!(r.read_i32::<le>());
                     let mut prop = Vec::new();
@@ -820,11 +832,12 @@ impl Message {
             8 /*CLOSE*/ => {
                 Ok( Message::CLOSE(Close) )
             },
-            _ /*UNKNOWN*/ => { Err( std::io::Error::new( std::io::ErrorKind::NotFound, "unknown message type" ) ) }
+            _ /*UNKNOWN*/ => { Err( Error{ source:"unknown message type", detail:None } ) }
         };
 
-        if !r.eof() {
-            let remains = try!(r.read_to_end());
+        let remains = Vec::new();
+        try!(r.read_to_end(&mut remains));
+        if (!remains.is_empty()) {
             println!("                       REMAINS {} bytes", remains.len());
         }
 
@@ -832,7 +845,7 @@ impl Message {
     }
 
     fn to_buf (&self) -> Result<Vec<u8>,Error> {
-        //type write_le_u16 = Vec<u8>::write_u16::<LittleEndian>;
+        //type write_u16::<le> = Vec<u8>::write_u16::<LittleEndian>;
         let mut w = vec![];
         match *self {
             // !!! this is client session message, not server !!!
@@ -841,21 +854,21 @@ impl Message {
                 try!(w.write_u16::<LittleEndian>(2)); // unknown
                 try!(w.write("Salem".as_bytes())); // proto
                 try!(w.write_u8(0));
-                try!(w.write_le_u16(34)); // version
+                try!(w.write_u16::<le>(34)); // version
                 try!(w.write(sess.login.as_bytes())); // login
                 try!(w.write_u8(0));
-                try!(w.write_le_u16(32)); // cookie length
+                try!(w.write_u16::<le>(32)); // cookie length
                 try!(w.write(sess.cookie.as_slice())); // cookie
-                Ok(w.into_inner())
+                Ok(w)
             }
             Message::ACK(ack) => /*ack (seq: u16) -> Vec<u8>*/ {
                 try!(w.write_u8(2)); //ACK
-                try!(w.write_le_u16(ack.seq));
-                Ok(w.into_inner())
+                try!(w.write_u16::<le>(ack.seq));
+                Ok(w)
             }
             Message::BEAT => /* beat () -> Vec<u8> */ {
                 try!(w.write_u8(3)); //BEAT
-                Ok(w.into_inner())
+                Ok(w)
             }
 
 
@@ -880,13 +893,13 @@ impl Message {
 
             Message::REL(rel) => /* rel_wdgmsg_play (seq: u16, name: &str) -> Vec<u8> */ {
                 try!(w.write_u8(1)); // REL
-                try!(w.write_le_u16(rel.seq));// sequence
+                try!(w.write_u16::<le>(rel.seq));// sequence
                 for rel_elem in rel.rel {
                     let rel_elem_buf = try!(rel_elem.to_buf());
                     try!(w.write(rel_elem_buf));
 
 //                    try!(w.write_u8(1));// rel type WDGMSG
-//                    try!(w.write_le_u16(3));// widget id
+//                    try!(w.write_u16::<le>(3));// widget id
 //                    try!(w.write("play".as_bytes()));// message name
 //  FIXME             try!(w.write_u8(0));
 //                    // args list
@@ -894,26 +907,26 @@ impl Message {
 //                    try!(w.write(rel.name.as_bytes())); // element
 //                    try!(w.write_u8(0));
                 }
-                Ok(w.into_inner())
+                Ok(w)
             }
             Message::MAPREQ(mapreq) => /* mapreq (x:i32, y:i32) -> Vec<u8> */ {
                 try!(w.write_u8(4)); // MAPREQ
-                try!(w.write_le_i32(mapreq.x)); // x
-                try!(w.write_le_i32(mapreq.y)); // y
-                Ok(w.into_inner())
+                try!(w.write_i32::<le>(mapreq.x)); // x
+                try!(w.write_i32::<le>(mapreq.y)); // y
+                Ok(w)
             }
             Message::OBJACK(objack) => {
-                //type write_le_u32 = Vec::write_u32<LittleEndian>;
+                //type write_u32::<le> = Vec::write_u32<LittleEndian>;
                 let mut w = vec![];
                 w.write_u8(7).unwrap(); //OBJACK writer
                 for o in objack.obj.iter() {
-                    w.write_le_u32(o.id).unwrap();
-                    w.write_le_i32(o.frame).unwrap();
+                    w.write_u32::<le>(o.id).unwrap();
+                    w.write_i32::<le>(o.frame).unwrap();
                 }
-                Ok(w.into_inner())
+                Ok(w)
             }
             _ => {
-                Err(std::io::Error::new(ErrorKind::NotFound, "unknown message type"))
+                Err( Error{ source:"unknown message type", detail:None } )
             }
         }
     }
@@ -1149,7 +1162,7 @@ impl Client {
     fn enqueue_to_send (&self, msg: Message, tx_buf:&mut LinkedList<Vec<u8>>) {
         match msg.to_buf() {
             Ok(buf) => { tx_buf.push_front(buf); },
-            Err(e) => { println!("enqueue error: {}", e); },
+            Err(e) => { println!("enqueue error: {:?}", e); },
         }
     }
 
@@ -1166,7 +1179,7 @@ impl Client {
     fn dispatch_message (&mut self, buf:&[u8], tx_buf:&mut LinkedList<Vec<u8>>) {
         let msg = match Message::from_buf(&mut buf) {
             Ok(msg) => { msg },
-            Err(err) => { println!("message parse error: {}", err); return; },
+            Err(err) => { println!("message parse error: {:?}", err); return; },
         };
         println!("RX: {:?}", msg);
         match msg {
@@ -1201,7 +1214,7 @@ impl Client {
                             match self.widgets.get(&(msg.id)) {
                                 None => {},
                                 Some(c) => {
-                                    if (c.as_slice() == "charlist\0") && (msg.name.as_slice() == "add\0") {
+                                    if (c == "charlist\0") && (msg.name == "add\0") {
                                         match msg.args[0] {
                                             MsgList::tSTR(ref char_name) => {
                                                 println!("    add char '{}'", char_name);
@@ -1284,7 +1297,7 @@ impl Client {
         //TODO send REL until reply
         if self.charlist.len() > 0 {
             println!("send play '{}'", self.charlist[0]);
-            let char_name = self.charlist[0].as_slice();
+            let char_name = self.charlist[0];
             //FIXME sequence is ALWAYS ZERO!! get sequence from client
             let rel = Rel{seq:0, rel:Vec::new()};
             let id : u16 = 3; //FIXME get widget id by name
