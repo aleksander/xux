@@ -36,6 +36,14 @@ struct Error {
     detail: Option<String>,
 }
 
+impl From<byteorder::new::Error> for Error {
+    fn from (err:byteorder::new::Error) -> Error { Error {source:"TODO: some error", detail:None} }
+}
+
+impl From<std::io::error::Error> for Error {
+    fn from (err:std::io::error::Error) -> Error { Error {source:"TODO: some error", detail:None} }
+}
+
 struct Obj {
     resid : u16,
     xy : (i32,i32),
@@ -277,7 +285,11 @@ impl RelElem {
             },
             1  /*WDGMSG*/  => {
                 let id = try!(r.read_u16::<le>());
-                let name = String::from_utf8(try!(r.read_until(0))).unwrap();
+                let name = {
+                    let tmp = Vec::new();
+                    r.read_until(0, &mut tmp).unwrap();
+                    String::from_utf8(tmp).unwrap()
+                };
                 let args = read_list(&mut r);
                 Ok( RelElem::WDGMSG( WdgMsg{ id:id, name:name, args:args } ) )
             },
@@ -290,7 +302,11 @@ impl RelElem {
             5  /*PAGINAE*/ => { Ok( RelElem::PAGINAE(Paginae) ) },
             6  /*RESID*/   => {
                 let id = try!(r.read_u16::<le>());
-                let name = String::from_utf8(try!(r.read_until(0))).unwrap();
+                let name = {
+                    let tmp = Vec::new();
+                    r.read_until(0, &mut tmp).unwrap();
+                    String::from_utf8(tmp).unwrap()
+                };
                 let ver = try!(r.read_u16::<le>());
                 Ok( RelElem::RESID( ResId{ id:id, name:name, ver:ver } ) )
             },
@@ -300,9 +316,16 @@ impl RelElem {
             10 /*MUSIC*/   => { Ok( RelElem::MUSIC(Music) ) },
             11 /*TILES*/   => {
                 let mut tiles = Vec::new();
-                while !r.eof() {
-                    let id = try!(r.read_u8());
-                    let name = String::from_utf8(try!(r.read_until(0))).unwrap();
+                loop {
+                    let id = match r.read_u8() {
+                        Ok(b) => {b}
+                        Err(e) => {break;}
+                    };
+                    let name = {
+                        let tmp = Vec::new();
+                        r.read_until(0, &mut tmp).unwrap();
+                        String::from_utf8(tmp).unwrap()
+                    };
                     let ver = try!(r.read_u16::<le>());
                     tiles.push(TilesElem{ id:id, name:name, ver:ver });
                 }
@@ -310,7 +333,7 @@ impl RelElem {
             },
             12 /*BUFF*/    => { Ok( RelElem::BUFF(Buff) ) },
             13 /*SESSKEY*/ => { Ok( RelElem::SESSKEY(SessKey) ) },
-            _  /*UNKNOWN*/ => { Err( std::io::Error::new( std::io::ErrorKind::NotFound, "unknown REL type") ) },
+            _  /*UNKNOWN*/ => { Err( Error{ source:"unknown REL type", detail:None } ) },
         }
     }
     fn to_buf (&self) -> Result<&[u8],Error> {
@@ -511,8 +534,11 @@ impl ObjProp {
                 let mut resid = try!(r.read_u16::<le>());
                 if (resid & 0x8000) != 0 {
                     resid &= !0x8000;
-                    let sdt_len = try!(r.read_u8()) as usize;
-                    let _/*sdt*/ = try!(r.read_exact(sdt_len)); //TODO
+                    let sdt_len = r.read_u8().unwrap();
+                    let sdt = vec![0; sdt_len as usize];
+                    let b = r.read(&mut sdt).unwrap();
+                    assert_eq!(b, sdt_len as usize);
+                    //let _/*sdt*/ = try!(r.read_exact(sdt_len));
                 }
                 Ok(Some(ObjProp::odRES(resid)))
             },
@@ -528,7 +554,11 @@ impl ObjProp {
             },
             5   /*OD_SPEECH*/ => {
                 let zo = try!(r.read_u16::<le>());
-                let text = String::from_utf8(try!(r.read_until(0))).unwrap();
+                let text = {
+                    let tmp = Vec::new();
+                    r.read_until(0, &mut tmp).unwrap();
+                    String::from_utf8(tmp).unwrap()
+                };
                 Ok(Some(ObjProp::odSPEECH(zo,text)))
             },
             6   /*OD_COMPOSE*/ => {
@@ -562,7 +592,11 @@ impl ObjProp {
                     Ok(Some(ObjProp::odFOLLOW(odFOLLOW::Stop)))
                 } else {
                     let xfres = try!(r.read_u16::<le>());
-                    let xfname = String::from_utf8(try!(r.read_until(0))).unwrap();
+                    let xfname = {
+                        let tmp = Vec::new();
+                        r.read_until(0, &mut tmp).unwrap();
+                        String::from_utf8(tmp).unwrap()
+                    };
                     Ok(Some(ObjProp::odFOLLOW(odFOLLOW::To(oid,xfres,xfname))))
                 }
             },
@@ -590,7 +624,10 @@ impl ObjProp {
                 if resid != 65535 {
                     if (resid & 0x8000) != 0 {
                         let sdt_len = try!(r.read_u8()) as usize;
-                        /*let sdt =*/ try!(r.read_exact(sdt_len)); //TODO
+                        let sdt = vec![0; sdt_len as usize];
+                        let b = r.read(&mut sdt).unwrap();
+                        assert_eq!(b, sdt_len as usize);
+                        //let sdt = try!(r.read_exact(sdt_len)); //TODO
                     }
                 }
                 Ok(Some(ObjProp::odOVERLAY( resid&(!0x8000) )))
@@ -603,7 +640,11 @@ impl ObjProp {
                 Ok(Some(ObjProp::odHEALTH(hp)))
             },
             15  /*OD_BUDDY*/ => {
-                let name = String::from_utf8(try!(r.read_until(0))).unwrap();
+                let name = {
+                    let tmp = Vec::new();
+                    r.read_until(0, &mut tmp).unwrap();
+                    String::from_utf8(tmp).unwrap()
+                };
                 //XXX FIXME C string is not like Rust string, it has \0 at the end,
                 //          so this check is incorrect, I SUPPOSE.
                 //          MOST PROBABLY we will crash here because 2 more readings.
@@ -625,7 +666,10 @@ impl ObjProp {
                         if (resid & 0x8000) != 0 {
                             /*resid &= !0x8000;*/
                             let sdt_len = try!(r.read_u8()) as usize;
-                            /*let sdt =*/ try!(r.read_exact(sdt_len));
+                            let sdt = vec![0; sdt_len as usize];
+                            let b = r.read(&mut sdt).unwrap();
+                            assert_eq!(b, sdt_len as usize);
+                            //let sdt = try!(r.read_exact(sdt_len));
                         }
                     }
                 }
@@ -636,7 +680,10 @@ impl ObjProp {
                         if (resid & 0x8000) != 0 {
                             /*resid &= !0x8000;*/
                             let sdt_len = try!(r.read_u8()) as usize;
-                            /*let sdt =*/ try!(r.read_exact(sdt_len));
+                            let sdt = vec![0; sdt_len as usize];
+                            let b = r.read(&mut sdt).unwrap();
+                            assert_eq!(b, sdt_len as usize);
+                            //let sdt = try!(r.read_exact(sdt_len));
                         }
                     }
                     /*let ttime =*/ try!(r.read_u8());
@@ -658,7 +705,11 @@ impl ObjProp {
                 loop {
                     let h = try!(r.read_u8());
                     if h == 255 { break; }
-                    /*let at =*/ String::from_utf8(try!(r.read_until(0))).unwrap();
+                    let at = {
+                        let tmp = Vec::new();
+                        r.read_until(0, &mut tmp).unwrap();
+                        String::from_utf8(tmp).unwrap()
+                    };
                     /*let resid =*/ try!(r.read_u16::<le>());
                     if (h & 0x80) != 0 {
                         /*let x =*/ try!(r.read_u16::<le>());
@@ -703,8 +754,12 @@ impl Message {
             1 /*REL*/ => {
                 let seq = try!(r.read_u16::<le>());
                 let mut rel_vec = Vec::new();
-                while !r.eof() {
-                    let mut rel_type = try!(r.read_u8());
+                loop {
+                    let mut rel_type = match r.read_u8() {
+                        Ok(b) => {b}
+                        Err(e) => {break;}
+                    };
+                    //let mut rel_type = try!(r.read_u8());
                     let rel_buf = if (rel_type & 0x80) != 0 {
                         rel_type &= !0x80;
                         let rel_len = try!(r.read_u16::<le>());
