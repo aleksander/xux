@@ -150,7 +150,9 @@ enum MsgList {
     tFLOAT64(f64),
 }
 
+#[allow(non_camel_case_types)]
 type le = LittleEndian;
+#[allow(non_camel_case_types)]
 type be = BigEndian;
 
 fn read_sublist (r : &mut std::io::Cursor<&[u8]> /*buf : &[u8]*/) /*TODO return Result instead*/ {
@@ -160,7 +162,7 @@ fn read_sublist (r : &mut std::io::Cursor<&[u8]> /*buf : &[u8]*/) /*TODO return 
         //if r.len() == 0 { return; }
         let t = match r.read_u8() {
             Ok(b) => {b}
-            Err(e) => {return;}
+            Err(_) => {return;}
         };
         match t {
             /*T_END    */  0  => { if deep == 0 { return; } else { deep -= 1; } },
@@ -202,7 +204,7 @@ fn read_list (r : &mut std::io::Cursor<&[u8]>) -> Vec<MsgList> /*TODO return Res
         //let t = r.read_u8().unwrap();
         let t = match r.read_u8() {
             Ok(b) => {b}
-            Err(e) => {return list;}
+            Err(_) => {return list;}
         };
         match t {
             /*T_END    */  0  => { return list; },
@@ -324,7 +326,7 @@ impl RelElem {
                 loop {
                     let id = match r.read_u8() {
                         Ok(b) => {b}
-                        Err(e) => {break;}
+                        Err(_) => {break;}
                     };
                     let name = {
                         let mut tmp = Vec::new();
@@ -373,10 +375,12 @@ impl SessError {
         }
     }
 }
+#[allow(non_camel_case_types)]
 #[derive(Debug)]
 struct sSess {
     err : SessError,
 }
+#[allow(non_camel_case_types)]
 #[derive(Debug)]
 struct cSess {
     login : String,
@@ -386,6 +390,7 @@ struct Rel {
     seq : u16,
     rel : Vec<RelElem>
 }
+#[allow(dead_code)]
 impl Rel {
     fn new (seq:u16) -> Rel {
         Rel{ seq:seq, rel:Vec::new() }
@@ -403,6 +408,7 @@ impl Debug for Rel {
 struct Ack {
     seq : u16,
 }
+#[allow(dead_code)]
 #[derive(Debug)]
 struct Beat;
 #[derive(Debug)]
@@ -457,6 +463,7 @@ struct ObjAckElem {
 #[derive(Debug)]
 struct Close;
 
+#[allow(non_camel_case_types)]
 #[derive(Debug)]
 //TODO replace with plain struct variants
 enum Message {
@@ -692,7 +699,7 @@ impl ObjProp {
                             //let sdt = try!(r.read_exact(sdt_len));
                         }
                     }
-                    /*let ttime =*/ try!(r.read_u8());
+                    let /*ttime*/ _ = try!(r.read_u8());
                 }
                 Ok(Some(ObjProp::odCMPPOSE))
             },
@@ -711,16 +718,16 @@ impl ObjProp {
                 loop {
                     let h = try!(r.read_u8());
                     if h == 255 { break; }
-                    let at = {
+                    let /*at*/ _ = {
                         let mut tmp = Vec::new();
                         r.read_until(0, &mut tmp).unwrap();
                         String::from_utf8(tmp).unwrap()
                     };
-                    /*let resid =*/ try!(r.read_u16::<le>());
+                    let /*resid*/ _ = try!(r.read_u16::<le>());
                     if (h & 0x80) != 0 {
-                        /*let x =*/ try!(r.read_u16::<le>());
-                        /*let y =*/ try!(r.read_u16::<le>());
-                        /*let z =*/ try!(r.read_u16::<le>());
+                        let /*x*/ _ = try!(r.read_u16::<le>());
+                        let /*y*/ _ = try!(r.read_u16::<le>());
+                        let /*z*/ _ = try!(r.read_u16::<le>());
                     }
                 }
                 Ok(Some(ObjProp::odCMPEQU))
@@ -730,7 +737,7 @@ impl ObjProp {
                 if resid == 65535 {
                     Ok(Some(ObjProp::odICON(odICON::Del)))
                 } else {
-                    /*let ifl =*/ try!(r.read_u8());
+                    let /*ifl*/ _ = try!(r.read_u8());
                     Ok(Some(ObjProp::odICON(odICON::Set(resid))))
                 }
             },
@@ -764,7 +771,7 @@ impl Message {
                 loop {
                     let mut rel_type = match r.read_u8() {
                         Ok(b) => {b}
-                        Err(e) => {break;}
+                        Err(_) => {break;}
                     };
                     //let mut rel_type = try!(r.read_u8());
                     let rel_buf = if (rel_type & 0x80) != 0 {
@@ -815,7 +822,7 @@ impl Message {
                 loop {
                     let fl = match r.read_u8() {
                         Ok(b) => {b}
-                        Err(e) => {break;}
+                        Err(_) => {break;}
                     };
                     let id = try!(r.read_u32::<le>());
                     let frame = try!(r.read_i32::<le>());
@@ -842,7 +849,7 @@ impl Message {
 
         let mut remains = Vec::new();
         try!(r.read_to_end(&mut remains));
-        if (!remains.is_empty()) {
+        if !remains.is_empty() {
             println!("                       REMAINS {} bytes", remains.len());
         }
 
@@ -1203,7 +1210,7 @@ impl Client {
                 }
                 Client::start_send_beats();
             },
-            Message::C_SESS(sess) => {/*TODO*/},
+            Message::C_SESS( /*sess*/ _ ) => {/*TODO*/},
             Message::REL( rel ) => {
                 //TODO do not process duplicates, but ACK only
                 //XXX are we handle seq right in the case of overflow ???
@@ -1387,7 +1394,7 @@ fn main() {
             }
         }
         fn writable(&mut self, _: &mut mio::EventLoop<UdpHandler>, token: mio::Token) {
-            use mio::buf::Buf;
+            //use mio::buf::Buf;
             match token {
                 CLIENT => {
                     //info!("WRITABLE");
