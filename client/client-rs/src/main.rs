@@ -98,7 +98,11 @@ struct Tiles {
 }
 impl Debug for Tiles {
     fn fmt(&self, f : &mut Formatter) -> std::fmt::Result {
-        write!(f, "    TILES")
+        try!(write!(f, "Tiles"));
+        for tile in self.tiles.iter() {
+            try!(writeln!(f, "      {:?}", tile));
+        }
+        Ok(())
     }
 }
 #[derive(Debug)]
@@ -344,7 +348,31 @@ impl RelElem {
         }
     }
     fn to_buf (&self) -> Result<&[u8],Error> {
-        //TODO FIXME to be implemented
+//            1 /*REL*/ => {
+//                let seq = try!(r.read_u16::<le>());
+//                let mut rel_vec = Vec::new();
+//                while !r.eof() {
+//                    let mut rel_type = try!(r.read_u8());
+//                    let rel_buf = if (rel_type & 0x80) != 0 {
+//                        rel_type &= !0x80;
+//  FIXME                 let rel_len = try!(r.read_u16::<le>());
+//                        try!(r.read_exact(rel_len as usize))
+//                    } else {
+//                        try!(r.read_to_end())
+//                    };
+//                    rel_vec.push(try!(RelElem::from_buf(rel_type, rel_buf.as_slice())));
+//                }
+//                Ok( Message::REL( Rel{ seq : seq, rel : rel_vec } ) )
+//            },
+
+//                    try!(w.write_u8(1));// rel type WDGMSG
+//                    try!(w.write_u16::<le>(3));// widget id
+//                    try!(w.write("play".as_bytes()));// message name
+//  FIXME             try!(w.write_u8(0));
+//                    // args list
+//                    try!(w.write_u8(2)); // list element type T_STR
+//                    try!(w.write(rel.name.as_bytes())); // element
+//                    try!(w.write_u8(0));
         Ok(&[])
     }
     //fn wdgmsg (id, name, args) {
@@ -401,7 +429,11 @@ impl Rel {
 }
 impl Debug for Rel {
     fn fmt(&self, f : &mut Formatter) -> std::fmt::Result {
-        write!(f, "REL seq={}", self.seq)
+        try!(writeln!(f, "REL seq={}", self.seq));
+        for r in self.rel.iter() {
+            try!(writeln!(f, "    {:?}", r));
+        }
+        Ok(())
     }
 }
 #[derive(Debug)]
@@ -767,7 +799,7 @@ impl Message {
     // }
     //TODO return Error with stack trace on Err instead of String
     //TODO get Vec not &[]. return Vec in the case of error
-    fn from_buf (buf : &[u8], dir : MessageDirection) -> Result<Message,Error> {
+    fn from_buf (buf : &[u8], dir : MessageDirection) -> Result<(Message,Option<Vec<u8>>),Error> {
         let mut r = Cursor::new(buf);
         let mtype = try!(r.read_u8());
         let res = match mtype {
@@ -865,13 +897,14 @@ impl Message {
             _ /*UNKNOWN*/ => { Err( Error{ source:"unknown message type", detail:None } ) }
         };
 
-        let mut remains = Vec::new();
-        try!(r.read_to_end(&mut remains));
-        if !remains.is_empty() {
-            println!("                       REMAINS {} bytes", remains.len());
-        }
+        let mut tmp = Vec::new();
+        try!(r.read_to_end(&mut tmp));
+        let remains = if tmp.is_empty() { None } else { Some(tmp) };
 
-        res
+        match res {
+            Ok(msg) => {Ok((msg,remains))}
+            Err(e) => {Err(e)}
+        }
     }
 
     fn to_buf (self) -> Result<Vec<u8>,Error> {
@@ -884,7 +917,7 @@ impl Message {
                 try!(w.write_u16::<LittleEndian>(2)); // unknown
                 try!(w.write("Salem".as_bytes())); // proto
                 try!(w.write_u8(0));
-                try!(w.write_u16::<le>(34)); // version
+                try!(w.write_u16::<le>(36)); // version
                 try!(w.write(sess.login.as_bytes())); // login
                 try!(w.write_u8(0));
                 try!(w.write_u16::<le>(32)); // cookie length
@@ -903,42 +936,12 @@ impl Message {
                 try!(w.write_u8(3)); //BEAT
                 Ok(w)
             }
-
-
-//            1 /*REL*/ => {
-//                let seq = try!(r.read_u16::<le>());
-//                let mut rel_vec = Vec::new();
-//                while !r.eof() {
-//                    let mut rel_type = try!(r.read_u8());
-//                    let rel_buf = if (rel_type & 0x80) != 0 {
-//                        rel_type &= !0x80;
-//  FIXME                 let rel_len = try!(r.read_u16::<le>());
-//                        try!(r.read_exact(rel_len as usize))
-//                    } else {
-//                        try!(r.read_to_end())
-//                    };
-//                    rel_vec.push(try!(RelElem::from_buf(rel_type, rel_buf.as_slice())));
-//                }
-//                Ok( Message::REL( Rel{ seq : seq, rel : rel_vec } ) )
-//            },
-
-
-
             Message::REL(rel) => /* rel_wdgmsg_play (seq: u16, name: &str) -> Vec<u8> */ {
                 try!(w.write_u8(1)); // REL
                 try!(w.write_u16::<le>(rel.seq));// sequence
                 for rel_elem in rel.rel {
-                    let rel_elem_buf = try!(rel_elem.to_buf());
+                    let rel_elem_buf = try!(rel_elem.to_buf(last_one));
                     try!(w.write(rel_elem_buf));
-
-//                    try!(w.write_u8(1));// rel type WDGMSG
-//                    try!(w.write_u16::<le>(3));// widget id
-//                    try!(w.write("play".as_bytes()));// message name
-//  FIXME             try!(w.write_u8(0));
-//                    // args list
-//                    try!(w.write_u8(2)); // list element type T_STR
-//                    try!(w.write(rel.name.as_bytes())); // element
-//                    try!(w.write_u8(0));
                 }
                 Ok(w)
             }
@@ -1205,28 +1208,28 @@ impl Client {
     }
     */
 
+    /*
     fn shutdown_and_exit () {
         /*TODO*/
     }
+    */
 
-    fn dispatch_message (&mut self, buf:&[u8], tx_buf:&mut LinkedList<Vec<u8>>) {
-        let msg = match Message::from_buf(buf,MessageDirection::FromServer) {
-            Ok(msg) => { msg },
-            Err(err) => { println!("message parse error: {:?}", err); return; },
+    fn dispatch_message (&mut self, buf:&[u8], tx_buf:&mut LinkedList<Vec<u8>>) -> Result<(),Error> {
+        let (msg,remains) = match Message::from_buf(buf,MessageDirection::FromServer) {
+            Ok((msg,remains)) => { (msg,remains) },
+            Err(err) => { println!("message parse error: {:?}", err); return Err(err); },
         };
         println!("RX: {:?}", msg);
+        if let Some(rem) = remains { println!("                 REMAINS {} bytes", rem.len()); }
         match msg {
             Message::S_SESS(sess) => {
                 match sess.err {
                     SessError::OK => {},
                     _ => {
+                        //TODO return Error::from(SessError)
+                        return Err(Error{source:"session error",detail:None});
                         //TODO event_loop.shutdown(); exit();
                         //XXX ??? should we send CLOSE too ???
-                        //FIXME
-                        //  receiver: SESS(Sess { err: BUSY })
-                        //  task '<unnamed>' panicked at 'receiving on a closed channel', ...
-                        //  task '<main>' panicked at 'receiving on a closed channel', ...
-                        //  task '<unnamed>' panicked at 'receiving on a closed channel',
                     }
                 }
                 Client::start_send_beats();
@@ -1237,7 +1240,6 @@ impl Client {
                 //XXX are we handle seq right in the case of overflow ???
                 self.enqueue_to_send(Message::ACK(Ack{seq : rel.seq + ((rel.rel.len() as u16) - 1)}), tx_buf);
                 for r in rel.rel.iter() {
-                    println!("    {:?}", r);
                     match *r {
                         RelElem::NEWWDG(ref wdg) => {
                             self.widgets.insert(wdg.id, wdg.kind.clone()/*FIXME String -> &str*/);
@@ -1270,11 +1272,7 @@ impl Client {
                         RelElem::SFX(_) => {},
                         RelElem::CATTR(_) => {},
                         RelElem::MUSIC(_) => {},
-                        RelElem::TILES(ref tiles) => {
-                            for tile in tiles.tiles.iter() {
-                                println!("      {:?}", tile);
-                            }
-                        },
+                        RelElem::TILES(_) => {},
                         RelElem::BUFF(_) => {},
                         RelElem::SESSKEY(_) => {},
                     }
@@ -1323,7 +1321,8 @@ impl Client {
             },
             Message::OBJACK(_)  => {},
             Message::CLOSE(_)   => {
-                Client::shutdown_and_exit();
+                return Err(Error{source:"session closed",detail:None});
+                //Client::shutdown_and_exit();
             },
         }
 
@@ -1342,6 +1341,8 @@ impl Client {
             self.enqueue_to_send(Message::REL(rel), tx_buf);
             self.charlist.clear();
         }
+
+        Ok(())
     }
 
     fn connect (&self, tx_buf:&mut LinkedList<Vec<u8>>) {
@@ -1397,7 +1398,7 @@ fn main() {
     impl<'a> mio::Handler for UdpHandler<'a> {
         type Timeout = usize;
         type Message = ();
-        fn readable(&mut self, _/*event_loop*/: &mut mio::EventLoop<UdpHandler>, token: mio::Token, _: mio::ReadHint) {
+        fn readable(&mut self, eloop: &mut mio::EventLoop<UdpHandler>, token: mio::Token, _: mio::ReadHint) {
             //use mio::buf::Buf;
             match token {
                 CLIENT => {
@@ -1407,9 +1408,11 @@ fn main() {
                     let buf: &[u8] = mio::buf::Buf::bytes(&rx_buf);
                     //XXX inspect why borrow checker error if I call self.client.dispatch_message
                     //TODO let out:Vec<Buf> = client.dispatch(); send_all(out);
-                    client.dispatch_message(buf, &mut self.tx_buf);
+                    if let Err(e) = client.dispatch_message(buf, &mut self.tx_buf) {
+                        println!("error: {:?}", e);
+                        eloop.shutdown();
+                    }
                     //assert!(str::from_utf8(self.rx_buf.reader().bytes()) == self.msg);
-                    //event_loop.shutdown();
                 },
                 _ => ()
             }
@@ -1425,7 +1428,9 @@ fn main() {
                     match self.tx_buf.pop_back() {
                         Some(data) => {
                             //TODO parse and print message
-                            println!("TX: {:?}", Message::from_buf(data.as_slice(),MessageDirection::FromClient));
+                            if let Ok((msg,_)) = Message::from_buf(data.as_slice(),MessageDirection::FromClient) {
+                                println!("TX: {:?}", msg);
+                            }
                             let mut buf = mio::buf::SliceBuf::wrap(data.as_slice());
                             if let Err(e) = self.sock.send_to(&mut buf, &self.addr) {
                                 println!("send_to error: {}", e);
