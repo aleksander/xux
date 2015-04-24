@@ -752,18 +752,36 @@ impl ObjProp {
 }
 
 //use std::old_io::IoErrorKind;
+enum MessageDirection {
+    FromClient,
+    FromServer,
+}
 
 impl Message {
+    //TODO
+    // fn from_buf_checked (buf,dir) {
+    //     if (this message can be received by this dir) {
+    //         return Ok(buf.from_buf)
+    //     else
+    //         return Err("this king of message can't be received by this side")
+    // }
     //TODO return Error with stack trace on Err instead of String
     //TODO get Vec not &[]. return Vec in the case of error
-    fn from_buf (buf : &[u8]) -> Result<Message,Error> {
+    fn from_buf (buf : &[u8], dir : MessageDirection) -> Result<Message,Error> {
         let mut r = Cursor::new(buf);
         let mtype = try!(r.read_u8());
         let res = match mtype {
             0 /*SESS*/ => {
                 //TODO ??? Ok(Message::sess(err))
                 //     impl Message { fn sess (err: u8) -> Message::SESS { ... } }
-                Ok( Message::S_SESS( sSess{ err : SessError::new(try!(r.read_u8())) } ) )
+                match dir {
+                    MessageDirection::FromClient => {
+                        Ok( Message::C_SESS( cSess{ login : "TODO".to_string(), cookie : vec![] } ) )
+                    }
+                    MessageDirection::FromServer => {
+                        Ok( Message::S_SESS( sSess{ err : SessError::new(try!(r.read_u8())) } ) )
+                    }
+                }
             },
             1 /*REL*/ => {
                 let seq = try!(r.read_u16::<le>());
@@ -872,6 +890,9 @@ impl Message {
                 try!(w.write_u16::<le>(32)); // cookie length
                 try!(w.write(sess.cookie.as_slice())); // cookie
                 Ok(w)
+            }
+            Message::S_SESS(/*sess*/ _ ) => {
+                Err( Error{ source:"sSess.to_buf is not implemented yet", detail:None } )
             }
             Message::ACK(ack) => /*ack (seq: u16) -> Vec<u8>*/ {
                 try!(w.write_u8(2)); //ACK
@@ -1189,7 +1210,7 @@ impl Client {
     }
 
     fn dispatch_message (&mut self, buf:&[u8], tx_buf:&mut LinkedList<Vec<u8>>) {
-        let msg = match Message::from_buf(buf) {
+        let msg = match Message::from_buf(buf,MessageDirection::FromServer) {
             Ok(msg) => { msg },
             Err(err) => { println!("message parse error: {:?}", err); return; },
         };
@@ -1381,19 +1402,19 @@ fn main() {
             match token {
                 CLIENT => {
                     let mut rx_buf = mio::buf::RingBuf::new(65535);
-                    self.sock.recv_from(&mut rx_buf).unwrap();
+                    self.sock.recv_from(&mut rx_buf).ok().expect("sock.recv");
                     let mut client: &mut Client = self.client;
                     let buf: &[u8] = mio::buf::Buf::bytes(&rx_buf);
                     //XXX inspect why borrow checker error if I call self.client.dispatch_message
                     //TODO let out:Vec<Buf> = client.dispatch(); send_all(out);
                     client.dispatch_message(buf, &mut self.tx_buf);
-                    //assert!(str::from_utf8(self.rx_buf.reader().bytes()).unwrap() == self.msg);
+                    //assert!(str::from_utf8(self.rx_buf.reader().bytes()) == self.msg);
                     //event_loop.shutdown();
                 },
                 _ => ()
             }
         }
-        fn writable(&mut self, _: &mut mio::EventLoop<UdpHandler>, token: mio::Token) {
+        fn writable(&mut self, eloop: &mut mio::EventLoop<UdpHandler>, token: mio::Token) {
             //use mio::buf::Buf;
             match token {
                 CLIENT => {
@@ -1403,10 +1424,13 @@ fn main() {
                     //None => ()
                     match self.tx_buf.pop_back() {
                         Some(data) => {
-                            let mut buf = mio::buf::SliceBuf::wrap(data.as_slice());
                             //TODO parse and print message
-                            //TODO println!("TX: {:?}", Message::from_buf(buf));
-                            self.sock.send_to(&mut buf, &self.addr).unwrap();
+                            println!("TX: {:?}", Message::from_buf(data.as_slice(),MessageDirection::FromClient));
+                            let mut buf = mio::buf::SliceBuf::wrap(data.as_slice());
+                            if let Err(e) = self.sock.send_to(&mut buf, &self.addr) {
+                                println!("send_to error: {}", e);
+                                eloop.shutdown();
+                            }
                             self.start = false;
                         },
                         None => {}
@@ -1417,44 +1441,39 @@ fn main() {
         }
     }
     //TODO every 5 seconds >>> Client::enqueue_to_send(beat());
-    //let server_ip = get_host_addresses("game.salemthegame.com").unwrap()[0];
+    //let server_ip = get_host_addresses("game.salemthegame.com")[0];
     let hostname = "game.salemthegame.com";
-    let server_ip = match std::net::lookup_host(hostname) {
-        Ok(mut ips) => {
-            ips.next().expect("host has None ip").unwrap().ip()
-        },
-        Err(e) => {
-            println!("couldn't resolve {}: {}", hostname, e);
-            return;
-        }
+    let host = {
+        let mut ips = std::net::lookup_host(hostname).ok().expect("lookup_host");
+        ips.next().expect("ip.next").ok().expect("ip.next.ok")
     };
-    //FIXME let addr = mio::net::SockAddr::InetAddr(server_ip, 1870);
-    let any = str::FromStr::from_str("0.0.0.0:0").unwrap();
-    let sock = mio::udp::bind(&any).unwrap();
+    //FIXME let addr = mio::net::SockAddr::InetAddr(host.ip(), 1870);
+    let any = str::FromStr::from_str("0.0.0.0:0").ok().expect("any.from_str");
+    let sock = mio::udp::bind(&any).ok().expect("bind");
     //type ClientEventLoop = mio::EventLoop<usize>;
-    println!("connect to {}", server_ip);
-    //FIXME sock.connect(&addr).unwrap();
+    println!("connect to {}", host.ip());
+    //FIXME sock.connect(&addr);
     sock.set_reuseaddr(true).ok().expect("set_reuseaddr");
 
     //TODO return Result and match
     let mut client = Client::new(/*"game.salemthegame.com", 1871, 1870*/);
     //TODO FIXME get login/password from command line instead of storing them here
-    match client.authorize("salvian", "простойпароль", server_ip, 1871) {
+    match client.authorize("salvian", "простойпароль", host.ip(), 1871) {
         Ok(()) => {
             println!("success. cookie = [{}]", client.cookie.as_slice().to_hex());
         },
         Err(e) => {
-            println!("error. {}: {}", e.source, e.detail.unwrap());
+            println!("authorize error: {:?}", e);
             return;
         }
     };
 
     
-    let mut event_loop = mio::EventLoop::new().unwrap();
+    let mut event_loop = mio::EventLoop::new().ok().expect("mio.loop.new");
     event_loop.register_opt(&sock, CLIENT, mio::Interest::readable() |
                                            mio::Interest::writable(),
                                            mio::PollOpt::level()).ok().expect("loop.register_opt");
-    let mut handler = UdpHandler::new(sock, &mut client, std::net::lookup_host(hostname).unwrap().next().expect("host has None ip").unwrap());
+    let mut handler = UdpHandler::new(sock, &mut client, std::net::SocketAddr::new(host.ip(),1870));
     handler.client.connect(&mut handler.tx_buf); //TODO return Result and match
 
     info!("run event loop");
