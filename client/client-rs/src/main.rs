@@ -1,5 +1,10 @@
-#![feature(int_uint)]
-#![allow(unstable)]
+//#![feature(int_uint)]
+//#![allow(unstable)]
+#![feature(rustc_private)]
+#![feature(convert)]
+#![feature(ip_addr)]
+#![feature(collections)]
+#![feature(lookup_host)]
 
 extern crate openssl;
 extern crate rustc_serialize;
@@ -9,9 +14,9 @@ extern crate byteorder;
 #[macro_use]
 extern crate log;
 
-use std::net::tcp;
-use std::net::tcp::TcpStream;
-use std::net::udp::UdpSocket;
+//use std::net::tcp;
+use std::net::TcpStream;
+use std::net::UdpSocket;
 use std::net::SocketAddr;
 use std::collections::hash_map::HashMap;
 use std::collections::hash_set::HashSet;
@@ -29,7 +34,7 @@ use byteorder::{LittleEndian, BigEndian, ReadBytesExt, WriteBytesExt};
 use std::io::Read;
 use std::io::BufRead;
 use std::io::Write;
-use std::io::ErrorKind;
+//use std::io::ErrorKind;
 
 #[derive(Debug)]
 struct Error {
@@ -37,12 +42,12 @@ struct Error {
     detail: Option<String>,
 }
 
-impl From<byteorder::new::Error> for Error {
-    fn from (err:byteorder::new::Error) -> Error { Error {source:"TODO: some error", detail:None} }
+impl From<byteorder::Error> for Error {
+    fn from (_:byteorder::Error) -> Error { Error {source:"TODO: some error", detail:None} }
 }
 
-impl From<std::io::error::Error> for Error {
-    fn from (err:std::io::error::Error) -> Error { Error {source:"TODO: some error", detail:None} }
+impl From<std::io::Error> for Error {
+    fn from (_:std::io::Error) -> Error { Error {source:"TODO: some error", detail:None} }
 }
 
 struct Obj {
@@ -146,8 +151,9 @@ enum MsgList {
 }
 
 type le = LittleEndian;
+type be = BigEndian;
 
-fn read_sublist (r : &std::io::cursor::Cursor<&[u8]> /*buf : &[u8]*/) /*TODO return Result instead*/ {
+fn read_sublist (r : &mut std::io::Cursor<&[u8]> /*buf : &[u8]*/) /*TODO return Result instead*/ {
     //let r = Cursor::new(buf);
     let mut deep = 0;
     loop {
@@ -156,11 +162,10 @@ fn read_sublist (r : &std::io::cursor::Cursor<&[u8]> /*buf : &[u8]*/) /*TODO ret
             Ok(b) => {b}
             Err(e) => {return;}
         };
-        let tmp = Vec::new();
         match t {
             /*T_END    */  0  => { if deep == 0 { return; } else { deep -= 1; } },
             /*T_INT    */  1  => { r.read_i32::<le>().unwrap(); },
-            /*T_STR    */  2  => { r.read_until(0, &mut tmp).unwrap(); },
+            /*T_STR    */  2  => { let mut tmp = Vec::new(); r.read_until(0, &mut tmp).unwrap(); },
             /*T_COORD  */  3  => { r.read_i32::<le>().unwrap(); r.read_i32::<le>().unwrap(); },
             /*T_UINT8  */  4  => { r.read_u8().unwrap(); },
             /*T_UINT16 */  5  => { r.read_u16::<le>().unwrap(); },
@@ -173,11 +178,11 @@ fn read_sublist (r : &std::io::cursor::Cursor<&[u8]> /*buf : &[u8]*/) /*TODO ret
                 let len = r.read_u8().unwrap();
                 if (len & 128) != 0 {
                     let len = r.read_i32::<le>().unwrap(); /* WHY NOT u32 ??? */
-                    let bytes = vec![0; len as usize];
+                    let mut bytes = vec![0; len as usize];
                     let b = r.read(&mut bytes).unwrap();
                     assert_eq!(b, len as usize);
                 } else {
-                    let bytes = vec![0; len as usize];
+                    let mut bytes = vec![0; len as usize];
                     let b = r.read(&mut bytes).unwrap();
                     assert_eq!(b, len as usize);
                 }
@@ -189,7 +194,7 @@ fn read_sublist (r : &std::io::cursor::Cursor<&[u8]> /*buf : &[u8]*/) /*TODO ret
     }
 }
 
-fn read_list (r : &std::io::cursor::Cursor<&[u8]>) -> Vec<MsgList> /*TODO return Result instead*/ {
+fn read_list (r : &mut std::io::Cursor<&[u8]>) -> Vec<MsgList> /*TODO return Result instead*/ {
     //let r = Cursor::new(buf);
     let mut list = Vec::new();
     loop {
@@ -205,7 +210,7 @@ fn read_list (r : &std::io::cursor::Cursor<&[u8]>) -> Vec<MsgList> /*TODO return
                 list.push(MsgList::tINT( r.read_i32::<le>().unwrap() ));
             },
             /*T_STR    */  2  => {
-                let tmp = Vec::new();
+                let mut tmp = Vec::new();
                 r.read_until(0, &mut tmp).unwrap();
                 list.push(MsgList::tSTR( String::from_utf8(tmp).unwrap() ));
             },
@@ -240,12 +245,12 @@ fn read_list (r : &std::io::cursor::Cursor<&[u8]>) -> Vec<MsgList> /*TODO return
                 let len = r.read_u8().unwrap();
                 if (len & 128) != 0 {
                     let len = r.read_i32::<le>().unwrap(); /* WHY NOT u32 ??? */
-                    let bytes = vec![0; len as usize];
+                    let mut bytes = vec![0; len as usize];
                     let b = r.read(&mut bytes).unwrap();
                     assert_eq!(b, len as usize);
                     list.push(MsgList::tBYTES( bytes ));
                 } else {
-                    let bytes = vec![0; len as usize];
+                    let mut bytes = vec![0; len as usize];
                     let b = r.read(&mut bytes).unwrap();
                     assert_eq!(b, len as usize);
                     list.push(MsgList::tBYTES( bytes ));
@@ -268,13 +273,13 @@ fn read_list (r : &std::io::cursor::Cursor<&[u8]>) -> Vec<MsgList> /*TODO return
 impl RelElem {
     // TODO in the case of Err return Error with backtrace instead of String
     fn from_buf (kind:u8, buf:&[u8]) -> Result<RelElem,Error> {
-        let r = Cursor::new(buf);
+        let mut r = Cursor::new(buf);
         //XXX RemoteUI.java +53
         match kind {
             0  /*NEWWDG*/  => {
                 let id = try!(r.read_u16::<le>());
                 let kind = {
-                    let tmp = Vec::new();
+                    let mut tmp = Vec::new();
                     r.read_until(0, &mut tmp).unwrap();
                     String::from_utf8(tmp).unwrap()
                 };
@@ -286,7 +291,7 @@ impl RelElem {
             1  /*WDGMSG*/  => {
                 let id = try!(r.read_u16::<le>());
                 let name = {
-                    let tmp = Vec::new();
+                    let mut tmp = Vec::new();
                     r.read_until(0, &mut tmp).unwrap();
                     String::from_utf8(tmp).unwrap()
                 };
@@ -303,7 +308,7 @@ impl RelElem {
             6  /*RESID*/   => {
                 let id = try!(r.read_u16::<le>());
                 let name = {
-                    let tmp = Vec::new();
+                    let mut tmp = Vec::new();
                     r.read_until(0, &mut tmp).unwrap();
                     String::from_utf8(tmp).unwrap()
                 };
@@ -322,7 +327,7 @@ impl RelElem {
                         Err(e) => {break;}
                     };
                     let name = {
-                        let tmp = Vec::new();
+                        let mut tmp = Vec::new();
                         r.read_until(0, &mut tmp).unwrap();
                         String::from_utf8(tmp).unwrap()
                     };
@@ -385,7 +390,7 @@ impl Rel {
     fn new (seq:u16) -> Rel {
         Rel{ seq:seq, rel:Vec::new() }
     }
-    fn append (&self, elem:RelElem) {
+    fn append (&mut self, elem:RelElem) {
         self.rel.push(elem);
     }
 }
@@ -436,8 +441,8 @@ struct ObjAck {
     obj : Vec<ObjAckElem>,
 }
 impl ObjAck {
-    fn new (objdata: ObjData) -> ObjAck {
-        let objack = ObjAck{ obj : Vec::new() };
+    fn new (objdata: &ObjData) -> ObjAck {
+        let mut objack = ObjAck{ obj : Vec::new() };
         for o in objdata.obj.iter() {
             objack.obj.push(ObjAckElem{ id : o.id, frame : o.frame});
         }
@@ -519,7 +524,7 @@ enum odICON {
 }
 
 impl ObjProp {
-    fn from_buf (r : &std::io::cursor::Cursor<&[u8]>) -> Result<Option<ObjProp>,Error> {
+    fn from_buf (r : &mut std::io::Cursor<&[u8]>) -> Result<Option<ObjProp>,Error> {
         //let r = Cursor::new(buf);
         let t = try!(r.read_u8()) as usize;
         match t {
@@ -536,7 +541,7 @@ impl ObjProp {
                 if (resid & 0x8000) != 0 {
                     resid &= !0x8000;
                     let sdt_len = r.read_u8().unwrap();
-                    let sdt = vec![0; sdt_len as usize];
+                    let mut sdt = vec![0; sdt_len as usize];
                     let b = r.read(&mut sdt).unwrap();
                     assert_eq!(b, sdt_len as usize);
                     //let _/*sdt*/ = try!(r.read_exact(sdt_len));
@@ -556,7 +561,7 @@ impl ObjProp {
             5   /*OD_SPEECH*/ => {
                 let zo = try!(r.read_u16::<le>());
                 let text = {
-                    let tmp = Vec::new();
+                    let mut tmp = Vec::new();
                     r.read_until(0, &mut tmp).unwrap();
                     String::from_utf8(tmp).unwrap()
                 };
@@ -594,7 +599,7 @@ impl ObjProp {
                 } else {
                     let xfres = try!(r.read_u16::<le>());
                     let xfname = {
-                        let tmp = Vec::new();
+                        let mut tmp = Vec::new();
                         r.read_until(0, &mut tmp).unwrap();
                         String::from_utf8(tmp).unwrap()
                     };
@@ -625,7 +630,7 @@ impl ObjProp {
                 if resid != 65535 {
                     if (resid & 0x8000) != 0 {
                         let sdt_len = try!(r.read_u8()) as usize;
-                        let sdt = vec![0; sdt_len as usize];
+                        let mut sdt = vec![0; sdt_len as usize];
                         let b = r.read(&mut sdt).unwrap();
                         assert_eq!(b, sdt_len as usize);
                         //let sdt = try!(r.read_exact(sdt_len)); //TODO
@@ -642,7 +647,7 @@ impl ObjProp {
             },
             15  /*OD_BUDDY*/ => {
                 let name = {
-                    let tmp = Vec::new();
+                    let mut tmp = Vec::new();
                     r.read_until(0, &mut tmp).unwrap();
                     String::from_utf8(tmp).unwrap()
                 };
@@ -667,7 +672,7 @@ impl ObjProp {
                         if (resid & 0x8000) != 0 {
                             /*resid &= !0x8000;*/
                             let sdt_len = try!(r.read_u8()) as usize;
-                            let sdt = vec![0; sdt_len as usize];
+                            let mut sdt = vec![0; sdt_len as usize];
                             let b = r.read(&mut sdt).unwrap();
                             assert_eq!(b, sdt_len as usize);
                             //let sdt = try!(r.read_exact(sdt_len));
@@ -681,7 +686,7 @@ impl ObjProp {
                         if (resid & 0x8000) != 0 {
                             /*resid &= !0x8000;*/
                             let sdt_len = try!(r.read_u8()) as usize;
-                            let sdt = vec![0; sdt_len as usize];
+                            let mut sdt = vec![0; sdt_len as usize];
                             let b = r.read(&mut sdt).unwrap();
                             assert_eq!(b, sdt_len as usize);
                             //let sdt = try!(r.read_exact(sdt_len));
@@ -707,7 +712,7 @@ impl ObjProp {
                     let h = try!(r.read_u8());
                     if h == 255 { break; }
                     let at = {
-                        let tmp = Vec::new();
+                        let mut tmp = Vec::new();
                         r.read_until(0, &mut tmp).unwrap();
                         String::from_utf8(tmp).unwrap()
                     };
@@ -745,7 +750,7 @@ impl Message {
     //TODO return Error with stack trace on Err instead of String
     //TODO get Vec not &[]. return Vec in the case of error
     fn from_buf (buf : &[u8]) -> Result<Message,Error> {
-        let r = Cursor::new(buf);
+        let mut r = Cursor::new(buf);
         let mtype = try!(r.read_u8());
         let res = match mtype {
             0 /*SESS*/ => {
@@ -765,13 +770,13 @@ impl Message {
                     let rel_buf = if (rel_type & 0x80) != 0 {
                         rel_type &= !0x80;
                         let rel_len = try!(r.read_u16::<le>());
-                        let tmp = vec![0; rel_len as usize];
+                        let mut tmp = vec![0; rel_len as usize];
                         let b = r.read(&mut tmp).unwrap();
                         assert_eq!(b, rel_len as usize);
                         tmp
                         //try!(r.read_exact(rel_len as usize))
                     } else {
-                        let tmp = Vec::new();
+                        let mut tmp = Vec::new();
                         try!(r.read_to_end(&mut tmp));
                         tmp
                     };
@@ -792,7 +797,7 @@ impl Message {
                 let pktid = try!(r.read_i32::<le>());
                 let off = try!(r.read_u16::<le>());
                 let len = try!(r.read_u16::<le>());
-                let buf = Vec::new();
+                let mut buf = Vec::new();
                 try!(r.read_to_end(&mut buf));
                 //println!("    pktid={} off={} len={}", pktid, off, len);
                 //if (off == 0) {
@@ -835,7 +840,7 @@ impl Message {
             _ /*UNKNOWN*/ => { Err( Error{ source:"unknown message type", detail:None } ) }
         };
 
-        let remains = Vec::new();
+        let mut remains = Vec::new();
         try!(r.read_to_end(&mut remains));
         if (!remains.is_empty()) {
             println!("                       REMAINS {} bytes", remains.len());
@@ -844,10 +849,10 @@ impl Message {
         res
     }
 
-    fn to_buf (&self) -> Result<Vec<u8>,Error> {
+    fn to_buf (self) -> Result<Vec<u8>,Error> {
         //type write_u16::<le> = Vec<u8>::write_u16::<LittleEndian>;
         let mut w = vec![];
-        match *self {
+        match self {
             // !!! this is client session message, not server !!!
             Message::C_SESS(sess) => /*(name: &str, cookie: &[u8]) -> Vec<u8>*/ {
                 try!(w.write_u8(0)); // SESS
@@ -1080,7 +1085,7 @@ impl Client {
         }
     }
 
-    fn authorize (&mut self, user: &'static str, pass: &str, ip: std::net::ip::IpAddr, port: u16) -> Result<(), Error> {
+    fn authorize (&mut self, user: &'static str, pass: &str, ip: std::net::IpAddr, port: u16) -> Result<(), Error> {
         self.user = user;
         //self.pass = pass;
         //let auth_addr: SocketAddr = SocketAddr {ip: ip, port: port};
@@ -1095,8 +1100,8 @@ impl Client {
         // send 'pw' command
         let user = user.as_bytes();
         let buf_len = (3 + user.len() + 1 + 32) as u16;
-        let buf: Vec<u8> = Vec::with_capacity((2 + buf_len) as usize);
-        buf.write_u16::<BigEndian>(buf_len).unwrap();
+        let mut buf: Vec<u8> = Vec::with_capacity((2 + buf_len) as usize);
+        buf.write_u16::<be>(buf_len).unwrap();
         buf.push_all("pw".as_bytes());
         buf.push(0);
         buf.push_all(user);
@@ -1112,7 +1117,7 @@ impl Client {
         if len != 2 { return Err(Error{source:"bytes read != 2",detail:None}); }
         //TODO replace byteorder crate with endian crate ???
         let mut rdr = Cursor::new(buf);
-        let len = rdr.read_u16::<BigEndian>().unwrap();
+        let len = rdr.read_u16::<be>().unwrap();
 
         let mut msg: Vec<u8> = Vec::with_capacity(len as usize);
         msg.resize(len as usize, 0);
@@ -1128,8 +1133,8 @@ impl Client {
         if (msg[0] == ('o' as u8)) && (msg[1] == ('k' as u8)) {
             // TODO tryio!(stream.write(Msg::cookie(params...)));
             let buf_len = ("cookie".as_bytes().len() + 1) as u16;
-            let buf: Vec<u8> = Vec::with_capacity((2 + buf_len) as usize);
-            buf.write_u16::<BigEndian>(buf_len).unwrap();
+            let mut buf: Vec<u8> = Vec::with_capacity((2 + buf_len) as usize);
+            buf.write_u16::<be>(buf_len).unwrap();
             buf.push_all("cookie".as_bytes());
             buf.push(0);
             stream.write(buf.as_slice()).unwrap();
@@ -1140,7 +1145,7 @@ impl Client {
             if len != 2 { return Err(Error{source:"bytes read != 2",detail:None}); }
             //TODO replace byteorder crate with endian crate ???
             let mut rdr = Cursor::new(buf);
-            let len = rdr.read_u16::<BigEndian>().unwrap();
+            let len = rdr.read_u16::<be>().unwrap();
 
             let mut msg: Vec<u8> = Vec::with_capacity(len as usize);
             msg.resize(len as usize, 0);
@@ -1177,7 +1182,7 @@ impl Client {
     }
 
     fn dispatch_message (&mut self, buf:&[u8], tx_buf:&mut LinkedList<Vec<u8>>) {
-        let msg = match Message::from_buf(&mut buf) {
+        let msg = match Message::from_buf(buf) {
             Ok(msg) => { msg },
             Err(err) => { println!("message parse error: {:?}", err); return; },
         };
@@ -1253,7 +1258,7 @@ impl Client {
             Message::MAPDATA(_) => {},
             Message::OBJDATA( objdata ) => {
                 //TODO receiver_to_sender.send(objdata.to_buf());
-                self.enqueue_to_send(Message::OBJACK(ObjAck::new(objdata)), tx_buf); // send OBJACKs
+                self.enqueue_to_send(Message::OBJACK(ObjAck::new(&objdata)), tx_buf); // send OBJACKs
                 for o in objdata.obj.iter() {
                     println!("    {:?}", o);
                 }
@@ -1297,13 +1302,13 @@ impl Client {
         //TODO send REL until reply
         if self.charlist.len() > 0 {
             println!("send play '{}'", self.charlist[0]);
-            let char_name = self.charlist[0];
+            let char_name = self.charlist[0].clone();
             //FIXME sequence is ALWAYS ZERO!! get sequence from client
-            let rel = Rel{seq:0, rel:Vec::new()};
+            let mut rel = Rel{seq:0, rel:Vec::new()};
             let id : u16 = 3; //FIXME get widget id by name
             let name : String = "play".to_string();
-            let args : Vec<MsgList> = Vec::new();
-            args.push(MsgList::tSTR(self.charlist[0]));
+            let mut args : Vec<MsgList> = Vec::new();
+            args.push(MsgList::tSTR(char_name));
             let elem = RelElem::WDGMSG(WdgMsg{ id : id, name : name, args : args });
             rel.rel.push(elem);
             self.enqueue_to_send(Message::REL(rel), tx_buf);
@@ -1314,7 +1319,7 @@ impl Client {
     fn connect (&self, tx_buf:&mut LinkedList<Vec<u8>>) {
         //TODO send SESS until reply
         //TODO get username from server responce, not from auth username
-        self.enqueue_to_send(Message::C_SESS(cSess{login:self.user.to_string(), cookie:self.cookie}), tx_buf);
+        self.enqueue_to_send(Message::C_SESS(cSess{login:self.user.to_string(), cookie:self.cookie.clone()}), tx_buf);
     }
 
     fn mapreq (&self, x:i32, y:i32, tx_buf:&mut LinkedList<Vec<u8>>) {
@@ -1337,20 +1342,20 @@ fn main() {
     //            println!("{}", Message::from_buf(v.as_slice()));
     //        }
 
-    use mio::net::Socket;
+    use mio::Socket;
     //use mio::IoReader;
     //use mio::IoWriter;
     //use mio::event::{READABLE,WRITABLE,LEVEL};
 
     struct UdpHandler<'a> {
-        sock: mio::nonblock::NonBlock<mio::net::udp::UdpSocket>,
+        sock: mio::NonBlock<mio::udp::UdpSocket>,
         addr: std::net::SocketAddr,
         tx_buf: LinkedList<Vec<u8>>,
         client: &'a mut Client,
         start: bool,
     }
     impl<'a> UdpHandler<'a> {
-        fn new(sock: mio::nonblock::NonBlock<mio::net::udp::UdpSocket>, client:&'a mut Client, addr: std::net::SocketAddr) -> UdpHandler<'a> {
+        fn new(sock: mio::NonBlock<mio::udp::UdpSocket>, client:&'a mut Client, addr: std::net::SocketAddr) -> UdpHandler<'a> {
             UdpHandler {
                 sock: sock,
                 addr: addr,
@@ -1364,11 +1369,11 @@ fn main() {
     impl<'a> mio::Handler for UdpHandler<'a> {
         type Timeout = usize;
         type Message = ();
-        fn readable(&mut self, _/*event_loop*/: &mut mio::EventLoop<UdpHandler>, token: mio::Token, _: mio::event::ReadHint) {
+        fn readable(&mut self, _/*event_loop*/: &mut mio::EventLoop<UdpHandler>, token: mio::Token, _: mio::ReadHint) {
             //use mio::buf::Buf;
             match token {
                 CLIENT => {
-                    let rx_buf = mio::buf::RingBuf::new(65535);
+                    let mut rx_buf = mio::buf::RingBuf::new(65535);
                     self.sock.recv_from(&mut rx_buf).unwrap();
                     let mut client: &mut Client = self.client;
                     let buf: &[u8] = mio::buf::Buf::bytes(&rx_buf);
@@ -1408,7 +1413,7 @@ fn main() {
     //let server_ip = get_host_addresses("game.salemthegame.com").unwrap()[0];
     let hostname = "game.salemthegame.com";
     let server_ip = match std::net::lookup_host(hostname) {
-        Ok(ips) => {
+        Ok(mut ips) => {
             ips.next().expect("host has None ip").unwrap().ip()
         },
         Err(e) => {
@@ -1418,7 +1423,7 @@ fn main() {
     };
     //FIXME let addr = mio::net::SockAddr::InetAddr(server_ip, 1870);
     let any = str::FromStr::from_str("0.0.0.0:0").unwrap();
-    let sock = mio::net::udp::bind(&any).unwrap();
+    let sock = mio::udp::bind(&any).unwrap();
     //type ClientEventLoop = mio::EventLoop<usize>;
     println!("connect to {}", server_ip);
     //FIXME sock.connect(&addr).unwrap();
@@ -1438,14 +1443,14 @@ fn main() {
     };
 
     
-    let mut handler = UdpHandler::new(sock, &mut client, std::net::lookup_host(hostname).unwrap().next().expect("host has None ip").unwrap());
-    handler.client.connect(&mut handler.tx_buf); //TODO return Result and match
-
-    info!("run event loop");
     let mut event_loop = mio::EventLoop::new().unwrap();
     event_loop.register_opt(&sock, CLIENT, mio::Interest::readable() |
                                            mio::Interest::writable(),
                                            mio::PollOpt::level()).ok().expect("loop.register_opt");
+    let mut handler = UdpHandler::new(sock, &mut client, std::net::lookup_host(hostname).unwrap().next().expect("host has None ip").unwrap());
+    handler.client.connect(&mut handler.tx_buf); //TODO return Result and match
+
+    info!("run event loop");
     event_loop.run(&mut handler).ok().expect("Failed to run the event loop");
 
     //client.wait_for_end();
