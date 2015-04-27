@@ -43,11 +43,15 @@ struct Error {
 }
 
 impl From<byteorder::Error> for Error {
-    fn from (_:byteorder::Error) -> Error { Error {source:"TODO: some error", detail:None} }
+    fn from (_:byteorder::Error) -> Error { Error {source:"TODO: ByteOrder error", detail:None} }
 }
 
 impl From<std::io::Error> for Error {
-    fn from (_:std::io::Error) -> Error { Error {source:"TODO: some error", detail:None} }
+    fn from (_:std::io::Error) -> Error { Error {source:"TODO: Io error", detail:None} }
+}
+
+impl From<std::string::FromUtf8Error> for Error {
+    fn from (_:std::string::FromUtf8Error) -> Error { Error {source:"TODO: FromUtf8 error", detail:None} }
 }
 
 struct Obj {
@@ -200,6 +204,70 @@ fn read_sublist (r : &mut std::io::Cursor<&[u8]> /*buf : &[u8]*/) /*TODO return 
     }
 }
 
+fn write_list (list:&[MsgList]) -> Result<Vec<u8>,Error> {
+    let mut w = vec![];
+    for l in list {
+        let tmp = l;
+        match *tmp {
+            MsgList::tINT(i) => {
+                try!(w.write_u8(1));
+                try!(w.write_i32::<le>(i));
+            },
+            MsgList::tSTR(ref s) => {
+                try!(w.write_u8(2));
+                try!(w.write(s.as_bytes()));
+            },
+            MsgList::tCOORD((x,y)) => {
+                try!(w.write_u8(3));
+                try!(w.write_i32::<le>(x));
+                try!(w.write_i32::<le>(y));
+            },
+            MsgList::tUINT8(u) => {
+                try!(w.write_u8(4));
+                try!(w.write_u8(u));
+            },
+            MsgList::tUINT16(u) => {
+                try!(w.write_u8(5));
+                try!(w.write_u16::<le>(u));
+            },
+            MsgList::tCOLOR((r,g,b,a)) => {
+                try!(w.write_u8(6));
+                try!(w.write_u8(r));
+                try!(w.write_u8(g));
+                try!(w.write_u8(b));
+                try!(w.write_u8(a));
+            },
+            MsgList::tTTOL => {
+                return Err(Error{source:"write_list is NOT implemented for tTTOL",detail:None});
+            },
+            MsgList::tINT8(i) => {
+                try!(w.write_u8(9));
+                try!(w.write_i8(i));
+            },
+            MsgList::tINT16(i) => {
+                try!(w.write_u8(10));
+                try!(w.write_i16::<le>(i));
+            },
+            MsgList::tNIL => {
+                try!(w.write_u8(12));
+            },
+            MsgList::tBYTES(_) => {
+                return Err(Error{source:"write_list is NOT implemented for tBYTES",detail:None});
+            },
+            MsgList::tFLOAT32(f) => {
+                try!(w.write_u8(15));
+                try!(w.write_f32::<le>(f));
+            },
+            MsgList::tFLOAT64(f) => {
+                try!(w.write_u8(16));
+                try!(w.write_f64::<le>(f));
+            },
+        }
+    }
+    try!(w.write_u8(0)); /* T_END */
+    Ok(w)
+}
+
 fn read_list (r : &mut std::io::Cursor<&[u8]>) -> Vec<MsgList> /*TODO return Result instead*/ {
     //let r = Cursor::new(buf);
     let mut list = Vec::new();
@@ -347,7 +415,26 @@ impl RelElem {
             _  /*UNKNOWN*/ => { Err( Error{ source:"unknown REL type", detail:None } ) },
         }
     }
-    fn to_buf (&self) -> Result<&[u8],Error> {
+    fn to_buf (&self, last:bool) -> Result<Vec<u8>,Error> {
+        let mut w = vec![];
+        match *self {
+            RelElem::WDGMSG(ref msg) => {
+                let mut tmp = vec![];
+                try!(tmp.write_u16::<le>(msg.id)); // widget ID
+                try!(tmp.write(msg.name.as_bytes())); // message name
+                let args_buf = try!(write_list(&msg.args));
+                try!(tmp.write(&args_buf));
+                if last {
+                    try!(w.write_u8(1)); // type WDGMSG
+                } else {
+                    try!(w.write_u8(1 & 0x80)); // type WDGMSG & more rels attached bit
+                    try!(w.write_u16::<le>(tmp.len() as u16)); // rel length
+                }
+                try!(w.write(&tmp));
+
+                Ok(w)
+            }
+            _ => {Err(Error{source:"RelElem.to_buf is not implemented for that elem type",detail:None})}
 //            1 /*REL*/ => {
 //                let seq = try!(r.read_u16::<le>());
 //                let mut rel_vec = Vec::new();
@@ -373,7 +460,7 @@ impl RelElem {
 //                    try!(w.write_u8(2)); // list element type T_STR
 //                    try!(w.write(rel.name.as_bytes())); // element
 //                    try!(w.write_u8(0));
-        Ok(&[])
+        }
     }
     //fn wdgmsg (id, name, args) {
     //    RelElem::WDGMSG( WdgMsg{ id:id, name:name, args:args } )
@@ -808,7 +895,26 @@ impl Message {
                 //     impl Message { fn sess (err: u8) -> Message::SESS { ... } }
                 match dir {
                     MessageDirection::FromClient => {
-                        Ok( Message::C_SESS( cSess{ login : "TODO".to_string(), cookie : vec![] } ) )
+                        let /*unknown*/ _ = try!(r.read_u16::<le>());
+                        let /*proto*/ _ = {
+                            let mut tmp = Vec::new();
+                            try!(r.read_until(0, &mut tmp));
+                            tmp
+                        };
+                        let /*version*/ _ = try!(r.read_u16::<le>());
+                        let login = {
+                            let mut tmp = Vec::new();
+                            try!(r.read_until(0, &mut tmp));
+                            tmp
+                        };
+                        let cookie_len = try!(r.read_u16::<le>());
+                        let cookie = {
+                            let mut tmp = vec![0; cookie_len as usize];
+                            let len = try!(r.read(&mut tmp));
+                            assert_eq!(len, cookie_len as usize);
+                            tmp
+                        };
+                        Ok( Message::C_SESS( cSess{ login : try!(String::from_utf8(login)), cookie : cookie } ) )
                     }
                     MessageDirection::FromServer => {
                         Ok( Message::S_SESS( sSess{ err : SessError::new(try!(r.read_u8())) } ) )
@@ -908,13 +1014,12 @@ impl Message {
     }
 
     fn to_buf (self) -> Result<Vec<u8>,Error> {
-        //type write_u16::<le> = Vec<u8>::write_u16::<LittleEndian>;
         let mut w = vec![];
         match self {
             // !!! this is client session message, not server !!!
             Message::C_SESS(sess) => /*(name: &str, cookie: &[u8]) -> Vec<u8>*/ {
                 try!(w.write_u8(0)); // SESS
-                try!(w.write_u16::<LittleEndian>(2)); // unknown
+                try!(w.write_u16::<le>(2)); // unknown
                 try!(w.write("Salem".as_bytes())); // proto
                 try!(w.write_u8(0));
                 try!(w.write_u16::<le>(36)); // version
@@ -939,9 +1044,11 @@ impl Message {
             Message::REL(rel) => /* rel_wdgmsg_play (seq: u16, name: &str) -> Vec<u8> */ {
                 try!(w.write_u8(1)); // REL
                 try!(w.write_u16::<le>(rel.seq));// sequence
-                for rel_elem in rel.rel {
+                for i in 0 .. rel.rel.len() {
+                    let rel_elem = &rel.rel[i];
+                    let last_one = i == (rel.rel.len() - 1);
                     let rel_elem_buf = try!(rel_elem.to_buf(last_one));
-                    try!(w.write(rel_elem_buf));
+                    try!(w.write(&rel_elem_buf));
                 }
                 Ok(w)
             }
