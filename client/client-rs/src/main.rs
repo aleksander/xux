@@ -1,5 +1,3 @@
-//#![feature(int_uint)]
-//#![allow(unstable)]
 #![feature(rustc_private)]
 #![feature(convert)]
 #![feature(ip_addr)]
@@ -14,7 +12,6 @@ extern crate byteorder;
 #[macro_use]
 extern crate log;
 
-//use std::net::tcp;
 use std::net::TcpStream;
 use std::net::UdpSocket;
 use std::net::SocketAddr;
@@ -34,7 +31,6 @@ use byteorder::{LittleEndian, BigEndian, ReadBytesExt, WriteBytesExt};
 use std::io::Read;
 use std::io::BufRead;
 use std::io::Write;
-//use std::io::ErrorKind;
 
 #[derive(Debug)]
 struct Error {
@@ -163,11 +159,10 @@ type le = LittleEndian;
 #[allow(non_camel_case_types)]
 type be = BigEndian;
 
-fn read_sublist (r : &mut std::io::Cursor<&[u8]> /*buf : &[u8]*/) /*TODO return Result instead*/ {
-    //let r = Cursor::new(buf);
+//TODO FIXME merge with read_list function
+fn read_sublist (r : &mut std::io::Cursor<&[u8]> /*buf : &[u8]*/) {
     let mut deep = 0;
     loop {
-        //if r.len() == 0 { return; }
         let t = match r.read_u8() {
             Ok(b) => {b}
             Err(_) => {return;}
@@ -187,7 +182,7 @@ fn read_sublist (r : &mut std::io::Cursor<&[u8]> /*buf : &[u8]*/) /*TODO return 
             /*T_BYTES  */  14 => {
                 let len = r.read_u8().unwrap();
                 if (len & 128) != 0 {
-                    let len = r.read_i32::<le>().unwrap(); /* WHY NOT u32 ??? */
+                    let len = r.read_i32::<le>().unwrap();
                     let mut bytes = vec![0; len as usize];
                     let b = r.read(&mut bytes).unwrap();
                     assert_eq!(b, len as usize);
@@ -199,7 +194,7 @@ fn read_sublist (r : &mut std::io::Cursor<&[u8]> /*buf : &[u8]*/) /*TODO return 
             },
             /*T_FLOAT32*/  15 => { r.read_f32::<le>().unwrap(); },
             /*T_FLOAT64*/  16 => { r.read_f64::<le>().unwrap(); },
-                           _  => { return; /*TODO return Error instead*/ },
+                           _  => { return; },
         }
     }
 }
@@ -269,11 +264,8 @@ fn write_list (list:&[MsgList]) -> Result<Vec<u8>,Error> {
 }
 
 fn read_list (r : &mut std::io::Cursor<&[u8]>) -> Vec<MsgList> /*TODO return Result instead*/ {
-    //let r = Cursor::new(buf);
     let mut list = Vec::new();
     loop {
-        //if r.eof() { return list; }
-        //let t = r.read_u8().unwrap();
         let t = match r.read_u8() {
             Ok(b) => {b}
             Err(_) => {return list;}
@@ -318,7 +310,7 @@ fn read_list (r : &mut std::io::Cursor<&[u8]>) -> Vec<MsgList> /*TODO return Res
             /*T_BYTES  */  14 => {
                 let len = r.read_u8().unwrap();
                 if (len & 128) != 0 {
-                    let len = r.read_i32::<le>().unwrap(); /* WHY NOT u32 ??? */
+                    let len = r.read_i32::<le>().unwrap();
                     let mut bytes = vec![0; len as usize];
                     let b = r.read(&mut bytes).unwrap();
                     assert_eq!(b, len as usize);
@@ -345,7 +337,6 @@ fn read_list (r : &mut std::io::Cursor<&[u8]>) -> Vec<MsgList> /*TODO return Res
 }
 
 impl RelElem {
-    // TODO in the case of Err return Error with backtrace instead of String
     fn from_buf (kind:u8, buf:&[u8]) -> Result<RelElem,Error> {
         let mut r = Cursor::new(buf);
         //XXX RemoteUI.java +53
@@ -415,6 +406,7 @@ impl RelElem {
             _  /*UNKNOWN*/ => { Err( Error{ source:"unknown REL type", detail:None } ) },
         }
     }
+
     fn to_buf (&self, last:bool) -> Result<Vec<u8>,Error> {
         let mut w = vec![];
         match *self {
@@ -422,6 +414,7 @@ impl RelElem {
                 let mut tmp = vec![];
                 try!(tmp.write_u16::<le>(msg.id)); // widget ID
                 try!(tmp.write(msg.name.as_bytes())); // message name
+                try!(tmp.write_u8(0)); // \0
                 let args_buf = try!(write_list(&msg.args));
                 try!(tmp.write(&args_buf));
                 if last {
@@ -435,36 +428,8 @@ impl RelElem {
                 Ok(w)
             }
             _ => {Err(Error{source:"RelElem.to_buf is not implemented for that elem type",detail:None})}
-//            1 /*REL*/ => {
-//                let seq = try!(r.read_u16::<le>());
-//                let mut rel_vec = Vec::new();
-//                while !r.eof() {
-//                    let mut rel_type = try!(r.read_u8());
-//                    let rel_buf = if (rel_type & 0x80) != 0 {
-//                        rel_type &= !0x80;
-//  FIXME                 let rel_len = try!(r.read_u16::<le>());
-//                        try!(r.read_exact(rel_len as usize))
-//                    } else {
-//                        try!(r.read_to_end())
-//                    };
-//                    rel_vec.push(try!(RelElem::from_buf(rel_type, rel_buf.as_slice())));
-//                }
-//                Ok( Message::REL( Rel{ seq : seq, rel : rel_vec } ) )
-//            },
-
-//                    try!(w.write_u8(1));// rel type WDGMSG
-//                    try!(w.write_u16::<le>(3));// widget id
-//                    try!(w.write("play".as_bytes()));// message name
-//  FIXME             try!(w.write_u8(0));
-//                    // args list
-//                    try!(w.write_u8(2)); // list element type T_STR
-//                    try!(w.write(rel.name.as_bytes())); // element
-//                    try!(w.write_u8(0));
         }
     }
-    //fn wdgmsg (id, name, args) {
-    //    RelElem::WDGMSG( WdgMsg{ id:id, name:name, args:args } )
-    //}
 }
 
 #[derive(Debug)]
@@ -651,7 +616,6 @@ enum odICON {
 
 impl ObjProp {
     fn from_buf (r : &mut std::io::Cursor<&[u8]>) -> Result<Option<ObjProp>,Error> {
-        //let r = Cursor::new(buf);
         let t = try!(r.read_u8()) as usize;
         match t {
             0   /*OD_REM*/ => {
@@ -667,10 +631,12 @@ impl ObjProp {
                 if (resid & 0x8000) != 0 {
                     resid &= !0x8000;
                     let sdt_len = r.read_u8().unwrap();
-                    let mut sdt = vec![0; sdt_len as usize];
-                    let b = r.read(&mut sdt).unwrap();
-                    assert_eq!(b, sdt_len as usize);
-                    //let _/*sdt*/ = try!(r.read_exact(sdt_len));
+                    let sdt = {
+                        let mut tmp = vec![0; sdt_len as usize];
+                        let len = r.read(&mut tmp).unwrap();
+                        assert_eq!(len, sdt_len as usize);
+                        tmp
+                    };
                 }
                 Ok(Some(ObjProp::odRES(resid)))
             },
@@ -751,15 +717,17 @@ impl ObjProp {
                 }
             },
             12  /*OD_OVERLAY*/ => {
-                /*let olid =*/ try!(r.read_i32::<le>());
+                let /*olid*/ _ = try!(r.read_i32::<le>());
                 let resid = try!(r.read_u16::<le>());
                 if resid != 65535 {
                     if (resid & 0x8000) != 0 {
                         let sdt_len = try!(r.read_u8()) as usize;
-                        let mut sdt = vec![0; sdt_len as usize];
-                        let b = r.read(&mut sdt).unwrap();
-                        assert_eq!(b, sdt_len as usize);
-                        //let sdt = try!(r.read_exact(sdt_len)); //TODO
+                        let sdt = {
+                            let mut tmp = vec![0; sdt_len as usize];
+                            let len = r.read(&mut tmp).unwrap();
+                            assert_eq!(len, sdt_len as usize);
+                            tmp
+                        };
                     }
                 }
                 Ok(Some(ObjProp::odOVERLAY( resid&(!0x8000) )))
@@ -790,32 +758,36 @@ impl ObjProp {
             },
             16  /*OD_CMPPOSE*/ => {
                 let pfl = try!(r.read_u8());
-                /*let seq =*/ try!(r.read_u8());
+                let /*seq*/ _ = try!(r.read_u8());
                 if (pfl & 2) != 0 {
                     loop {
-                        let /*mut*/ resid = try!(r.read_u16::<le>());
+                        let mut resid = try!(r.read_u16::<le>());
                         if resid == 65535 { break; }
                         if (resid & 0x8000) != 0 {
-                            /*resid &= !0x8000;*/
+                            resid &= !0x8000;
                             let sdt_len = try!(r.read_u8()) as usize;
-                            let mut sdt = vec![0; sdt_len as usize];
-                            let b = r.read(&mut sdt).unwrap();
-                            assert_eq!(b, sdt_len as usize);
-                            //let sdt = try!(r.read_exact(sdt_len));
+                            let sdt = {
+                                let mut tmp = vec![0; sdt_len as usize];
+                                let len = r.read(&mut tmp).unwrap();
+                                assert_eq!(len, sdt_len as usize);
+                                tmp
+                            };
                         }
                     }
                 }
                 if (pfl & 4) != 0 {
                     loop {
-                        let /*mut*/ resid = try!(r.read_u16::<le>());
+                        let mut resid = try!(r.read_u16::<le>());
                         if resid == 65535 { break; }
                         if (resid & 0x8000) != 0 {
-                            /*resid &= !0x8000;*/
+                            resid &= !0x8000;
                             let sdt_len = try!(r.read_u8()) as usize;
-                            let mut sdt = vec![0; sdt_len as usize];
-                            let b = r.read(&mut sdt).unwrap();
-                            assert_eq!(b, sdt_len as usize);
-                            //let sdt = try!(r.read_exact(sdt_len));
+                            let mut sdt = {
+                                let mut tmp = vec![0; sdt_len as usize];
+                                let len = r.read(&mut tmp).unwrap();
+                                assert_eq!(len, sdt_len as usize);
+                                tmp
+                            };
                         }
                     }
                     let /*ttime*/ _ = try!(r.read_u8());
@@ -870,7 +842,6 @@ impl ObjProp {
     }
 }
 
-//use std::old_io::IoErrorKind;
 enum MessageDirection {
     FromClient,
     FromServer,
@@ -929,7 +900,6 @@ impl Message {
                         Ok(b) => {b}
                         Err(_) => {break;}
                     };
-                    //let mut rel_type = try!(r.read_u8());
                     let rel_buf = if (rel_type & 0x80) != 0 {
                         rel_type &= !0x80;
                         let rel_len = try!(r.read_u16::<le>());
@@ -937,7 +907,6 @@ impl Message {
                         let b = r.read(&mut tmp).unwrap();
                         assert_eq!(b, rel_len as usize);
                         tmp
-                        //try!(r.read_exact(rel_len as usize))
                     } else {
                         let mut tmp = Vec::new();
                         try!(r.read_to_end(&mut tmp));
