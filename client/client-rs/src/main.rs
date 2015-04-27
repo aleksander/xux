@@ -483,7 +483,7 @@ impl Debug for Rel {
     fn fmt(&self, f : &mut Formatter) -> std::fmt::Result {
         try!(writeln!(f, "REL seq={}", self.seq));
         for r in self.rel.iter() {
-            try!(writeln!(f, "    {:?}", r));
+            try!(writeln!(f, "      {:?}", r));
         }
         Ok(())
     }
@@ -516,7 +516,11 @@ struct ObjData {
 }
 impl Debug for ObjData {
     fn fmt(&self, f : &mut Formatter) -> std::fmt::Result {
-        write!(f, "OBJDATA")
+        try!(writeln!(f, "OBJDATA"));
+        for o in self.obj.iter() {
+            try!(writeln!(f, "      {:?}", o));
+        }
+        Ok(())
     }
 }
 #[derive(Debug)]
@@ -631,7 +635,7 @@ impl ObjProp {
                 if (resid & 0x8000) != 0 {
                     resid &= !0x8000;
                     let sdt_len = r.read_u8().unwrap();
-                    let sdt = {
+                    let /*sdt*/ _ = {
                         let mut tmp = vec![0; sdt_len as usize];
                         let len = r.read(&mut tmp).unwrap();
                         assert_eq!(len, sdt_len as usize);
@@ -722,7 +726,7 @@ impl ObjProp {
                 if resid != 65535 {
                     if (resid & 0x8000) != 0 {
                         let sdt_len = try!(r.read_u8()) as usize;
-                        let sdt = {
+                        let /*sdt*/ _ = {
                             let mut tmp = vec![0; sdt_len as usize];
                             let len = r.read(&mut tmp).unwrap();
                             assert_eq!(len, sdt_len as usize);
@@ -761,12 +765,12 @@ impl ObjProp {
                 let /*seq*/ _ = try!(r.read_u8());
                 if (pfl & 2) != 0 {
                     loop {
-                        let mut resid = try!(r.read_u16::<le>());
+                        let resid = try!(r.read_u16::<le>());
                         if resid == 65535 { break; }
                         if (resid & 0x8000) != 0 {
-                            resid &= !0x8000;
+                            //resid &= !0x8000;
                             let sdt_len = try!(r.read_u8()) as usize;
-                            let sdt = {
+                            let /*sdt*/ _ = {
                                 let mut tmp = vec![0; sdt_len as usize];
                                 let len = r.read(&mut tmp).unwrap();
                                 assert_eq!(len, sdt_len as usize);
@@ -777,12 +781,12 @@ impl ObjProp {
                 }
                 if (pfl & 4) != 0 {
                     loop {
-                        let mut resid = try!(r.read_u16::<le>());
+                        let resid = try!(r.read_u16::<le>());
                         if resid == 65535 { break; }
                         if (resid & 0x8000) != 0 {
-                            resid &= !0x8000;
+                            //resid &= !0x8000;
                             let sdt_len = try!(r.read_u8()) as usize;
-                            let mut sdt = {
+                            let /*sdt*/ _ = {
                                 let mut tmp = vec![0; sdt_len as usize];
                                 let len = r.read(&mut tmp).unwrap();
                                 assert_eq!(len, sdt_len as usize);
@@ -1028,7 +1032,6 @@ impl Message {
                 Ok(w)
             }
             Message::OBJACK(objack) => {
-                //type write_u32::<le> = Vec::write_u32<LittleEndian>;
                 let mut w = vec![];
                 w.write_u8(7).unwrap(); //OBJACK writer
                 for o in objack.obj.iter() {
@@ -1329,7 +1332,8 @@ impl Client {
                                         match msg.args[0] {
                                             MsgList::tSTR(ref char_name) => {
                                                 println!("    add char '{}'", char_name);
-                                                self.charlist.push(char_name.clone()/*FIXME rewrite without cloning*/);
+                                                /*FIXME rewrite without cloning*/
+                                                self.charlist.push(char_name.clone());
                                             },
                                             _ => {}
                                         }
@@ -1359,11 +1363,7 @@ impl Client {
             Message::MAPREQ(_)  => { println!("     !!! client must not receive MAPREQ !!!"); },
             Message::MAPDATA(_) => {},
             Message::OBJDATA( objdata ) => {
-                //TODO receiver_to_sender.send(objdata.to_buf());
                 self.enqueue_to_send(Message::OBJACK(ObjAck::new(&objdata)), tx_buf); // send OBJACKs
-                for o in objdata.obj.iter() {
-                    println!("    {:?}", o);
-                }
                 //TODO parse objdata in network thread and send here more normalized objects
                 for o in objdata.obj.iter() {
                     if !self.objects.contains_key(&o.id) {
