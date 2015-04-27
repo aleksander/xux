@@ -1049,30 +1049,7 @@ impl Message {
 
 struct Client {
     user: &'static str,
-    //pass: &'static str,
     cookie: Vec<u8>,
-    //host: &'static str,
-    //auth_port: u16,
-    //port: u16,
-    //game_addr: SocketAddr,
-    //any_addr: SocketAddr,
-    //udp_rx: UdpSocket,
-    //udp_tx: UdpSocket,
-    //main_to_sender: Sender<Vec<u8>>,     //TODO type OutputBuffer = Vec<u8>
-    //sender_from_any: Receiver<Vec<u8>>,  //TODO type OutputBuffer = Vec<u8>
-    //receiver_to_sender: Sender<Vec<u8>>, //TODO type OutputBuffer = Vec<u8>
-    //beater_to_sender: Sender<Vec<u8>>,
-    //receiver_to_main: Sender<()>,
-    //main_from_any: Receiver<()>,
-    //receiver_to_beater: Sender<()>,
-    //beater_from_any: Receiver<()>,
-    //receiver_to_viewer: Sender<(u32,Obj)>,
-    //viewer_from_any: Receiver<Data>,
-    //objects: HashMap<u32,Obj>,
-    //resources: HashMap<u16,String>,
-    //widgets: HashMap<usize,String>,
-    //control_rx: Receiver<Control>,
-    //control_tx: Sender<String>,
     widgets : HashMap<u16,String>,
     objects : HashMap<u32,Obj>,
     grids : HashSet<(i32,i32)>,
@@ -1080,19 +1057,8 @@ struct Client {
     resources : HashMap<u16,String>,
 }
 
-/*
-#[derive(Debug)]
-enum Control {
-    Dump,
-    Quit,
-}
-*/
-
 impl Client {
-    fn new (/*host: &'static str, auth_port: u16, port: u16*/) -> Client {
-        //let host_ip = get_host_addresses(host).unwrap()[0];
-        //let any_addr = SocketAddr {ip: Ipv4Addr(0,0,0,0), port: 0};
-        //let sock = UdpSocket::bind(any_addr).unwrap();
+    fn new () -> Client {
         let mut widgets = HashMap::new();
         widgets.insert(0, "root".to_string());
         let objects = HashMap::new();
@@ -1100,17 +1066,6 @@ impl Client {
         let charlist = Vec::new();
         let resources = HashMap::new();
 
-        //let (tx1,rx1) = channel(); // any -> sender   (packet to send)
-        //let (tx2,rx2) = channel(); // any -> beater   (wakeup signal)
-        //let (tx3,rx3) = channel(); // any -> viewer   (objects data)
-        //let (tx4,rx4) = channel(); // any -> main     (exit signal) // TODO remove ???
-        //let (tx5,rx5) = channel(); // any -> main     (control messages)
-        //let (tx6,rx6) = channel(); // main -> control (strings to output)
-
-        // control socket reader
-        //let reader_to_main = tx4.clone();
-        //let control_to_main = tx5.clone();
-        //let control_from_main = rx6;
         /*
         Thread::spawn(move || {
             let path = Path::new("/tmp/socket");
@@ -1164,29 +1119,6 @@ impl Client {
         Client {
             user: "",
             cookie: Vec::new(),
-            //host: host,
-            //auth_port: auth_port,
-            //port: port,
-            //game_addr: SocketAddr {ip: host_ip, port: port},
-            //udp_rx: sock.clone(),
-            //udp_tx: sock.clone(),
-
-            //main_to_sender: tx1.clone(),
-            //sender_from_any: rx1,
-            //receiver_to_sender: tx1.clone(),
-            //beater_to_sender: tx1.clone(),
-            //receiver_to_main: tx2.clone(),
-            //main_from_any: rx4,
-            //receiver_to_beater: tx2.clone(),
-            //beater_from_any: rx2,
-            //receiver_to_viewer: tx3.clone(),
-            //viewer_from_any: rx3,
-
-            //objects: HashMap::new(),
-            //resources: resources,//HashMap::new(),
-            //widgets: HashMap::new(),
-            //control_rx: rx5,
-            //control_tx: tx6,
             widgets: widgets, 
             objects: objects,
             grids: grids,
@@ -1281,18 +1213,6 @@ impl Client {
         }
     }
 
-    /*
-    fn save_object () {
-        /*TODO*/
-    }
-    */
-
-    /*
-    fn shutdown_and_exit () {
-        /*TODO*/
-    }
-    */
-
     fn dispatch_message (&mut self, buf:&[u8], tx_buf:&mut LinkedList<Vec<u8>>) -> Result<(),Error> {
         let (msg,remains) = match Message::from_buf(buf,MessageDirection::FromServer) {
             Ok((msg,remains)) => { (msg,remains) },
@@ -1364,25 +1284,21 @@ impl Client {
             Message::MAPDATA(_) => {},
             Message::OBJDATA( objdata ) => {
                 self.enqueue_to_send(Message::OBJACK(ObjAck::new(&objdata)), tx_buf); // send OBJACKs
-                //TODO parse objdata in network thread and send here more normalized objects
                 for o in objdata.obj.iter() {
                     if !self.objects.contains_key(&o.id) {
                         self.objects.insert(o.id, Obj{resid:0, xy:(0,0)});
                     }
-                    match self.objects.get_mut(&o.id) {
-                        Some(obj) => {
-                            //TODO check for o.frame vs obj.frame
-                            for prop in o.prop.iter() {
-                                match *prop {
-                                    ObjProp::odREM => { /*FIXME objects.remove(&o.id); break;*/ },
-                                    ObjProp::odMOVE(xy,_) => { obj.xy = xy; },
-                                    ObjProp::odRES(resid) => { obj.resid = resid; },
-                                    ObjProp::odCOMPOSE(resid) => { obj.resid = resid; },
-                                    _ => {},
-                                }
+                    if let Some(obj) = self.objects.get_mut(&o.id) {
+                        //TODO check for o.frame vs obj.frame
+                        for prop in o.prop.iter() {
+                            match *prop {
+                                ObjProp::odREM => { /*FIXME objects.remove(&o.id); break;*/ },
+                                ObjProp::odMOVE(xy,_) => { obj.xy = xy; },
+                                ObjProp::odRES(resid) => { obj.resid = resid; },
+                                ObjProp::odCOMPOSE(resid) => { obj.resid = resid; },
+                                _ => {},
                             }
-                        },
-                        None => unreachable!(),
+                        }
                     };
                 }
                 for o in self.objects.values() {
@@ -1398,7 +1314,6 @@ impl Client {
             Message::OBJACK(_)  => {},
             Message::CLOSE(_)   => {
                 return Err(Error{source:"session closed",detail:None});
-                //Client::shutdown_and_exit();
             },
         }
 
@@ -1408,7 +1323,8 @@ impl Client {
             let char_name = self.charlist[0].clone();
             //FIXME sequence is ALWAYS ZERO!! get sequence from client
             let mut rel = Rel{seq:0, rel:Vec::new()};
-            let id : u16 = 3; //FIXME get widget id by name
+            //FIXME get widget id by name
+            let id : u16 = 3;
             let name : String = "play".to_string();
             let mut args : Vec<MsgList> = Vec::new();
             args.push(MsgList::tSTR(char_name));
@@ -1447,10 +1363,21 @@ fn main() {
     //            println!("{}", Message::from_buf(v.as_slice()));
     //        }
 
+    /* TODO
+    Ok(Control::Dump) => {
+        for o in objects.values() {
+            let (x,y) = o.xy;
+            let resid = o.resid;
+            let resname = match resources.get(&o.resid) {
+                Some(res) => { res.as_slice() },
+                None      => { "null" },
+            };
+            client.control_tx.send(format!("({:7},{:7}) {:7} {}", x, y, resid, resname));
+        }
+    },
+    */
+
     use mio::Socket;
-    //use mio::IoReader;
-    //use mio::IoWriter;
-    //use mio::event::{READABLE,WRITABLE,LEVEL};
 
     struct UdpHandler<'a> {
         sock: mio::NonBlock<mio::udp::UdpSocket>,
@@ -1459,6 +1386,7 @@ fn main() {
         client: &'a mut Client,
         start: bool,
     }
+
     impl<'a> UdpHandler<'a> {
         fn new(sock: mio::NonBlock<mio::udp::UdpSocket>, client:&'a mut Client, addr: std::net::SocketAddr) -> UdpHandler<'a> {
             UdpHandler {
@@ -1470,40 +1398,34 @@ fn main() {
             }
         }
     }
+
     const CLIENT: mio::Token = mio::Token(0);
+
     impl<'a> mio::Handler for UdpHandler<'a> {
         type Timeout = usize;
         type Message = ();
+
         fn readable(&mut self, eloop: &mut mio::EventLoop<UdpHandler>, token: mio::Token, _: mio::ReadHint) {
-            //use mio::buf::Buf;
             match token {
                 CLIENT => {
                     let mut rx_buf = mio::buf::RingBuf::new(65535);
                     self.sock.recv_from(&mut rx_buf).ok().expect("sock.recv");
                     let mut client: &mut Client = self.client;
                     let buf: &[u8] = mio::buf::Buf::bytes(&rx_buf);
-                    //XXX inspect why borrow checker error if I call self.client.dispatch_message
-                    //TODO let out:Vec<Buf> = client.dispatch(); send_all(out);
                     if let Err(e) = client.dispatch_message(buf, &mut self.tx_buf) {
                         println!("error: {:?}", e);
                         eloop.shutdown();
                     }
-                    //assert!(str::from_utf8(self.rx_buf.reader().bytes()) == self.msg);
                 },
                 _ => ()
             }
         }
+
         fn writable(&mut self, eloop: &mut mio::EventLoop<UdpHandler>, token: mio::Token) {
-            //use mio::buf::Buf;
             match token {
                 CLIENT => {
-                    //info!("WRITABLE");
-                    //TODO Option buf = client.get_any_data_to_send();
-                    //Some => self.sock.send(buf),
-                    //None => ()
                     match self.tx_buf.pop_back() {
                         Some(data) => {
-                            //TODO parse and print message
                             if let Ok((msg,_)) = Message::from_buf(data.as_slice(),MessageDirection::FromClient) {
                                 println!("TX: {:?}", msg);
                             }
@@ -1521,23 +1443,22 @@ fn main() {
             }
         }
     }
-    //TODO every 5 seconds >>> Client::enqueue_to_send(beat());
-    //let server_ip = get_host_addresses("game.salemthegame.com")[0];
+
     let hostname = "game.salemthegame.com";
     let host = {
         let mut ips = std::net::lookup_host(hostname).ok().expect("lookup_host");
         ips.next().expect("ip.next").ok().expect("ip.next.ok")
     };
-    //FIXME let addr = mio::net::SockAddr::InetAddr(host.ip(), 1870);
     let any = str::FromStr::from_str("0.0.0.0:0").ok().expect("any.from_str");
     let sock = mio::udp::bind(&any).ok().expect("bind");
-    //type ClientEventLoop = mio::EventLoop<usize>;
     println!("connect to {}", host.ip());
+
     //FIXME sock.connect(&addr);
     sock.set_reuseaddr(true).ok().expect("set_reuseaddr");
 
     //TODO return Result and match
     let mut client = Client::new(/*"game.salemthegame.com", 1871, 1870*/);
+
     //TODO FIXME get login/password from command line instead of storing them here
     match client.authorize("salvian", "простойпароль", host.ip(), 1871) {
         Ok(()) => {
@@ -1549,7 +1470,6 @@ fn main() {
         }
     };
 
-    
     let mut event_loop = mio::EventLoop::new().ok().expect("mio.loop.new");
     event_loop.register_opt(&sock, CLIENT, mio::Interest::readable() |
                                            mio::Interest::writable(),
@@ -1559,39 +1479,4 @@ fn main() {
 
     info!("run event loop");
     event_loop.run(&mut handler).ok().expect("Failed to run the event loop");
-
-    //client.wait_for_end();
-
-/* TODO
-    Ok(Control::Dump) => {
-        for o in objects.values() {
-            let (x,y) = o.xy;
-            let resid = o.resid;
-            let resname = match resources.get(&o.resid) {
-                Some(res) => { res.as_slice() },
-                None      => { "null" },
-            };
-            client.control_tx.send(format!("({:7},{:7}) {:7} {}", x, y, resid, resname));
-        }
-    },
-*/
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
