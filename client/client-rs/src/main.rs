@@ -1055,6 +1055,7 @@ struct Client {
     grids : HashSet<(i32,i32)>,
     charlist : Vec<String>,
     resources : HashMap<u16,String>,
+    seq : u16,
 }
 
 impl Client {
@@ -1124,6 +1125,7 @@ impl Client {
             grids: grids,
             charlist: charlist,
             resources:resources,
+            seq : 0,
         }
     }
 
@@ -1218,8 +1220,30 @@ impl Client {
             Ok((msg,remains)) => { (msg,remains) },
             Err(err) => { println!("message parse error: {:?}", err); return Err(err); },
         };
-        println!("RX: {:?}", msg);
-        if let Some(rem) = remains { println!("                 REMAINS {} bytes", rem.len()); }
+
+        {
+            let mut duplicate = false;
+            if let Message::REL(rel) = msg {
+                match self.last_rx_rel_seq {
+                    None => {
+                        self.last_rx_rel_seq = Some(rel.seq);
+                    }
+                    Some(seq) => {
+                        if rel.seq == seq {
+                            println!("RX: REL {} duplicate", seq);
+                            duplicate = true;
+                        } else {
+                            self.last_rx_rel_seq = Some(rel.seq);
+                        }
+                    }
+                }
+            }
+            if !duplicate {
+                println!("RX: {:?}", msg);
+                if let Some(rem) = remains { println!("                 REMAINS {} bytes", rem.len()); }
+            }
+        }
+
         match msg {
             Message::S_SESS(sess) => {
                 match sess.err {
@@ -1278,7 +1302,14 @@ impl Client {
                     }
                 }
             },
-            Message::ACK(_)     => {},
+            Message::ACK(ack)   => {
+                if ack.seq == self.seq {
+                    println!("our rel {} acked", self.seq);
+                    //TODO remove pending REL message with this seq
+                    //FIXME self.seq += last_rel.rels.len()
+                    self.seq += 1;
+                }
+            },
             Message::BEAT    => { println!("     !!! client must not receive BEAT !!!"); },
             Message::MAPREQ(_)  => { println!("     !!! client must not receive MAPREQ !!!"); },
             Message::MAPDATA(_) => {},
@@ -1317,12 +1348,16 @@ impl Client {
             },
         }
 
+        Ok(())
+    }
+
+    fn react () {
         //TODO send REL until reply
         if self.charlist.len() > 0 {
             println!("send play '{}'", self.charlist[0]);
             let char_name = self.charlist[0].clone();
             //FIXME sequence is ALWAYS ZERO!! get sequence from client
-            let mut rel = Rel{seq:0, rel:Vec::new()};
+            let mut rel = Rel{seq:self.seq, rel:Vec::new()};
             //FIXME get widget id by name
             let id : u16 = 3;
             let name : String = "play".to_string();
@@ -1333,8 +1368,6 @@ impl Client {
             self.enqueue_to_send(Message::REL(rel), tx_buf);
             self.charlist.clear();
         }
-
-        Ok(())
     }
 
     fn connect (&self, tx_buf:&mut LinkedList<Vec<u8>>) {
