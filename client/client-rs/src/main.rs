@@ -98,7 +98,7 @@ struct Tiles {
 }
 impl Debug for Tiles {
     fn fmt(&self, f : &mut Formatter) -> std::fmt::Result {
-        try!(write!(f, "Tiles"));
+        try!(writeln!(f, ""));
         for tile in self.tiles.iter() {
             try!(writeln!(f, "      {:?}", tile));
         }
@@ -170,7 +170,7 @@ fn read_sublist (r : &mut std::io::Cursor<&[u8]> /*buf : &[u8]*/) {
         match t {
             /*T_END    */  0  => { if deep == 0 { return; } else { deep -= 1; } },
             /*T_INT    */  1  => { r.read_i32::<le>().unwrap(); },
-            /*T_STR    */  2  => { let mut tmp = Vec::new(); r.read_until(0, &mut tmp).unwrap(); },
+            /*T_STR    */  2  => { let mut tmp = Vec::new(); r.read_until(0, &mut tmp).unwrap(); tmp.pop(); },
             /*T_COORD  */  3  => { r.read_i32::<le>().unwrap(); r.read_i32::<le>().unwrap(); },
             /*T_UINT8  */  4  => { r.read_u8().unwrap(); },
             /*T_UINT16 */  5  => { r.read_u16::<le>().unwrap(); },
@@ -278,6 +278,7 @@ fn read_list (r : &mut std::io::Cursor<&[u8]>) -> Vec<MsgList> /*TODO return Res
             /*T_STR    */  2  => {
                 let mut tmp = Vec::new();
                 r.read_until(0, &mut tmp).unwrap();
+                tmp.pop();
                 list.push(MsgList::tSTR( String::from_utf8(tmp).unwrap() ));
             },
             /*T_COORD  */  3  => {
@@ -346,6 +347,7 @@ impl RelElem {
                 let kind = {
                     let mut tmp = Vec::new();
                     r.read_until(0, &mut tmp).unwrap();
+                    tmp.pop();
                     String::from_utf8(tmp).unwrap()
                 };
                 let parent = try!(r.read_u16::<le>());
@@ -358,6 +360,7 @@ impl RelElem {
                 let name = {
                     let mut tmp = Vec::new();
                     r.read_until(0, &mut tmp).unwrap();
+                    tmp.pop();
                     String::from_utf8(tmp).unwrap()
                 };
                 let args = read_list(&mut r);
@@ -375,6 +378,7 @@ impl RelElem {
                 let name = {
                     let mut tmp = Vec::new();
                     r.read_until(0, &mut tmp).unwrap();
+                    tmp.pop();
                     String::from_utf8(tmp).unwrap()
                 };
                 let ver = try!(r.read_u16::<le>());
@@ -394,6 +398,7 @@ impl RelElem {
                     let name = {
                         let mut tmp = Vec::new();
                         r.read_until(0, &mut tmp).unwrap();
+                        tmp.pop();
                         String::from_utf8(tmp).unwrap()
                     };
                     let ver = try!(r.read_u16::<le>());
@@ -659,6 +664,7 @@ impl ObjProp {
                 let text = {
                     let mut tmp = Vec::new();
                     r.read_until(0, &mut tmp).unwrap();
+                    tmp.pop();
                     String::from_utf8(tmp).unwrap()
                 };
                 Ok(Some(ObjProp::odSPEECH(zo,text)))
@@ -697,6 +703,7 @@ impl ObjProp {
                     let xfname = {
                         let mut tmp = Vec::new();
                         r.read_until(0, &mut tmp).unwrap();
+                        tmp.pop();
                         String::from_utf8(tmp).unwrap()
                     };
                     Ok(Some(ObjProp::odFOLLOW(odFOLLOW::To(oid,xfres,xfname))))
@@ -747,6 +754,7 @@ impl ObjProp {
                 let name = {
                     let mut tmp = Vec::new();
                     r.read_until(0, &mut tmp).unwrap();
+                    tmp.pop();
                     String::from_utf8(tmp).unwrap()
                 };
                 //XXX FIXME C string is not like Rust string, it has \0 at the end,
@@ -816,6 +824,7 @@ impl ObjProp {
                     let /*at*/ _ = {
                         let mut tmp = Vec::new();
                         r.read_until(0, &mut tmp).unwrap();
+                        tmp.pop();
                         String::from_utf8(tmp).unwrap()
                     };
                     let /*resid*/ _ = try!(r.read_u16::<le>());
@@ -874,12 +883,14 @@ impl Message {
                         let /*proto*/ _ = {
                             let mut tmp = Vec::new();
                             try!(r.read_until(0, &mut tmp));
+                            tmp.pop();
                             tmp
                         };
                         let /*version*/ _ = try!(r.read_u16::<le>());
                         let login = {
                             let mut tmp = Vec::new();
                             try!(r.read_until(0, &mut tmp));
+                            tmp.pop();
                             tmp
                         };
                         let cookie_len = try!(r.read_u16::<le>());
@@ -927,7 +938,10 @@ impl Message {
                 Ok( Message::BEAT )
             },
             4 /*MAPREQ*/ => {
-                Ok( Message::MAPREQ( MapReq { x:0, y:0 } /*FIXME should read x,y from buf*/ ) )
+                Ok( Message::MAPREQ( MapReq {
+                    x:try!(r.read_i32::<le>()),
+                    y:try!(r.read_i32::<le>()),
+                } ) )
             },
             5 /*MAPDATA*/ => {
                 let pktid = try!(r.read_i32::<le>());
@@ -1056,6 +1070,7 @@ struct Client {
     charlist : Vec<String>,
     resources : HashMap<u16,String>,
     seq : u16,
+    last_rx_rel_seq : Option<u16>,
 }
 
 impl Client {
@@ -1126,6 +1141,7 @@ impl Client {
             charlist: charlist,
             resources:resources,
             seq : 0,
+            last_rx_rel_seq : None,
         }
     }
 
@@ -1223,7 +1239,7 @@ impl Client {
 
         {
             let mut duplicate = false;
-            if let Message::REL(rel) = msg {
+            if let Message::REL(ref rel) = msg {
                 match self.last_rx_rel_seq {
                     None => {
                         self.last_rx_rel_seq = Some(rel.seq);
@@ -1272,7 +1288,7 @@ impl Client {
                             match self.widgets.get(&(msg.id)) {
                                 None => {},
                                 Some(c) => {
-                                    if (c == "charlist\0") && (msg.name == "add\0") {
+                                    if (c == "charlist") && (msg.name == "add") {
                                         match msg.args[0] {
                                             MsgList::tSTR(ref char_name) => {
                                                 println!("    add char '{}'", char_name);
@@ -1348,18 +1364,29 @@ impl Client {
             },
         }
 
+        //TODO reactor.react(&client)
+        self.react(tx_buf);
+
         Ok(())
     }
 
-    fn react () {
+    fn widget_id_from_name (&self, name:&str) -> Option<u16> {
+        for (id,n) in self.widgets.iter() {
+            if n == name {
+                return Some(*id)
+            }
+        }
+        None
+    }
+
+    fn react (&mut self, tx_buf:&mut LinkedList<Vec<u8>>) {
         //TODO send REL until reply
         if self.charlist.len() > 0 {
             println!("send play '{}'", self.charlist[0]);
             let char_name = self.charlist[0].clone();
-            //FIXME sequence is ALWAYS ZERO!! get sequence from client
             let mut rel = Rel{seq:self.seq, rel:Vec::new()};
             //FIXME get widget id by name
-            let id : u16 = 3;
+            let id = self.widget_id_from_name("charlist").expect("charlist widget is not found");
             let name : String = "play".to_string();
             let mut args : Vec<MsgList> = Vec::new();
             args.push(MsgList::tSTR(char_name));
