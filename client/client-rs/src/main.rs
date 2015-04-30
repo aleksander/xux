@@ -1071,6 +1071,7 @@ struct Client {
     resources : HashMap<u16,String>,
     seq : u16,
     last_rx_rel_seq : Option<u16>,
+    que: LinkedList<Vec<u8>>,
 }
 
 impl Client {
@@ -1142,6 +1143,7 @@ impl Client {
             resources:resources,
             seq : 0,
             last_rx_rel_seq : None,
+            que: LinkedList::new(),
         }
     }
 
@@ -1227,6 +1229,16 @@ impl Client {
     fn enqueue_to_send (&self, msg: Message, tx_buf:&mut LinkedList<Vec<u8>>) {
         match msg.to_buf() {
             Ok(buf) => { tx_buf.push_front(buf); },
+            Err(e) => { println!("enqueue error: {:?}", e); },
+        }
+    }
+
+    fn enqueue_to_send_and_repeat (&mut self, msg: Message, tx_buf:&mut LinkedList<Vec<u8>>) {
+        match msg.to_buf() {
+            Ok(buf) => {
+                tx_buf.push_front(buf.clone());
+                self.que.push_front(buf);
+            },
             Err(e) => { println!("enqueue error: {:?}", e); },
         }
     }
@@ -1370,7 +1382,7 @@ impl Client {
         Ok(())
     }
 
-    fn widget_id_from_name (&self, name:&str) -> Option<u16> {
+    fn widget_id_by_name (&self, name:&str) -> Option<u16> {
         for (id,n) in self.widgets.iter() {
             if n == name {
                 return Some(*id)
@@ -1385,8 +1397,7 @@ impl Client {
             println!("send play '{}'", self.charlist[0]);
             let char_name = self.charlist[0].clone();
             let mut rel = Rel{seq:self.seq, rel:Vec::new()};
-            //FIXME get widget id by name
-            let id = self.widget_id_from_name("charlist").expect("charlist widget is not found");
+            let id = self.widget_id_by_name("charlist").expect("charlist widget is not found");
             let name : String = "play".to_string();
             let mut args : Vec<MsgList> = Vec::new();
             args.push(MsgList::tSTR(char_name));
@@ -1397,10 +1408,11 @@ impl Client {
         }
     }
 
-    fn connect (&self, tx_buf:&mut LinkedList<Vec<u8>>) {
+    fn connect (&mut self, tx_buf:&mut LinkedList<Vec<u8>>) {
         //TODO send SESS until reply
         //TODO get username from server responce, not from auth username
-        self.enqueue_to_send(Message::C_SESS(cSess{login:self.user.to_string(), cookie:self.cookie.clone()}), tx_buf);
+        let cookie = self.cookie.clone();
+        self.enqueue_to_send_and_repeat(Message::C_SESS(cSess{login:self.user.to_string(), cookie:cookie}), tx_buf);
     }
 
     fn mapreq (&self, x:i32, y:i32, tx_buf:&mut LinkedList<Vec<u8>>) {
@@ -1411,6 +1423,15 @@ impl Client {
     }
 
 }
+
+//TODO
+/*
+enum MsgType {
+    REL,
+    C_SESS,
+    MAPREQ,
+}
+*/
 
 
 fn main() {
@@ -1445,7 +1466,7 @@ fn main() {
         addr: std::net::SocketAddr,
         tx_buf: LinkedList<Vec<u8>>,
         client: &'a mut Client,
-        start: bool,
+        //start: bool,
     }
 
     impl<'a> UdpHandler<'a> {
@@ -1455,7 +1476,7 @@ fn main() {
                 addr: addr,
                 tx_buf: LinkedList::new(),
                 client: client,
-                start: true,
+                //start: true,
             }
         }
     }
@@ -1495,12 +1516,37 @@ fn main() {
                                 println!("send_to error: {}", e);
                                 eloop.shutdown();
                             }
-                            self.start = false;
+                            if !self.client.que.is_empty() {
+                                //TODO use returned timeout handle to cancel timeout
+                                if let Err(e) = eloop.timeout_ms(123, 300) {
+                                    println!("eloop.timeout FAILED: {:?}", e);
+                                    eloop.shutdown();
+                                }
+                            }
+                            //self.start = false;
                         },
                         None => {}
                     }
                 },
                 _ => ()
+            }
+        }
+
+        fn timeout (&mut self, eloop: &mut mio::EventLoop<UdpHandler>, /*timeout*/ _: usize) {
+            let client = &self.client;
+            match client.que.front() {
+                Some(buf) => {
+                    println!("re-enqueue to send by timeout");
+                    self.tx_buf.push_front(buf.clone());
+                    //TODO use returned timeout handle to cancel timeout
+                    if let Err(e) = eloop.timeout_ms(123, 300) {
+                        println!("eloop.timeout FAILED: {:?}", e);
+                        eloop.shutdown();
+                    }
+                }
+                None => {
+                    println!("WARNING: timeout on empty que");
+                }
             }
         }
     }
