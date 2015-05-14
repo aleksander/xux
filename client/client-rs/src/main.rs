@@ -1062,6 +1062,7 @@ impl Message {
 }
 
 struct Client {
+    serv_ip: std::net::IpAddr,
     user: &'static str,
     cookie: Vec<u8>,
     widgets : HashMap<u16,String>,
@@ -1134,6 +1135,7 @@ impl Client {
         */
 
         Client {
+            serv_ip: std::net::IpAddr::V4(std::net::Ipv4Addr::new(0,0,0,0)),
             user: "",
             cookie: Vec::new(),
             widgets: widgets, 
@@ -1147,11 +1149,18 @@ impl Client {
         }
     }
 
-    fn authorize (&mut self, user: &'static str, pass: &str, ip: std::net::IpAddr, port: u16) -> Result<(), Error> {
+    fn authorize (&mut self, user: &'static str, pass: &str, hostname: &str, port: u16) -> Result<(), Error> {
+        let host = {
+            let mut ips = std::net::lookup_host(hostname).ok().expect("lookup_host");
+            ips.next().expect("ip.next").ok().expect("ip.next.ok")
+        };
+        println!("connect to {}", host.ip());
+
         self.user = user;
+        self.serv_ip = host.ip();
         //self.pass = pass;
         //let auth_addr: SocketAddr = SocketAddr {ip: ip, port: port};
-        let auth_addr = SocketAddr::new(ip, port);
+        let auth_addr = SocketAddr::new(self.serv_ip, port);
         println!("authorize {} @ {}", user, auth_addr);
         //TODO add method connect(SocketAddr) to TcpStream
         //let stream = tryio!("tcp.connect" TcpStream::connect(self.auth_addr));
@@ -1233,7 +1242,7 @@ impl Client {
         }
     }
 
-    fn enqueue_to_send_and_repeat (&mut self, msg: Message, tx_buf:&mut LinkedList<Vec<u8>>) {
+    fn enqueue_to_send_and_repeat (&mut self, msg: Message, tx_buf:&mut LinkedList<Vec<u8>>) /*TODO return Result*/ {
         match msg.to_buf() {
             Ok(buf) => {
                 tx_buf.push_front(buf.clone());
@@ -1552,13 +1561,9 @@ fn main() {
     }
 
     let hostname = "game.salemthegame.com";
-    let host = {
-        let mut ips = std::net::lookup_host(hostname).ok().expect("lookup_host");
-        ips.next().expect("ip.next").ok().expect("ip.next.ok")
-    };
+
     let any = str::FromStr::from_str("0.0.0.0:0").ok().expect("any.from_str");
     let sock = mio::udp::bind(&any).ok().expect("bind");
-    println!("connect to {}", host.ip());
 
     //FIXME sock.connect(&addr);
     sock.set_reuseaddr(true).ok().expect("set_reuseaddr");
@@ -1567,7 +1572,7 @@ fn main() {
     let mut client = Client::new(/*"game.salemthegame.com", 1871, 1870*/);
 
     //TODO FIXME get login/password from command line instead of storing them here
-    match client.authorize("salvian", "простойпароль", host.ip(), 1871) {
+    match client.authorize("salvian", "простойпароль", hostname, 1871) {
         Ok(()) => {
             println!("success. cookie = [{}]", client.cookie.as_slice().to_hex());
         },
@@ -1581,7 +1586,8 @@ fn main() {
     event_loop.register_opt(&sock, CLIENT, mio::Interest::readable() |
                                            mio::Interest::writable(),
                                            mio::PollOpt::level()).ok().expect("loop.register_opt");
-    let mut handler = UdpHandler::new(sock, &mut client, std::net::SocketAddr::new(host.ip(),1870));
+    let ip = client.serv_ip;
+    let mut handler = UdpHandler::new(sock, &mut client, std::net::SocketAddr::new(ip, 1870));
     handler.client.connect(&mut handler.tx_buf); //TODO return Result and match
 
     info!("run event loop");
