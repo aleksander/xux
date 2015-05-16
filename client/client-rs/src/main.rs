@@ -13,10 +13,8 @@ extern crate log;
 
 use std::net::UdpSocket;
 use std::net::SocketAddr;
-use std::collections::LinkedList;
 use std::str;
 use rustc_serialize::hex::ToHex;
-use std::vec::Vec;
 
 mod salem;
 use salem::message::*;
@@ -61,7 +59,7 @@ fn main() {
     struct UdpHandler<'a> {
         sock: mio::NonBlock<mio::udp::UdpSocket>,
         addr: std::net::SocketAddr,
-        tx_buf: LinkedList<Vec<u8>>,
+        //tx_buf: LinkedList<Vec<u8>>,
         client: &'a mut Client,
         //start: bool,
     }
@@ -71,7 +69,7 @@ fn main() {
             UdpHandler {
                 sock: sock,
                 addr: addr,
-                tx_buf: LinkedList::new(),
+                //tx_buf: LinkedList::new(),
                 client: client,
                 //start: true,
             }
@@ -91,7 +89,7 @@ fn main() {
                     self.sock.recv_from(&mut rx_buf).ok().expect("sock.recv");
                     let mut client: &mut Client = self.client;
                     let buf: &[u8] = mio::buf::Buf::bytes(&rx_buf);
-                    if let Err(e) = client.dispatch_message(buf, &mut self.tx_buf) {
+                    if let Err(e) = client.rx(buf) {
                         println!("error: {:?}", e);
                         eloop.shutdown();
                     }
@@ -103,7 +101,7 @@ fn main() {
         fn writable(&mut self, eloop: &mut mio::EventLoop<UdpHandler>, token: mio::Token) {
             match token {
                 CLIENT => {
-                    match self.tx_buf.pop_back() {
+                    match self.client.tx_buf.pop_back() {
                         Some(data) => {
                             if let Ok((msg,_)) = Message::from_buf(data.as_slice(),MessageDirection::FromClient) {
                                 println!("TX: {:?}", msg);
@@ -113,6 +111,8 @@ fn main() {
                                 println!("send_to error: {}", e);
                                 eloop.shutdown();
                             }
+                            self.client.tx();
+                            /*
                             if !self.client.que.is_empty() {
                                 //TODO use returned timeout handle to cancel timeout
                                 if let Err(e) = eloop.timeout_ms(123, 300) {
@@ -120,6 +120,7 @@ fn main() {
                                     eloop.shutdown();
                                 }
                             }
+                            */
                             //self.start = false;
                         },
                         None => {}
@@ -129,7 +130,9 @@ fn main() {
             }
         }
 
-        fn timeout (&mut self, eloop: &mut mio::EventLoop<UdpHandler>, /*timeout*/ _: usize) {
+        fn timeout (&mut self, /*eloop*/ _: &mut mio::EventLoop<UdpHandler>, /*timeout*/ _: usize) {
+            self.client.timeout();
+            /*
             let client = &self.client;
             match client.que.front() {
                 Some(buf) => {
@@ -145,10 +148,9 @@ fn main() {
                     println!("WARNING: timeout on empty que");
                 }
             }
+            */
         }
     }
-
-    let hostname = "game.salemthegame.com";
 
     let any = str::FromStr::from_str("0.0.0.0:0").ok().expect("any.from_str");
     let sock = mio::udp::bind(&any).ok().expect("bind");
@@ -160,7 +162,7 @@ fn main() {
     let mut client = Client::new(/*"game.salemthegame.com", 1871, 1870*/);
 
     //TODO FIXME get login/password from command line instead of storing them here
-    match client.authorize("salvian", "простойпароль", hostname, 1871) {
+    match client.authorize("salvian", "простойпароль", "game.salemthegame.com", 1871) {
         Ok(()) => {
             println!("success. cookie = [{}]", client.cookie.as_slice().to_hex());
         },
@@ -176,7 +178,7 @@ fn main() {
                                            mio::PollOpt::level()).ok().expect("loop.register_opt");
     let ip = client.serv_ip;
     let mut handler = UdpHandler::new(sock, &mut client, std::net::SocketAddr::new(ip, 1870));
-    handler.client.connect(&mut handler.tx_buf); //TODO return Result and match
+    handler.client.connect(); //TODO return Result and match
 
     info!("run event loop");
     event_loop.run(&mut handler).ok().expect("Failed to run the event loop");

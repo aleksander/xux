@@ -13,7 +13,6 @@ type le = LittleEndian;
 #[allow(non_camel_case_types)]
 type be = BigEndian;
 
-
 //TODO move to salem::error mod
 #[derive(Debug)]
 pub struct Error {

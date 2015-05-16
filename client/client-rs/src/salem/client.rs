@@ -35,6 +35,7 @@ pub struct Obj {
 }
 
 pub struct Client {
+    //TODO do all fileds PRIVATE and use callback interface
     pub serv_ip: IpAddr,
     pub user: &'static str,
     pub cookie: Vec<u8>,
@@ -46,6 +47,7 @@ pub struct Client {
     pub seq : u16,
     pub last_rx_rel_seq : Option<u16>,
     pub que: LinkedList<Vec<u8>>,
+    pub tx_buf: LinkedList<Vec<u8>>
 }
 
 impl Client {
@@ -119,6 +121,7 @@ impl Client {
             seq : 0,
             last_rx_rel_seq : None,
             que: LinkedList::new(),
+            tx_buf: LinkedList::new(),
         }
     }
 
@@ -208,24 +211,24 @@ impl Client {
         /*TODO*/
     }
 
-    pub fn enqueue_to_send (&self, msg: Message, tx_buf:&mut LinkedList<Vec<u8>>) {
+    pub fn enqueue_to_send (&mut self, msg: Message) {
         match msg.to_buf() {
-            Ok(buf) => { tx_buf.push_front(buf); },
+            Ok(buf) => { self.tx_buf.push_front(buf); },
             Err(e) => { println!("enqueue error: {:?}", e); },
         }
     }
 
-    pub fn enqueue_to_send_and_repeat (&mut self, msg: Message, tx_buf:&mut LinkedList<Vec<u8>>) /*TODO return Result*/ {
+    pub fn enqueue_to_send_and_repeat (&mut self, msg: Message) /*TODO return Result*/ {
         match msg.to_buf() {
             Ok(buf) => {
-                tx_buf.push_front(buf.clone());
+                self.tx_buf.push_front(buf.clone());
                 self.que.push_front(buf);
             },
             Err(e) => { println!("enqueue error: {:?}", e); },
         }
     }
 
-    pub fn dispatch_message (&mut self, buf:&[u8], tx_buf:&mut LinkedList<Vec<u8>>) -> Result<(),Error> {
+    pub fn dispatch_message (&mut self, buf:&[u8]/*, tx_buf:&mut LinkedList<Vec<u8>>*/) -> Result<(),Error> {
         let (msg,remains) = match Message::from_buf(buf,MessageDirection::FromServer) {
             Ok((msg,remains)) => { (msg,remains) },
             Err(err) => { println!("message parse error: {:?}", err); return Err(err); },
@@ -271,7 +274,7 @@ impl Client {
             Message::REL( rel ) => {
                 //TODO do not process duplicates, but ACK only
                 //XXX are we handle seq right in the case of overflow ???
-                self.enqueue_to_send(Message::ACK(Ack{seq : rel.seq + ((rel.rel.len() as u16) - 1)}), tx_buf);
+                self.enqueue_to_send(Message::ACK(Ack{seq : rel.seq + ((rel.rel.len() as u16) - 1)}));
                 for r in rel.rel.iter() {
                     match *r {
                         RelElem::NEWWDG(ref wdg) => {
@@ -320,11 +323,11 @@ impl Client {
                     self.seq += 1;
                 }
             },
-            Message::BEAT    => { println!("     !!! client must not receive BEAT !!!"); },
+            Message::BEAT       => { println!("     !!! client must not receive BEAT !!!"); },
             Message::MAPREQ(_)  => { println!("     !!! client must not receive MAPREQ !!!"); },
             Message::MAPDATA(_) => {},
             Message::OBJDATA( objdata ) => {
-                self.enqueue_to_send(Message::OBJACK(ObjAck::new(&objdata)), tx_buf); // send OBJACKs
+                self.enqueue_to_send(Message::OBJACK(ObjAck::new(&objdata))); // send OBJACKs
                 for o in objdata.obj.iter() {
                     if !self.objects.contains_key(&o.id) {
                         self.objects.insert(o.id, Obj{resid:0, xy:(0,0)});
@@ -342,14 +345,19 @@ impl Client {
                         }
                     };
                 }
+                
+                let mut tmp = Vec::new();
                 for o in self.objects.values() {
                     let (x,y) = o.xy;
                     let gx:i32 = x / 1100;
                     let gy:i32 = y / 1100;
                     if !self.grids.contains(&(gx,gy)) {
-                        self.mapreq(gx, gy, tx_buf);
+                        tmp.push((gx,gy));
                         self.grids.insert((gx,gy));
                     }
+                }
+                for (x,y) in tmp {
+                     self.mapreq(x, y);
                 }
             },
             Message::OBJACK(_)  => {},
@@ -357,9 +365,6 @@ impl Client {
                 return Err(Error{source:"session closed",detail:None});
             },
         }
-
-        //TODO reactor.react(&client)
-        self.react(tx_buf);
 
         Ok(())
     }
@@ -373,7 +378,7 @@ impl Client {
         None
     }
 
-    pub fn react (&mut self, tx_buf:&mut LinkedList<Vec<u8>>) {
+    pub fn react (&mut self) {
         //TODO send REL until reply
         if self.charlist.len() > 0 {
             println!("send play '{}'", self.charlist[0]);
@@ -385,24 +390,38 @@ impl Client {
             args.push(MsgList::tSTR(char_name));
             let elem = RelElem::WDGMSG(WdgMsg{ id : id, name : name, args : args });
             rel.rel.push(elem);
-            self.enqueue_to_send(Message::REL(rel), tx_buf);
+            self.enqueue_to_send(Message::REL(rel));
             self.charlist.clear();
         }
     }
 
-    pub fn connect (&mut self, tx_buf:&mut LinkedList<Vec<u8>>) {
+    pub fn connect (&mut self) {
         //TODO send SESS until reply
         //TODO get username from server responce, not from auth username
         let cookie = self.cookie.clone();
-        self.enqueue_to_send_and_repeat(Message::C_SESS(cSess{login:self.user.to_string(), cookie:cookie}), tx_buf);
+        self.enqueue_to_send_and_repeat(Message::C_SESS(cSess{login:self.user.to_string(), cookie:cookie}));
     }
 
-    pub fn mapreq (&self, x:i32, y:i32, tx_buf:&mut LinkedList<Vec<u8>>) {
+    pub fn mapreq (&mut self, x:i32, y:i32) {
         //TODO send until reply
         //TODO replace with client.send(Message::MapReq::new(x,y).to_buf())
         //     or client.send(Message::mapreq(x,y).to_buf())
-        self.enqueue_to_send(Message::MAPREQ(MapReq{x:x,y:y}), tx_buf);
+        self.enqueue_to_send(Message::MAPREQ(MapReq{x:x,y:y}));
     }
 
+    pub fn rx (&mut self, buf:&[u8]) -> Result<(),Error> {
+        try!(self.dispatch_message(buf));
+        //TODO reactor.react(&client)
+        self.react();
+        Ok(())
+    }
+    
+    pub fn timeout (&self) {
+        println!("TIMEOUT!");
+    }
+    
+    pub fn tx (&self) {
+        println!("TXed!");
+    }
 }
 
