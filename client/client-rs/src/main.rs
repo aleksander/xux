@@ -62,6 +62,7 @@ fn main() {
         //tx_buf: LinkedList<Vec<u8>>,
         client: &'a mut Client,
         //start: bool,
+        counter: usize,
     }
 
     impl<'a> UdpHandler<'a> {
@@ -72,6 +73,7 @@ fn main() {
                 //tx_buf: LinkedList::new(),
                 client: client,
                 //start: true,
+                counter: 0,
             }
         }
     }
@@ -103,26 +105,32 @@ fn main() {
         fn writable(&mut self, eloop: &mut mio::EventLoop<UdpHandler>, token: mio::Token) {
             match token {
                 CLIENT => {
-                    match self.client.tx_buf.pop_back() {
-                        Some(data) => {
+                    match self.client.tx() {
+                        Some((data,timeout)) => {
                             if let Ok((msg,_)) = Message::from_buf(data.as_slice(),MessageDirection::FromClient) {
                                 println!("TX: {:?}", msg);
                             }
-                            let mut buf = mio::buf::SliceBuf::wrap(data.as_slice());
-                            if let Err(e) = self.sock.send_to(&mut buf, &self.addr) {
-                                println!("send_to error: {}", e);
-                                eloop.shutdown();
+                            self.counter += 1;
+                            if self.counter % 5 == 0 {
+                                let mut buf = mio::buf::SliceBuf::wrap(data.as_slice());
+                                if let Err(e) = self.sock.send_to(&mut buf, &self.addr) {
+                                    println!("send_to error: {}", e);
+                                    eloop.shutdown();
+                                }
+                            } else {
+                                println!("DROPPED!");
                             }
-                            self.client.tx();
-                            /*
-                            if !self.client.que.is_empty() {
+                            self.client.txed();
+
+                            if let Some(timeout) = timeout {
                                 //TODO use returned timeout handle to cancel timeout
-                                if let Err(e) = eloop.timeout_ms(123, 300) {
+                                println!("set timeout {} ms", timeout);
+                                if let Err(e) = eloop.timeout_ms(123, timeout) {
                                     println!("eloop.timeout FAILED: {:?}", e);
                                     eloop.shutdown();
                                 }
                             }
-                            */
+
                             //self.start = false;
                         },
                         None => {}
@@ -132,29 +140,15 @@ fn main() {
             }
         }
 
-        fn timeout (&mut self, eloop: &mut mio::EventLoop<UdpHandler>, /*timeout*/ _: usize) {
+        fn timeout (&mut self, /*eloop*/ _: &mut mio::EventLoop<UdpHandler>, /*timeout*/ _: usize) {
             self.client.timeout();
+            //FIXME move to reactor part
+            /*
             if self.client.ready_to_go() {
                 println!("client is ready to GO!");
                 if let Err(e) = self.client.go() {
                     println!("client.go FAILED: {:?}", e);
                     eloop.shutdown();
-                }
-            }
-            /*
-            let client = &self.client;
-            match client.que.front() {
-                Some(buf) => {
-                    println!("re-enqueue to send by timeout");
-                    self.tx_buf.push_front(buf.clone());
-                    //TODO use returned timeout handle to cancel timeout
-                    if let Err(e) = eloop.timeout_ms(123, 300) {
-                        println!("eloop.timeout FAILED: {:?}", e);
-                        eloop.shutdown();
-                    }
-                }
-                None => {
-                    println!("WARNING: timeout on empty que");
                 }
             }
             */
@@ -189,7 +183,7 @@ fn main() {
     let mut handler = UdpHandler::new(sock, &mut client, std::net::SocketAddr::new(ip, 1870));
     handler.client.connect().ok().expect("client.connect()");
 
-    if let Err(e) = eloop.timeout_ms(123, 2000) {
+    if let Err(e) = eloop.timeout_ms(123, 4000) {
         println!("eloop.timeout FAILED: {:?}", e);
         return;
     }

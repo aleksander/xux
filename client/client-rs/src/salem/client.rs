@@ -46,8 +46,8 @@ pub struct Client {
     pub resources : HashMap<u16,String>,
     pub seq : u16,
     pub rx_rel_seq : u16,
-    pub que: LinkedList<Vec<u8>>,
-    pub tx_buf: LinkedList<Vec<u8>>
+    pub que: LinkedList<(Vec<u8>,Option<u64>)>,
+    pub tx_buf: LinkedList<(Vec<u8>,Option<u64>)>
 }
 
 impl Client {
@@ -211,18 +211,13 @@ impl Client {
         /*TODO*/
     }
 
-    pub fn enqueue_to_send (&mut self, msg: Message) -> Result<(),Error> {
-        match msg.to_buf() {
-            Ok(buf) => { self.tx_buf.push_front(buf); Ok(()) },
-            Err(e) => { println!("enqueue error: {:?}", e); Err(e) },
-        }
-    }
-
-    pub fn enqueue_to_send_and_repeat (&mut self, msg: Message) -> Result<(),Error> {
+    pub fn enqueue_to_send (&mut self, msg: Message, timeout: Option<u64>) -> Result<(),Error> {
         match msg.to_buf() {
             Ok(buf) => {
-                self.tx_buf.push_front(buf.clone());
-                self.que.push_front(buf);
+                self.tx_buf.push_front( (buf.clone(),timeout) );
+                if let Some(_) = timeout {
+                    self.que.push_front( (buf,timeout) );
+                }
                 Ok(())
             },
             Err(e) => { println!("enqueue error: {:?}", e); Err(e) },
@@ -259,6 +254,7 @@ impl Client {
                         //??? or can we re-send our SESS requests in case of BUSY err ?
                     }
                 }
+                self.remove_sess_from_que();
                 Client::start_send_beats();
             },
             Message::C_SESS(_) => { println!("     !!! client must not receive C_SESS !!!"); },
@@ -266,7 +262,7 @@ impl Client {
                 if !out_of_seq_rel {
                     //XXX are we handle seq right in the case of overflow ???
                     let mut next_rel_seq = rel.seq + ((rel.rel.len() as u16) - 1);
-                    try!(self.enqueue_to_send(Message::ACK(Ack{seq : next_rel_seq})));
+                    try!(self.enqueue_to_send(Message::ACK(Ack{seq : next_rel_seq}), None));
                     next_rel_seq += 1;
                     self.rx_rel_seq = next_rel_seq;
                     for r in rel.rel.iter() {
@@ -324,7 +320,7 @@ impl Client {
             Message::MAPREQ(_)  => { println!("     !!! client must not receive MAPREQ !!!"); },
             Message::MAPDATA(_) => {},
             Message::OBJDATA( objdata ) => {
-                try!(self.enqueue_to_send(Message::OBJACK(ObjAck::new(&objdata)))); // send OBJACKs
+                try!(self.enqueue_to_send(Message::OBJACK(ObjAck::new(&objdata)), None)); // send OBJACKs
                 for o in objdata.obj.iter() {
                     if !self.objects.contains_key(&o.id) {
                         self.objects.insert(o.id, Obj{resid:0, xy:(0,0)});
@@ -366,6 +362,20 @@ impl Client {
         Ok(())
     }
 
+    fn remove_sess_from_que (&mut self) {
+        let mut should_be_removed = false;
+        if let Some(&(ref buf,_)) = self.que.back() {
+            if let Ok(msg) = Message::from_buf(buf, MessageDirection::FromClient) {
+                if let (Message::C_SESS(_),_) = msg {
+                    should_be_removed = true;
+                }
+            }
+        }
+        if should_be_removed {
+            self.que.pop_back();
+        }
+    }
+
     pub fn widget_id_by_name (&self, name:&str) -> Option<u16> {
         for (id,n) in self.widgets.iter() {
             if n == name {
@@ -388,7 +398,7 @@ impl Client {
             args.push(MsgList::tSTR(char_name));
             let elem = RelElem::WDGMSG(WdgMsg{ id : id, name : name, args : args });
             rel.rel.push(elem);
-            try!(self.enqueue_to_send(Message::REL(rel)));
+            try!(self.enqueue_to_send(Message::REL(rel), Some(100)));
             self.charlist.clear();
         }
         Ok(())
@@ -398,7 +408,7 @@ impl Client {
         //TODO send SESS until reply
         //TODO get username from server responce, not from auth username
         let cookie = self.cookie.clone();
-        try!(self.enqueue_to_send_and_repeat(Message::C_SESS(cSess{login:self.user.to_string(), cookie:cookie})));
+        try!(self.enqueue_to_send(Message::C_SESS(cSess{login:self.user.to_string(), cookie:cookie}), Some(100)));
         Ok(())
     }
 
@@ -406,7 +416,7 @@ impl Client {
         //TODO send until reply
         //TODO replace with client.send(Message::MapReq::new(x,y).to_buf())
         //     or client.send(Message::mapreq(x,y).to_buf())
-        try!(self.enqueue_to_send(Message::MAPREQ(MapReq{x:x,y:y})));
+        try!(self.enqueue_to_send( Message::MAPREQ(MapReq{x:x,y:y}),Some(200) ));
         Ok(())
     }
 
@@ -417,14 +427,28 @@ impl Client {
         Ok(())
     }
     
-    pub fn timeout (&self) {
+    pub fn timeout (&mut self) {
         println!("TIMEOUT!");
+        match self.que.back() {
+            Some(&(ref buf,timeout)) => {
+                println!("re-enqueue to send by timeout");
+                self.tx_buf.push_front( (buf.clone(),timeout) );
+            }
+            None => {
+                println!("WARNING: timeout on empty que");
+            }
+        }
+    }
+
+    pub fn tx (&mut self) -> Option<(Vec<u8>,Option<u64>)> {
+        self.tx_buf.pop_back()
     }
     
-    pub fn tx (&self) {
+    pub fn txed (&self) {
         println!("TXed!");
     }
-    
+
+    /*    
     pub fn ready_to_go (&self) -> bool {
         let mut ret = false;
         for name in self.widgets.values() {
@@ -449,10 +473,11 @@ impl Client {
         args.push(MsgList::tINT(0));
         let elem = RelElem::WDGMSG(WdgMsg{ id : id, name : name, args : args });
         rel.rel.push(elem);
-        try!(self.enqueue_to_send(Message::REL(rel)));
+        try!(self.enqueue_to_send(Message::REL(rel), Some(100)));
         self.charlist.clear();
         Ok(())
     }
+    */
 }
 
 /*
