@@ -168,7 +168,7 @@ fn main() {
     sock.set_reuseaddr(true).ok().expect("set_reuseaddr");
 
     //TODO return Result and match
-    let mut client = Client::new(/*"game.salemthegame.com", 1871, 1870*/);
+    let mut client = Client::new();
 
     //TODO FIXME get login/password from command line instead of storing them here
     match client.authorize("salvian", "простойпароль", "game.salemthegame.com", 1871) {
@@ -187,9 +187,9 @@ fn main() {
                                            mio::PollOpt::level()).ok().expect("loop.register_opt");
     let ip = client.serv_ip;
     let mut handler = UdpHandler::new(sock, &mut client, std::net::SocketAddr::new(ip, 1870));
-    handler.client.connect().ok().expect("client.connect()"); //TODO return Result and match
+    handler.client.connect().ok().expect("client.connect()");
 
-    if let Err(e) = eloop.timeout_ms(123, 1000) {
+    if let Err(e) = eloop.timeout_ms(123, 2000) {
         println!("eloop.timeout FAILED: {:?}", e);
         return;
     }

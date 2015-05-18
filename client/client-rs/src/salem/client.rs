@@ -45,7 +45,7 @@ pub struct Client {
     pub charlist : Vec<String>,
     pub resources : HashMap<u16,String>,
     pub seq : u16,
-    pub last_rx_rel_seq : Option<u16>,
+    pub rx_rel_seq : u16,
     pub que: LinkedList<Vec<u8>>,
     pub tx_buf: LinkedList<Vec<u8>>
 }
@@ -119,7 +119,7 @@ impl Client {
             charlist: charlist,
             resources: resources,
             seq: 0,
-            last_rx_rel_seq: None,
+            rx_rel_seq: 0,
             que: LinkedList::new(),
             tx_buf: LinkedList::new(),
         }
@@ -235,27 +235,17 @@ impl Client {
             Err(err) => { println!("message parse error: {:?}", err); return Err(err); },
         };
 
-        {
-            let mut duplicate = false;
-            if let Message::REL(ref rel) = msg {
-                match self.last_rx_rel_seq {
-                    None => {
-                        self.last_rx_rel_seq = Some(rel.seq);
-                    }
-                    Some(seq) => {
-                        if rel.seq == seq {
-                            println!("RX: REL {} duplicate", seq);
-                            duplicate = true;
-                        } else {
-                            self.last_rx_rel_seq = Some(rel.seq);
-                        }
-                    }
-                }
+        let mut out_of_seq_rel = false;
+        if let Message::REL(ref rel) = msg {
+            if rel.seq != self.rx_rel_seq {
+                out_of_seq_rel = true;
+                println!("RX: REL {} OUT OF SEQUENCE", rel.seq);
             }
-            if !duplicate {
-                println!("RX: {:?}", msg);
-                if let Some(rem) = remains { println!("                 REMAINS {} bytes", rem.len()); }
-            }
+        }
+
+        if !out_of_seq_rel {
+            println!("RX: {:?}", msg);
+            if let Some(rem) = remains { println!("                 REMAINS {} bytes", rem.len()); }
         }
 
         match msg {
@@ -271,48 +261,54 @@ impl Client {
                 }
                 Client::start_send_beats();
             },
-            Message::C_SESS( /*sess*/ _ ) => {/*TODO*/},
+            Message::C_SESS(_) => { println!("     !!! client must not receive C_SESS !!!"); },
             Message::REL( rel ) => {
-                //TODO do not process duplicates, but ACK only
-                //XXX are we handle seq right in the case of overflow ???
-                try!(self.enqueue_to_send(Message::ACK(Ack{seq : rel.seq + ((rel.rel.len() as u16) - 1)})));
-                for r in rel.rel.iter() {
-                    match *r {
-                        RelElem::NEWWDG(ref wdg) => {
-                            self.widgets.insert(wdg.id, wdg.kind.clone()/*FIXME String -> &str*/);
-                        },
-                        RelElem::WDGMSG(ref msg) => {
-                            //TODO match against widget.type and message.type
-                            match self.widgets.get(&(msg.id)) {
-                                None => {},
-                                Some(c) => {
-                                    if (c == "charlist") && (msg.name == "add") {
-                                        match msg.args[0] {
-                                            MsgList::tSTR(ref char_name) => {
-                                                println!("    add char '{}'", char_name);
-                                                /*FIXME rewrite without cloning*/
-                                                self.charlist.push(char_name.clone());
-                                            },
-                                            _ => {}
+                if !out_of_seq_rel {
+                    //XXX are we handle seq right in the case of overflow ???
+                    let mut next_rel_seq = rel.seq + ((rel.rel.len() as u16) - 1);
+                    try!(self.enqueue_to_send(Message::ACK(Ack{seq : next_rel_seq})));
+                    next_rel_seq += 1;
+                    self.rx_rel_seq = next_rel_seq;
+                    for r in rel.rel.iter() {
+                        match *r {
+                            RelElem::NEWWDG(ref wdg) => {
+                                self.widgets.insert(wdg.id, wdg.kind.clone()/*FIXME String -> &str*/);
+                            },
+                            RelElem::WDGMSG(ref msg) => {
+                                //TODO match against widget.type and message.type
+                                match self.widgets.get(&(msg.id)) {
+                                    None => {},
+                                    Some(c) => {
+                                        if (c == "charlist") && (msg.name == "add") {
+                                            match msg.args[0] {
+                                                MsgList::tSTR(ref char_name) => {
+                                                    println!("    add char '{}'", char_name);
+                                                    /*FIXME rewrite without cloning*/
+                                                    self.charlist.push(char_name.clone());
+                                                },
+                                                _ => {}
+                                            }
                                         }
                                     }
                                 }
-                            }
-                        },
-                        RelElem::DSTWDG(_) => { /*TODO widgets.delete(wdg.id)*/ },
-                        RelElem::MAPIV(_) => {},
-                        RelElem::GLOBLOB(_) => {},
-                        RelElem::PAGINAE(_) => {},
-                        RelElem::RESID(ref res) => {
-                            self.resources.insert(res.id, res.name.clone()/*FIXME String -> &str*/);
-                        },
-                        RelElem::PARTY(_) => {},
-                        RelElem::SFX(_) => {},
-                        RelElem::CATTR(_) => {},
-                        RelElem::MUSIC(_) => {},
-                        RelElem::TILES(_) => {},
-                        RelElem::BUFF(_) => {},
-                        RelElem::SESSKEY(_) => {},
+                            },
+                            RelElem::DSTWDG(ref wdg) => {
+                                self.widgets.remove(&wdg.id);
+                            },
+                            RelElem::MAPIV(_) => {},
+                            RelElem::GLOBLOB(_) => {},
+                            RelElem::PAGINAE(_) => {},
+                            RelElem::RESID(ref res) => {
+                                self.resources.insert(res.id, res.name.clone()/*FIXME String -> &str*/);
+                            },
+                            RelElem::PARTY(_) => {},
+                            RelElem::SFX(_) => {},
+                            RelElem::CATTR(_) => {},
+                            RelElem::MUSIC(_) => {},
+                            RelElem::TILES(_) => {},
+                            RelElem::BUFF(_) => {},
+                            RelElem::SESSKEY(_) => {},
+                        }
                     }
                 }
             },
