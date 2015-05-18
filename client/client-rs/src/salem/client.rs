@@ -117,9 +117,9 @@ impl Client {
             objects: objects,
             grids: grids,
             charlist: charlist,
-            resources:resources,
-            seq : 0,
-            last_rx_rel_seq : None,
+            resources: resources,
+            seq: 0,
+            last_rx_rel_seq: None,
             que: LinkedList::new(),
             tx_buf: LinkedList::new(),
         }
@@ -211,20 +211,21 @@ impl Client {
         /*TODO*/
     }
 
-    pub fn enqueue_to_send (&mut self, msg: Message) {
+    pub fn enqueue_to_send (&mut self, msg: Message) -> Result<(),Error> {
         match msg.to_buf() {
-            Ok(buf) => { self.tx_buf.push_front(buf); },
-            Err(e) => { println!("enqueue error: {:?}", e); },
+            Ok(buf) => { self.tx_buf.push_front(buf); Ok(()) },
+            Err(e) => { println!("enqueue error: {:?}", e); Err(e) },
         }
     }
 
-    pub fn enqueue_to_send_and_repeat (&mut self, msg: Message) /*TODO return Result*/ {
+    pub fn enqueue_to_send_and_repeat (&mut self, msg: Message) -> Result<(),Error> {
         match msg.to_buf() {
             Ok(buf) => {
                 self.tx_buf.push_front(buf.clone());
                 self.que.push_front(buf);
+                Ok(())
             },
-            Err(e) => { println!("enqueue error: {:?}", e); },
+            Err(e) => { println!("enqueue error: {:?}", e); Err(e) },
         }
     }
 
@@ -264,8 +265,8 @@ impl Client {
                     _ => {
                         //TODO return Error::from(SessError)
                         return Err(Error{source:"session error",detail:None});
-                        //TODO event_loop.shutdown(); exit();
                         //XXX ??? should we send CLOSE too ???
+                        //??? or can we re-send our SESS requests in case of BUSY err ?
                     }
                 }
                 Client::start_send_beats();
@@ -274,7 +275,7 @@ impl Client {
             Message::REL( rel ) => {
                 //TODO do not process duplicates, but ACK only
                 //XXX are we handle seq right in the case of overflow ???
-                self.enqueue_to_send(Message::ACK(Ack{seq : rel.seq + ((rel.rel.len() as u16) - 1)}));
+                try!(self.enqueue_to_send(Message::ACK(Ack{seq : rel.seq + ((rel.rel.len() as u16) - 1)})));
                 for r in rel.rel.iter() {
                     match *r {
                         RelElem::NEWWDG(ref wdg) => {
@@ -327,7 +328,7 @@ impl Client {
             Message::MAPREQ(_)  => { println!("     !!! client must not receive MAPREQ !!!"); },
             Message::MAPDATA(_) => {},
             Message::OBJDATA( objdata ) => {
-                self.enqueue_to_send(Message::OBJACK(ObjAck::new(&objdata))); // send OBJACKs
+                try!(self.enqueue_to_send(Message::OBJACK(ObjAck::new(&objdata)))); // send OBJACKs
                 for o in objdata.obj.iter() {
                     if !self.objects.contains_key(&o.id) {
                         self.objects.insert(o.id, Obj{resid:0, xy:(0,0)});
@@ -357,7 +358,7 @@ impl Client {
                     }
                 }
                 for (x,y) in tmp {
-                     self.mapreq(x, y);
+                     try!(self.mapreq(x, y));
                 }
             },
             Message::OBJACK(_)  => {},
@@ -378,10 +379,11 @@ impl Client {
         None
     }
 
-    pub fn react (&mut self) {
+    pub fn react (&mut self) -> Result<(),Error> {
         //TODO send REL until reply
         if self.charlist.len() > 0 {
             println!("send play '{}'", self.charlist[0]);
+            //TODO let mut rel = Rel::new(seq,id,name);
             let char_name = self.charlist[0].clone();
             let mut rel = Rel{seq:self.seq, rel:Vec::new()};
             let id = self.widget_id_by_name("charlist").expect("charlist widget is not found");
@@ -390,29 +392,32 @@ impl Client {
             args.push(MsgList::tSTR(char_name));
             let elem = RelElem::WDGMSG(WdgMsg{ id : id, name : name, args : args });
             rel.rel.push(elem);
-            self.enqueue_to_send(Message::REL(rel));
+            try!(self.enqueue_to_send(Message::REL(rel)));
             self.charlist.clear();
         }
+        Ok(())
     }
 
-    pub fn connect (&mut self) {
+    pub fn connect (&mut self) -> Result<(),Error> {
         //TODO send SESS until reply
         //TODO get username from server responce, not from auth username
         let cookie = self.cookie.clone();
-        self.enqueue_to_send_and_repeat(Message::C_SESS(cSess{login:self.user.to_string(), cookie:cookie}));
+        try!(self.enqueue_to_send_and_repeat(Message::C_SESS(cSess{login:self.user.to_string(), cookie:cookie})));
+        Ok(())
     }
 
-    pub fn mapreq (&mut self, x:i32, y:i32) {
+    pub fn mapreq (&mut self, x:i32, y:i32) -> Result<(),Error> {
         //TODO send until reply
         //TODO replace with client.send(Message::MapReq::new(x,y).to_buf())
         //     or client.send(Message::mapreq(x,y).to_buf())
-        self.enqueue_to_send(Message::MAPREQ(MapReq{x:x,y:y}));
+        try!(self.enqueue_to_send(Message::MAPREQ(MapReq{x:x,y:y})));
+        Ok(())
     }
 
     pub fn rx (&mut self, buf:&[u8]) -> Result<(),Error> {
         try!(self.dispatch_message(buf));
         //TODO reactor.react(&client)
-        self.react();
+        try!(self.react());
         Ok(())
     }
     
@@ -423,5 +428,81 @@ impl Client {
     pub fn tx (&self) {
         println!("TXed!");
     }
+    
+    pub fn ready_to_go (&self) -> bool {
+        let mut ret = false;
+        for name in self.widgets.values() {
+            if name == "mapview" {
+                ret = true;
+                break;
+            }
+        }
+        return ret;
+    }
+    
+    pub fn go (&mut self) -> Result<(),Error> {
+        println!("let's GO somewhere!");
+        //TODO let mut rel = Rel::new(seq,id,name);
+        let mut rel = Rel{seq:self.seq, rel:Vec::new()};
+        let id = self.widget_id_by_name("mapview").expect("charlist widget is not found");
+        let name : String = "click".to_string();
+        let mut args : Vec<MsgList> = Vec::new();
+        args.push(MsgList::tCOORD((907, 755)));
+        args.push(MsgList::tCOORD((39683, 36377)));
+        args.push(MsgList::tINT(1));
+        args.push(MsgList::tINT(0));
+        let elem = RelElem::WDGMSG(WdgMsg{ id : id, name : name, args : args });
+        rel.rel.push(elem);
+        try!(self.enqueue_to_send(Message::REL(rel)));
+        self.charlist.clear();
+        Ok(())
+    }
 }
 
+/*
+
+CLIENT
+ REL  seq=4
+  WDGMSG len=65
+   id=6 name=click
+     COORD : [907, 755]        Coord pc
+     COORD : [39683, 36377]    Coord mc
+     INT : 1                   int clickb
+     INT : 0                   ui.modflags()
+     INT : 0                   inf.ol != null
+     INT : 325183464           (int)inf.gob.id
+     COORD : [39737, 36437]    inf.gob.rc
+     INT : 0                   inf.ol.id
+     INT : -1                  inf.r.id or -1
+
+CLIENT
+ REL  seq=5
+  WDGMSG len=36
+   id=6 name=click
+     COORD : [1019, 759]        Coord pc
+     COORD : [39709, 36386]     Coord mc
+     INT : 1                    int clickb
+     INT : 0                    ui.modflags()
+
+private class Click extends Hittest {
+    int clickb;
+
+    private Click(Coord c, int b) {
+        super(c);
+        clickb = b;
+    }
+
+    protected void hit(Coord pc, Coord mc, ClickInfo inf) {
+        if(inf == null) {
+            wdgmsg("click", pc, mc, clickb, ui.modflags());
+        } else {
+            if(inf.ol == null) {
+                wdgmsg("click", pc, mc, clickb, ui.modflags(), 0, (int)inf.gob.id, inf.gob.rc, 0, getid(inf.r));
+            } else {
+                wdgmsg("click", pc, mc, clickb, ui.modflags(), 1, (int)inf.gob.id, inf.gob.rc, inf.ol.id, getid(inf.r));
+            }
+        }
+    }
+}
+
+*/

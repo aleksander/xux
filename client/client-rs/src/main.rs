@@ -87,11 +87,13 @@ fn main() {
                 CLIENT => {
                     let mut rx_buf = mio::buf::RingBuf::new(65535);
                     self.sock.recv_from(&mut rx_buf).ok().expect("sock.recv");
-                    let mut client: &mut Client = self.client;
-                    let buf: &[u8] = mio::buf::Buf::bytes(&rx_buf);
-                    if let Err(e) = client.rx(buf) {
-                        println!("error: {:?}", e);
-                        eloop.shutdown();
+                    {
+                        let mut client: &mut Client = self.client;
+                        let buf: &[u8] = mio::buf::Buf::bytes(&rx_buf);
+                        if let Err(e) = client.rx(buf) {
+                            println!("error: {:?}", e);
+                            eloop.shutdown();
+                        }
                     }
                 },
                 _ => ()
@@ -130,8 +132,15 @@ fn main() {
             }
         }
 
-        fn timeout (&mut self, /*eloop*/ _: &mut mio::EventLoop<UdpHandler>, /*timeout*/ _: usize) {
+        fn timeout (&mut self, eloop: &mut mio::EventLoop<UdpHandler>, /*timeout*/ _: usize) {
             self.client.timeout();
+            if self.client.ready_to_go() {
+                println!("client is ready to GO!");
+                if let Err(e) = self.client.go() {
+                    println!("client.go FAILED: {:?}", e);
+                    eloop.shutdown();
+                }
+            }
             /*
             let client = &self.client;
             match client.que.front() {
@@ -172,14 +181,19 @@ fn main() {
         }
     };
 
-    let mut event_loop = mio::EventLoop::new().ok().expect("mio.loop.new");
-    event_loop.register_opt(&sock, CLIENT, mio::Interest::readable() |
+    let mut eloop = mio::EventLoop::new().ok().expect("mio.loop.new");
+    eloop.register_opt(&sock, CLIENT, mio::Interest::readable() |
                                            mio::Interest::writable(),
                                            mio::PollOpt::level()).ok().expect("loop.register_opt");
     let ip = client.serv_ip;
     let mut handler = UdpHandler::new(sock, &mut client, std::net::SocketAddr::new(ip, 1870));
-    handler.client.connect(); //TODO return Result and match
+    handler.client.connect().ok().expect("client.connect()"); //TODO return Result and match
+
+    if let Err(e) = eloop.timeout_ms(123, 1000) {
+        println!("eloop.timeout FAILED: {:?}", e);
+        return;
+    }
 
     info!("run event loop");
-    event_loop.run(&mut handler).ok().expect("Failed to run the event loop");
+    eloop.run(&mut handler).ok().expect("Failed to run the event loop");
 }
