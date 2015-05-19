@@ -106,26 +106,27 @@ fn main() {
             match token {
                 CLIENT => {
                     match self.client.tx() {
-                        Some((data,timeout)) => {
-                            if let Ok((msg,_)) = Message::from_buf(data.as_slice(),MessageDirection::FromClient) {
+                        Some(ebuf) => {
+                            if let Ok((msg,_)) = Message::from_buf(ebuf.buf.as_slice(), MessageDirection::FromClient) {
                                 println!("TX: {:?}", msg);
-                            }
+                            } //TODO else println(ERROR:malformed message); eloop_shutdown();
                             self.counter += 1;
-                            if self.counter % 2 == 0 {
-                                let mut buf = mio::buf::SliceBuf::wrap(data.as_slice());
+                            //if self.counter % 3 == 0 {
+                                let mut buf = mio::buf::SliceBuf::wrap(ebuf.buf.as_slice());
                                 if let Err(e) = self.sock.send_to(&mut buf, &self.addr) {
                                     println!("send_to error: {}", e);
                                     eloop.shutdown();
                                 }
-                            } else {
-                                println!("DROPPED!");
-                            }
-                            self.client.txed();
+                            //} else {
+                            //    println!("DROPPED!");
+                            //}
+                            
+                            //self.client.txed();
 
-                            if let Some(timeout) = timeout {
+                            if let Some(timeout) = ebuf.timeout {
                                 //TODO use returned timeout handle to cancel timeout
-                                println!("set timeout {} ms", timeout);
-                                if let Err(e) = eloop.timeout_ms(123, timeout) {
+                                println!("set {} timeout {} ms", timeout.seq, timeout.ms);
+                                if let Err(e) = eloop.timeout_ms(timeout.seq, timeout.ms) {
                                     println!("eloop.timeout FAILED: {:?}", e);
                                     eloop.shutdown();
                                 }
@@ -140,8 +141,8 @@ fn main() {
             }
         }
 
-        fn timeout (&mut self, /*eloop*/ _: &mut mio::EventLoop<UdpHandler>, /*timeout*/ _: usize) {
-            self.client.timeout();
+        fn timeout (&mut self, /*eloop*/ _: &mut mio::EventLoop<UdpHandler>, timeout: usize) {
+            self.client.timeout(timeout);
             //FIXME move to reactor part
             /*
             if self.client.ready_to_go() {
@@ -183,10 +184,12 @@ fn main() {
     let mut handler = UdpHandler::new(sock, &mut client, std::net::SocketAddr::new(ip, 1870));
     handler.client.connect().ok().expect("client.connect()");
 
+    /*
     if let Err(e) = eloop.timeout_ms(123, 4000) {
         println!("eloop.timeout FAILED: {:?}", e);
         return;
     }
+    */
 
     info!("run event loop");
     eloop.run(&mut handler).ok().expect("Failed to run the event loop");

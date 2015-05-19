@@ -34,20 +34,33 @@ pub struct Obj {
     pub xy : (i32,i32),
 }
 
+#[derive(Clone)]
+pub struct Timeout {
+    pub ms  : u64,
+    pub seq : usize,
+}
+
+#[derive(Clone)]
+pub struct EnqueuedBuffer {
+    pub buf : Vec<u8>,
+    pub timeout : Option<Timeout>,
+}
+    
 pub struct Client {
     //TODO do all fileds PRIVATE and use callback interface
-    pub serv_ip: IpAddr,
-    pub user: &'static str,
-    pub cookie: Vec<u8>,
-    pub widgets : HashMap<u16,String>,
-    pub objects : HashMap<u32,Obj>,
-    pub grids : HashSet<(i32,i32)>,
-    pub charlist : Vec<String>,
-    pub resources : HashMap<u16,String>,
-    pub seq : u16,
+    pub serv_ip    : IpAddr,
+    pub user       : &'static str,
+    pub cookie     : Vec<u8>,
+    pub widgets    : HashMap<u16,String>,
+    pub objects    : HashMap<u32,Obj>,
+    pub grids      : HashSet<(i32,i32)>,
+    pub charlist   : Vec<String>,
+    pub resources  : HashMap<u16,String>,
+    pub seq        : u16,
     pub rx_rel_seq : u16,
-    pub que: LinkedList<(Vec<u8>,Option<u64>)>,
-    pub tx_buf: LinkedList<(Vec<u8>,Option<u64>)>
+    pub que        : LinkedList<EnqueuedBuffer>,
+    pub tx_buf     : LinkedList<EnqueuedBuffer>,
+    pub enqueue_seq    : usize,
 }
 
 impl Client {
@@ -122,6 +135,7 @@ impl Client {
             rx_rel_seq: 0,
             que: LinkedList::new(),
             tx_buf: LinkedList::new(),
+            enqueue_seq: 0,
         }
     }
 
@@ -211,18 +225,31 @@ impl Client {
         /*TODO*/
     }
 
-    pub fn enqueue_to_send (&mut self, msg: Message, timeout: Option<u64>) -> Result<(),Error> {
+    pub fn enqueue_to_send (&mut self, msg: Message) -> Result<(),Error> {
         match msg.to_buf() {
             Ok(buf) => {
-                match timeout {
-                    Some(_) => {
+                match msg {
+                    Message::C_SESS(_) |
+                    Message::REL(_) |
+                    Message::MAPREQ(_) => {
+                        let ebuf = EnqueuedBuffer{buf : buf, timeout : Some(Timeout{ms : 100, seq : self.enqueue_seq})};
                         if self.que.is_empty() {
-                            self.tx_buf.push_front( (buf.clone(),timeout) );
+                            self.tx_buf.push_front(ebuf.clone());
                         }
-                        self.que.push_front( (buf,timeout) );
+                        self.que.push_front(ebuf);
+                        self.enqueue_seq += 1;
                     }
-                    None => {
-                        self.tx_buf.push_front( (buf,timeout) );
+                    Message::ACK(_) |
+                    Message::BEAT |
+                    Message::OBJACK(_) |
+                    Message::CLOSE(_) => {
+                        let ebuf = EnqueuedBuffer{buf : buf, timeout : None};
+                        self.tx_buf.push_front(ebuf);
+                    }
+                    Message::S_SESS(_) |
+                    Message::MAPDATA(_) |
+                    Message::OBJDATA(_) => {
+                        return Err(Error{source:"client must NOT send this kind of message",detail:None});
                     }
                 }
                 Ok(())
@@ -232,26 +259,19 @@ impl Client {
     }
 
     pub fn dispatch_message (&mut self, buf:&[u8]/*, tx_buf:&mut LinkedList<Vec<u8>>*/) -> Result<(),Error> {
-        let (msg,remains) = match Message::from_buf(buf,MessageDirection::FromServer) {
+        let (msg,/*remains*/_) = match Message::from_buf(buf,MessageDirection::FromServer) {
             Ok((msg,remains)) => { (msg,remains) },
             Err(err) => { println!("message parse error: {:?}", err); return Err(err); },
         };
 
-        let mut out_of_seq_rel = false;
-        if let Message::REL(ref rel) = msg {
-            if rel.seq != self.rx_rel_seq {
-                out_of_seq_rel = true;
-                println!("RX: REL {} OUT OF SEQUENCE", rel.seq);
-            }
-        }
-
-        if !out_of_seq_rel {
-            println!("RX: {:?}", msg);
-            if let Some(rem) = remains { println!("                 REMAINS {} bytes", rem.len()); }
-        }
+        //if !out_of_seq_rel {
+        //    println!("RX: {:?}", msg);
+        //    if let Some(rem) = remains { println!("                 REMAINS {} bytes", rem.len()); }
+        //}
 
         match msg {
             Message::S_SESS(sess) => {
+                println!("RX: S_SESS");
                 match sess.err {
                     SessError::OK => {},
                     _ => {
@@ -266,10 +286,14 @@ impl Client {
             },
             Message::C_SESS(_) => { println!("     !!! client must not receive C_SESS !!!"); },
             Message::REL( rel ) => {
-                //XXX are we handle seq right in the case of overflow ???
-                let mut next_rel_seq = rel.seq + ((rel.rel.len() as u16) - 1);
-                try!(self.enqueue_to_send(Message::ACK(Ack{seq : next_rel_seq}), None));
+                let out_of_seq_rel = if rel.seq != self.rx_rel_seq { true } else { false };
+                let tmp_str = if out_of_seq_rel { " OUT OF SEQUENCE" } else { "" };
+                println!("RX: REL {}{}", rel.seq, tmp_str);
                 if !out_of_seq_rel {
+                    //XXX are we handle seq right in the case of overflow ???
+                    let mut next_rel_seq = rel.seq + ((rel.rel.len() as u16) - 1);
+                    //FIXME !!! what if our ACK will be lost??? We will stuck here!!!
+                    try!(self.enqueue_to_send(Message::ACK(Ack{seq : next_rel_seq})));
                     next_rel_seq += 1;
                     self.rx_rel_seq = next_rel_seq;
                     for r in rel.rel.iter() {
@@ -316,18 +340,23 @@ impl Client {
                 }
             },
             Message::ACK(ack)   => {
+                println!("RX: ACK {}", ack.seq);
                 if ack.seq == self.seq {
                     println!("our rel {} acked", self.seq);
-                    //TODO remove pending REL message with this seq
+                    self.remove_rel_from_que();
                     //FIXME self.seq += last_rel.rels.len()
                     self.seq += 1;
                 }
             },
             Message::BEAT       => { println!("     !!! client must not receive BEAT !!!"); },
             Message::MAPREQ(_)  => { println!("     !!! client must not receive MAPREQ !!!"); },
-            Message::MAPDATA(_) => {},
+            Message::MAPDATA(_) => {
+                println!("RX: MAPDATA");
+                self.remove_mapreq_from_que();
+            },
             Message::OBJDATA( objdata ) => {
-                try!(self.enqueue_to_send(Message::OBJACK(ObjAck::new(&objdata)), None)); // send OBJACKs
+                println!("RX: OBJDATA");
+                try!(self.enqueue_to_send(Message::OBJACK(ObjAck::new(&objdata)))); // send OBJACKs
                 for o in objdata.obj.iter() {
                     if !self.objects.contains_key(&o.id) {
                         self.objects.insert(o.id, Obj{resid:0, xy:(0,0)});
@@ -362,6 +391,7 @@ impl Client {
             },
             Message::OBJACK(_)  => {},
             Message::CLOSE(_)   => {
+                println!("RX: CLOSE");
                 return Err(Error{source:"session closed",detail:None});
             },
         }
@@ -371,8 +401,8 @@ impl Client {
 
     fn remove_sess_from_que (&mut self) {
         let mut should_be_removed = false;
-        if let Some(&(ref buf,_)) = self.que.back() {
-            if let Ok(msg) = Message::from_buf(buf, MessageDirection::FromClient) {
+        if let Some(ref buf) = self.que.back() {
+            if let Ok(msg) = Message::from_buf(&buf.buf, MessageDirection::FromClient) {
                 if let (Message::C_SESS(_),_) = msg {
                     should_be_removed = true;
                 }
@@ -380,7 +410,65 @@ impl Client {
         }
         if should_be_removed {
             self.que.pop_back();
-            self.enqueue_next();
+            match self.que.back() {
+                Some(buf) => {
+                    println!("enqueue next packet");
+                    self.tx_buf.push_front(buf.clone());
+                }
+                None => {
+                    println!("remove_sess: empty que");
+                }
+            }
+        }
+    }
+
+    //TODO do something with this ugly duplication of previous fn
+    fn remove_rel_from_que (&mut self) {
+        let mut should_be_removed = false;
+        if let Some(ref buf) = self.que.back() {
+            if let Ok(msg) = Message::from_buf(&buf.buf, MessageDirection::FromClient) {
+                //FIXME TODO check that this is exactly same REL we are waiting for
+                if let (Message::REL(_),_) = msg {
+                    should_be_removed = true;
+                }
+            }
+        }
+        if should_be_removed {
+            self.que.pop_back();
+            match self.que.back() {
+                Some(buf) => {
+                    println!("enqueue next packet");
+                    self.tx_buf.push_front(buf.clone());
+                }
+                None => {
+                    println!("remove_sess: empty que");
+                }
+            }
+        }
+    }
+
+    //TODO do something with this ugly duplication of previous fn
+    fn remove_mapreq_from_que (&mut self) {
+        let mut should_be_removed = false;
+        if let Some(ref buf) = self.que.back() {
+            if let Ok(msg) = Message::from_buf(&buf.buf, MessageDirection::FromClient) {
+                //FIXME TODO check that this is exactly same MAPDATA we are waiting for
+                if let (Message::MAPREQ(_),_) = msg {
+                    should_be_removed = true;
+                }
+            }
+        }
+        if should_be_removed {
+            self.que.pop_back();
+            match self.que.back() {
+                Some(buf) => {
+                    println!("enqueue next packet");
+                    self.tx_buf.push_front(buf.clone());
+                }
+                None => {
+                    println!("remove_sess: empty que");
+                }
+            }
         }
     }
 
@@ -406,7 +494,7 @@ impl Client {
             args.push(MsgList::tSTR(char_name));
             let elem = RelElem::WDGMSG(WdgMsg{ id : id, name : name, args : args });
             rel.rel.push(elem);
-            try!(self.enqueue_to_send(Message::REL(rel), Some(100)));
+            try!(self.enqueue_to_send(Message::REL(rel)));
             self.charlist.clear();
         }
         Ok(())
@@ -416,7 +504,7 @@ impl Client {
         //TODO send SESS until reply
         //TODO get username from server responce, not from auth username
         let cookie = self.cookie.clone();
-        try!(self.enqueue_to_send(Message::C_SESS(cSess{login:self.user.to_string(), cookie:cookie}), Some(100)));
+        try!(self.enqueue_to_send(Message::C_SESS(cSess{login:self.user.to_string(), cookie:cookie})));
         Ok(())
     }
 
@@ -424,7 +512,7 @@ impl Client {
         //TODO send until reply
         //TODO replace with client.send(Message::MapReq::new(x,y).to_buf())
         //     or client.send(Message::mapreq(x,y).to_buf())
-        try!(self.enqueue_to_send( Message::MAPREQ(MapReq{x:x,y:y}),Some(200) ));
+        try!(self.enqueue_to_send(Message::MAPREQ(MapReq{x:x,y:y})));
         Ok(())
     }
 
@@ -435,30 +523,38 @@ impl Client {
         Ok(())
     }
     
-    pub fn timeout (&mut self) {
-        println!("TIMEOUT!");
-        self.enqueue_next();
-    }
-
-    fn enqueue_next (&mut self) {
+    pub fn timeout (&mut self, seq: usize) {
         match self.que.back() {
-            Some(&(ref buf,timeout)) => {
-                println!("re-enqueue to send by timeout");
-                self.tx_buf.push_front( (buf.clone(),timeout) );
+            Some(ref mut buf) => {
+                match buf.timeout {
+                    Some(ref timeout) => {
+                        if timeout.seq == seq {
+                            println!("timeout {}: re-enqueue", seq);
+                            self.tx_buf.push_front(buf.clone());
+                        } else {
+                            println!("timeout {}: packet dropped", seq);
+                        }
+                    }
+                    None => {
+                        println!("ERROR: enqueued packet without timeout");
+                    }
+                }
             }
             None => {
-                println!("WARNING: timeout on empty que");
+                println!("timeout {}: empty que", seq);
             }
         }
     }
 
-    pub fn tx (&mut self) -> Option<(Vec<u8>,Option<u64>)> {
+    pub fn tx (&mut self) -> Option<EnqueuedBuffer> {
         self.tx_buf.pop_back()
     }
     
+    /*
     pub fn txed (&self) {
         println!("TXed!");
     }
+    */
 
     /*    
     pub fn ready_to_go (&self) -> bool {
