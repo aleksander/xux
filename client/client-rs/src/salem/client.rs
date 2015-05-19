@@ -214,9 +214,16 @@ impl Client {
     pub fn enqueue_to_send (&mut self, msg: Message, timeout: Option<u64>) -> Result<(),Error> {
         match msg.to_buf() {
             Ok(buf) => {
-                self.tx_buf.push_front( (buf.clone(),timeout) );
-                if let Some(_) = timeout {
-                    self.que.push_front( (buf,timeout) );
+                match timeout {
+                    Some(_) => {
+                        if self.que.is_empty() {
+                            self.tx_buf.push_front( (buf.clone(),timeout) );
+                        }
+                        self.que.push_front( (buf,timeout) );
+                    }
+                    None => {
+                        self.tx_buf.push_front( (buf,timeout) );
+                    }
                 }
                 Ok(())
             },
@@ -259,10 +266,10 @@ impl Client {
             },
             Message::C_SESS(_) => { println!("     !!! client must not receive C_SESS !!!"); },
             Message::REL( rel ) => {
+                //XXX are we handle seq right in the case of overflow ???
+                let mut next_rel_seq = rel.seq + ((rel.rel.len() as u16) - 1);
+                try!(self.enqueue_to_send(Message::ACK(Ack{seq : next_rel_seq}), None));
                 if !out_of_seq_rel {
-                    //XXX are we handle seq right in the case of overflow ???
-                    let mut next_rel_seq = rel.seq + ((rel.rel.len() as u16) - 1);
-                    try!(self.enqueue_to_send(Message::ACK(Ack{seq : next_rel_seq}), None));
                     next_rel_seq += 1;
                     self.rx_rel_seq = next_rel_seq;
                     for r in rel.rel.iter() {
@@ -373,6 +380,7 @@ impl Client {
         }
         if should_be_removed {
             self.que.pop_back();
+            self.enqueue_next();
         }
     }
 
@@ -429,6 +437,10 @@ impl Client {
     
     pub fn timeout (&mut self) {
         println!("TIMEOUT!");
+        self.enqueue_next();
+    }
+
+    fn enqueue_next (&mut self) {
         match self.que.back() {
             Some(&(ref buf,timeout)) => {
                 println!("re-enqueue to send by timeout");

@@ -111,7 +111,7 @@ fn main() {
                                 println!("TX: {:?}", msg);
                             }
                             self.counter += 1;
-                            if self.counter % 5 == 0 {
+                            if self.counter % 2 == 0 {
                                 let mut buf = mio::buf::SliceBuf::wrap(data.as_slice());
                                 if let Err(e) = self.sock.send_to(&mut buf, &self.addr) {
                                     println!("send_to error: {}", e);
