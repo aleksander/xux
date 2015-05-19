@@ -288,9 +288,15 @@ impl Client {
                 println!("RX: REL {}", rel.seq);
                 if rel.seq == self.rx_rel_seq {
                     try!(self.dispatch_rel_cache(&rel));
-                } else {
-                    //FIXME TODO cache only rels with seq > current_seq
+                } else if (self.rx_rel_seq - rel.seq) < 32767 {
+                    // future REL
                     self.cache_rel(rel);
+                } else {
+                    // past REL
+                    println!("past");
+                    //TODO self.ack(seq);
+                    let last_acked_seq = self.rx_rel_seq - 1;
+                    try!(self.enqueue_to_send(Message::ACK(Ack{seq : last_acked_seq})));
                 }
             },
             Message::ACK(ack)   => {
