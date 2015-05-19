@@ -61,16 +61,30 @@ pub struct Client {
     pub que        : LinkedList<EnqueuedBuffer>,
     pub tx_buf     : LinkedList<EnqueuedBuffer>,
     pub enqueue_seq    : usize,
+    pub rel_cache  : HashMap<u16,Rel>,
 }
 
 impl Client {
     pub fn new () -> Client {
         let mut widgets = HashMap::new();
         widgets.insert(0, "root".to_string());
-        let objects = HashMap::new();
-        let grids = HashSet::new();
-        let charlist = Vec::new();
-        let resources = HashMap::new();
+
+        Client {
+            serv_ip: IpAddr::V4(Ipv4Addr::new(0,0,0,0)),
+            user: "",
+            cookie: Vec::new(),
+            widgets: widgets, 
+            objects: HashMap::new(),
+            grids: HashSet::new(),
+            charlist: Vec::new(),
+            resources: HashMap::new(),
+            seq: 0,
+            rx_rel_seq: 0,
+            que: LinkedList::new(),
+            tx_buf: LinkedList::new(),
+            enqueue_seq: 0,
+            rel_cache: HashMap::new(),
+        }
 
         /*
         Thread::spawn(move || {
@@ -121,22 +135,6 @@ impl Client {
             }
         });
         */
-
-        Client {
-            serv_ip: IpAddr::V4(Ipv4Addr::new(0,0,0,0)),
-            user: "",
-            cookie: Vec::new(),
-            widgets: widgets, 
-            objects: objects,
-            grids: grids,
-            charlist: charlist,
-            resources: resources,
-            seq: 0,
-            rx_rel_seq: 0,
-            que: LinkedList::new(),
-            tx_buf: LinkedList::new(),
-            enqueue_seq: 0,
-        }
     }
 
     pub fn authorize (&mut self, user: &'static str, pass: &str, hostname: &str, port: u16) -> Result<(), Error> {
@@ -232,6 +230,7 @@ impl Client {
                     Message::C_SESS(_) |
                     Message::REL(_) |
                     Message::MAPREQ(_) => {
+                        //TODO maybe we should increase timeout in the case of MAPREQ?
                         let ebuf = EnqueuedBuffer{buf : buf, timeout : Some(Timeout{ms : 100, seq : self.enqueue_seq})};
                         if self.que.is_empty() {
                             self.tx_buf.push_front(ebuf.clone());
@@ -286,57 +285,12 @@ impl Client {
             },
             Message::C_SESS(_) => { println!("     !!! client must not receive C_SESS !!!"); },
             Message::REL( rel ) => {
-                let out_of_seq_rel = if rel.seq != self.rx_rel_seq { true } else { false };
-                let tmp_str = if out_of_seq_rel { " OUT OF SEQUENCE" } else { "" };
-                println!("RX: REL {}{}", rel.seq, tmp_str);
-                if !out_of_seq_rel {
-                    //XXX are we handle seq right in the case of overflow ???
-                    let mut next_rel_seq = rel.seq + ((rel.rel.len() as u16) - 1);
-                    //FIXME !!! what if our ACK will be lost??? We will stuck here!!!
-                    try!(self.enqueue_to_send(Message::ACK(Ack{seq : next_rel_seq})));
-                    next_rel_seq += 1;
-                    self.rx_rel_seq = next_rel_seq;
-                    for r in rel.rel.iter() {
-                        match *r {
-                            RelElem::NEWWDG(ref wdg) => {
-                                self.widgets.insert(wdg.id, wdg.kind.clone()/*FIXME String -> &str*/);
-                            },
-                            RelElem::WDGMSG(ref msg) => {
-                                //TODO match against widget.type and message.type
-                                match self.widgets.get(&(msg.id)) {
-                                    None => {},
-                                    Some(c) => {
-                                        if (c == "charlist") && (msg.name == "add") {
-                                            match msg.args[0] {
-                                                MsgList::tSTR(ref char_name) => {
-                                                    println!("    add char '{}'", char_name);
-                                                    /*FIXME rewrite without cloning*/
-                                                    self.charlist.push(char_name.clone());
-                                                },
-                                                _ => {}
-                                            }
-                                        }
-                                    }
-                                }
-                            },
-                            RelElem::DSTWDG(ref wdg) => {
-                                self.widgets.remove(&wdg.id);
-                            },
-                            RelElem::MAPIV(_) => {},
-                            RelElem::GLOBLOB(_) => {},
-                            RelElem::PAGINAE(_) => {},
-                            RelElem::RESID(ref res) => {
-                                self.resources.insert(res.id, res.name.clone()/*FIXME String -> &str*/);
-                            },
-                            RelElem::PARTY(_) => {},
-                            RelElem::SFX(_) => {},
-                            RelElem::CATTR(_) => {},
-                            RelElem::MUSIC(_) => {},
-                            RelElem::TILES(_) => {},
-                            RelElem::BUFF(_) => {},
-                            RelElem::SESSKEY(_) => {},
-                        }
-                    }
+                println!("RX: REL {}", rel.seq);
+                if rel.seq == self.rx_rel_seq {
+                    try!(self.dispatch_rel_cache(&rel));
+                } else {
+                    //FIXME TODO cache only rels with seq > current_seq
+                    self.cache_rel(rel);
                 }
             },
             Message::ACK(ack)   => {
@@ -352,6 +306,7 @@ impl Client {
             Message::MAPREQ(_)  => { println!("     !!! client must not receive MAPREQ !!!"); },
             Message::MAPDATA(_) => {
                 println!("RX: MAPDATA");
+                //TODO FIXME remove MAPREQ only after all MAPDATA pieces collected
                 self.remove_mapreq_from_que();
             },
             Message::OBJDATA( objdata ) => {
@@ -392,11 +347,84 @@ impl Client {
             Message::OBJACK(_)  => {},
             Message::CLOSE(_)   => {
                 println!("RX: CLOSE");
+                //TODO return Status::EndOfSession instead of Error
                 return Err(Error{source:"session closed",detail:None});
             },
         }
 
+        //TODO return Status::Continue/AllOk instead of ()
         Ok(())
+    }
+
+    fn cache_rel (&mut self, rel: Rel) {
+        println!("cache REL {}-{}", rel.seq, rel.seq + ((rel.rel.len() as u16) - 1));
+        self.rel_cache.insert(rel.seq, rel);
+    }
+    
+    fn dispatch_rel_cache (&mut self, rel: &Rel) -> Result<(),Error> {
+        //XXX are we handle seq right in the case of overflow ???
+        let mut next_rel_seq = rel.seq + ((rel.rel.len() as u16) - 1);
+        self.dispatch_rel(rel);
+        loop {
+            let next_rel = self.rel_cache.remove(&(next_rel_seq + 1));
+            match next_rel {
+                Some(rel) => {
+                    next_rel_seq = rel.seq + ((rel.rel.len() as u16) - 1);
+                    self.dispatch_rel(&rel);
+                }
+                None => {
+                    break;
+                }
+            }
+        }
+        try!(self.enqueue_to_send(Message::ACK(Ack{seq : next_rel_seq})));
+        self.rx_rel_seq = next_rel_seq + 1;
+        Ok(())
+    }
+        
+    fn dispatch_rel (&mut self, rel: &Rel) {
+        println!("dispatch REL {}-{}", rel.seq, rel.seq + ((rel.rel.len() as u16) - 1));
+        for r in rel.rel.iter() {
+            match *r {
+                RelElem::NEWWDG(ref wdg) => {
+                    self.widgets.insert(wdg.id, wdg.kind.clone()/*FIXME String -> &str*/);
+                },
+                RelElem::WDGMSG(ref msg) => {
+                    //TODO match against widget.type and message.type
+                    match self.widgets.get(&(msg.id)) {
+                        None => {},
+                        Some(c) => {
+                            if (c == "charlist") && (msg.name == "add") {
+                                match msg.args[0] {
+                                    MsgList::tSTR(ref char_name) => {
+                                        println!("    add char '{}'", char_name);
+                                        /*FIXME rewrite without cloning*/
+                                        self.charlist.push(char_name.clone());
+                                    },
+                                    _ => {}
+                                }
+                            }
+                        }
+                    }
+                },
+                RelElem::DSTWDG(ref wdg) => {
+                    self.widgets.remove(&wdg.id);
+                },
+                RelElem::MAPIV(_) => {},
+                RelElem::GLOBLOB(_) => {},
+                RelElem::PAGINAE(_) => {},
+                RelElem::RESID(ref res) => {
+                    self.resources.insert(res.id, res.name.clone()/*FIXME String -> &str*/);
+                },
+                RelElem::PARTY(_) => {},
+                RelElem::SFX(_) => {},
+                RelElem::CATTR(_) => {},
+                RelElem::MUSIC(_) => {},
+                RelElem::TILES(_) => {},
+                RelElem::BUFF(_) => {},
+                RelElem::SESSKEY(_) => {},
+            }
+        }
     }
 
     fn remove_sess_from_que (&mut self) {
@@ -441,7 +469,7 @@ impl Client {
                     self.tx_buf.push_front(buf.clone());
                 }
                 None => {
-                    println!("remove_sess: empty que");
+                    println!("remove_rel: empty que");
                 }
             }
         }
@@ -452,7 +480,7 @@ impl Client {
         let mut should_be_removed = false;
         if let Some(ref buf) = self.que.back() {
             if let Ok(msg) = Message::from_buf(&buf.buf, MessageDirection::FromClient) {
-                //FIXME TODO check that this is exactly same MAPDATA we are waiting for
+                //FIXME TODO check that this is exactly MAPDATA we are waiting for
                 if let (Message::MAPREQ(_),_) = msg {
                     should_be_removed = true;
                 }
@@ -466,7 +494,7 @@ impl Client {
                     self.tx_buf.push_front(buf.clone());
                 }
                 None => {
-                    println!("remove_sess: empty que");
+                    println!("remove_mapreq: empty que");
                 }
             }
         }
