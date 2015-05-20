@@ -288,7 +288,7 @@ impl Client {
                 println!("RX: REL {}", rel.seq);
                 if rel.seq == self.rx_rel_seq {
                     try!(self.dispatch_rel_cache(&rel));
-                } else if (self.rx_rel_seq - rel.seq) < 32767 {
+                } else if (rel.seq - self.rx_rel_seq) < 32767 {
                     // future REL
                     self.cache_rel(rel);
                 } else {
