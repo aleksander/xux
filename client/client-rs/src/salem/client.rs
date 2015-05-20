@@ -258,19 +258,18 @@ impl Client {
     }
 
     pub fn dispatch_message (&mut self, buf:&[u8]/*, tx_buf:&mut LinkedList<Vec<u8>>*/) -> Result<(),Error> {
-        let (msg,/*remains*/_) = match Message::from_buf(buf,MessageDirection::FromServer) {
+        let (msg,remains) = match Message::from_buf(buf,MessageDirection::FromServer) {
             Ok((msg,remains)) => { (msg,remains) },
             Err(err) => { println!("message parse error: {:?}", err); return Err(err); },
         };
 
-        //if !out_of_seq_rel {
-        //    println!("RX: {:?}", msg);
-        //    if let Some(rem) = remains { println!("                 REMAINS {} bytes", rem.len()); }
-        //}
+        if let Some(remains) = remains {
+            println!("                 REMAINS {} bytes", remains.len());
+        }
 
         match msg {
             Message::S_SESS(sess) => {
-                println!("RX: S_SESS");
+                println!("RX: S_SESS {:?}", sess.err);
                 match sess.err {
                     SessError::OK => {},
                     _ => {
@@ -310,13 +309,13 @@ impl Client {
             },
             Message::BEAT       => { println!("     !!! client must not receive BEAT !!!"); },
             Message::MAPREQ(_)  => { println!("     !!! client must not receive MAPREQ !!!"); },
-            Message::MAPDATA(_) => {
-                println!("RX: MAPDATA");
+            Message::MAPDATA(mapdata) => {
+                println!("RX: MAPDATA {:?}", mapdata);
                 //TODO FIXME remove MAPREQ only after all MAPDATA pieces collected
                 self.remove_mapreq_from_que();
             },
-            Message::OBJDATA( objdata ) => {
-                println!("RX: OBJDATA");
+            Message::OBJDATA(objdata) => {
+                println!("RX: OBJDATA {:?}", objdata);
                 try!(self.enqueue_to_send(Message::OBJACK(ObjAck::new(&objdata)))); // send OBJACKs
                 for o in objdata.obj.iter() {
                     if !self.objects.contains_key(&o.id) {

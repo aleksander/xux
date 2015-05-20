@@ -78,7 +78,8 @@ fn main() {
         }
     }
 
-    const CLIENT: mio::Token = mio::Token(0);
+    const UDP: mio::Token = mio::Token(0);
+    const UNIX: mio::Token = mio::Token(0);
 
     impl<'a> mio::Handler for UdpHandler<'a> {
         type Timeout = usize;
@@ -86,7 +87,7 @@ fn main() {
 
         fn readable(&mut self, eloop: &mut mio::EventLoop<UdpHandler>, token: mio::Token, _: mio::ReadHint) {
             match token {
-                CLIENT => {
+                UDP => {
                     let mut rx_buf = mio::buf::RingBuf::new(65535);
                     self.sock.recv_from(&mut rx_buf).ok().expect("sock.recv");
                     {
@@ -104,7 +105,7 @@ fn main() {
 
         fn writable(&mut self, eloop: &mut mio::EventLoop<UdpHandler>, token: mio::Token) {
             match token {
-                CLIENT => {
+                UDP => {
                     match self.client.tx() {
                         Some(ebuf) => {
                             if let Ok((msg,_)) = Message::from_buf(ebuf.buf.as_slice(), MessageDirection::FromClient) {
@@ -177,9 +178,8 @@ fn main() {
     };
 
     let mut eloop = mio::EventLoop::new().ok().expect("mio.loop.new");
-    eloop.register_opt(&sock, CLIENT, mio::Interest::readable() |
-                                           mio::Interest::writable(),
-                                           mio::PollOpt::level()).ok().expect("loop.register_opt");
+    eloop.register_opt(&sock, UDP, mio::Interest::readable() | mio::Interest::writable(), mio::PollOpt::level()).ok().expect("loop.register_opt");
+
     let ip = client.serv_ip;
     let mut handler = UdpHandler::new(sock, &mut client, std::net::SocketAddr::new(ip, 1870));
     handler.client.connect().ok().expect("client.connect()");
@@ -190,6 +190,9 @@ fn main() {
         return;
     }
     */
+
+    let unix_sock = mio::unix::UnixStream::connect(&std::path::PathBuf::from(".socket")).unwrap();
+    eloop.register_opt(&unix_sock, UNIX, mio::Interest::writable(), mio::PollOpt::edge() | mio::PollOpt::oneshot()).unwrap();
 
     info!("run event loop");
     eloop.run(&mut handler).ok().expect("Failed to run the event loop");
