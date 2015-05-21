@@ -79,7 +79,10 @@ fn main() {
     }
 
     const UDP: mio::Token = mio::Token(0);
-    const UNIX: mio::Token = mio::Token(0);
+    //const UNIX: mio::Token = mio::Token(1);
+    const TCP: mio::Token = mio::Token(1);
+
+    use mio::unix::UnixListener;
 
     impl<'a> mio::Handler for UdpHandler<'a> {
         type Timeout = usize;
@@ -99,6 +102,9 @@ fn main() {
                         }
                     }
                 },
+                TCP => {
+                    println!("READABLE !!!");
+                }
                 _ => ()
             }
         }
@@ -109,7 +115,7 @@ fn main() {
                     match self.client.tx() {
                         Some(ebuf) => {
                             if let Ok((msg,_)) = Message::from_buf(ebuf.buf.as_slice(), MessageDirection::FromClient) {
-                                println!("TX: {:?}", msg);
+//                                println!("TX: {:?}", msg);
                             } //TODO else println(ERROR:malformed message); eloop_shutdown();
                             self.counter += 1;
                             //if self.counter % 3 == 0 {
@@ -177,8 +183,8 @@ fn main() {
         }
     };
 
-    let mut eloop = mio::EventLoop::new().ok().expect("mio.loop.new");
-    eloop.register_opt(&sock, UDP, mio::Interest::readable() | mio::Interest::writable(), mio::PollOpt::level()).ok().expect("loop.register_opt");
+    let mut eloop = mio::EventLoop::new().ok().expect("eloop.new");
+    eloop.register_opt(&sock, UDP, mio::Interest::readable() | mio::Interest::writable(), mio::PollOpt::level()).ok().expect("eloop.register(udp)");
 
     let ip = client.serv_ip;
     let mut handler = UdpHandler::new(sock, &mut client, std::net::SocketAddr::new(ip, 1870));
@@ -191,8 +197,17 @@ fn main() {
     }
     */
 
-    let unix_sock = mio::unix::UnixStream::connect(&std::path::PathBuf::from(".socket")).unwrap();
-    eloop.register_opt(&unix_sock, UNIX, mio::Interest::writable(), mio::PollOpt::edge() | mio::PollOpt::oneshot()).unwrap();
+    /*
+    let unix_sock = match mio::unix::UnixListener::bind(&std::path::PathBuf::from(".socket")) {
+        Ok(sock) => { sock }
+        Err(e) => { println!("couldn't connect unix socket: {}", e); return; }
+    };
+    eloop.register_opt(&unix_sock, UNIX, mio::Interest::readable(), mio::PollOpt::edge() | mio::PollOpt::oneshot()).ok().expect("eloop.register(unix)");
+    */
+
+    let addr: std::net::SocketAddr = str::FromStr::from_str("127.0.0.1:33000").ok().expect("any.from_str");
+    let srv = mio::tcp::TcpListener::bind(&addr).unwrap();
+    eloop.register_opt(&srv, TCP, mio::Interest::readable(), mio::PollOpt::edge() | mio::PollOpt::oneshot()).unwrap();
 
     info!("run event loop");
     eloop.run(&mut handler).ok().expect("Failed to run the event loop");
