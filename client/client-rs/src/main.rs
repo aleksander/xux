@@ -17,7 +17,7 @@ use std::str;
 use rustc_serialize::hex::ToHex;
 
 mod salem;
-use salem::message::*;
+//use salem::message::*;
 use salem::client::*;
 
 //TODO
@@ -56,33 +56,60 @@ fn main() {
 
     use mio::Socket;
 
-    struct UdpHandler<'a> {
-        sock: mio::NonBlock<mio::udp::UdpSocket>,
-        addr: std::net::SocketAddr,
-        //tx_buf: LinkedList<Vec<u8>>,
-        client: &'a mut Client,
-        //start: bool,
-        counter: usize,
+    const UDP: mio::Token = mio::Token(0);
+    const TCP: mio::Token = mio::Token(1);
+
+    struct ControlConn {
+        sock: mio::tcp::TcpStream,
+        //buf: Option<mio::buf::ByteBuf>,
+        //mut_buf: Option<mio::buf::MutByteBuf>,
+        token: Option<mio::Token>,
+        //interest: mio::Interest
     }
 
-    impl<'a> UdpHandler<'a> {
-        fn new(sock: mio::NonBlock<mio::udp::UdpSocket>, client:&'a mut Client, addr: std::net::SocketAddr) -> UdpHandler<'a> {
-            UdpHandler {
+    impl ControlConn {
+        fn new(sock: mio::tcp::TcpStream) -> ControlConn {
+            ControlConn {
                 sock: sock,
-                addr: addr,
-                //tx_buf: LinkedList::new(),
-                client: client,
-                //start: true,
-                counter: 0,
+                //buf: None,
+                //mut_buf: Some(mio::buf::ByteBuf::mut_with_capacity(2048)),
+                token: None,
+                //interest: mio::Interest::hup()
             }
         }
     }
 
-    const UDP: mio::Token = mio::Token(0);
-    //const UNIX: mio::Token = mio::Token(1);
-    const TCP: mio::Token = mio::Token(1);
+    struct UdpHandler<'a> {
+        sock: mio::NonBlock<mio::udp::UdpSocket>,
+        addr: std::net::SocketAddr,
+        client: &'a mut Client,
+        counter: usize,
+        tcp_listener: mio::tcp::TcpListener,
+        conns: mio::util::Slab<ControlConn>,
+    }
 
-    use mio::unix::UnixListener;
+    impl<'a> UdpHandler<'a> {
+        fn new(sock: mio::NonBlock<mio::udp::UdpSocket>, tcp_listener: mio::tcp::TcpListener, client:&'a mut Client, addr: std::net::SocketAddr) -> UdpHandler<'a> {
+            UdpHandler {
+                sock: sock,
+                addr: addr,
+                client: client,
+                counter: 0,
+                tcp_listener: tcp_listener,
+                conns: mio::util::Slab::new_starting_at(mio::Token(2), 128),
+            }
+        }
+
+        fn accept (&mut self, event_loop: &mut mio::EventLoop<UdpHandler>) -> std::io::Result<()> {
+            println!("TCP: new connection");
+            let (sock,_) = self.tcp_listener.accept().unwrap();
+            let conn = ControlConn::new(sock);
+            let tok = self.conns.insert(conn).ok().expect("could not add connection to slab");
+            self.conns[tok].token = Some(tok);
+            event_loop.register_opt(&self.conns[tok].sock, tok, mio::Interest::readable(), mio::PollOpt::edge() | mio::PollOpt::oneshot()).ok().expect("could not register socket with event loop");
+            Ok(())
+        }
+    }
 
     impl<'a> mio::Handler for UdpHandler<'a> {
         type Timeout = usize;
@@ -103,7 +130,7 @@ fn main() {
                     }
                 },
                 TCP => {
-                    println!("READABLE !!!");
+                    self.accept(eloop).ok().expect("TCP.accept");
                 }
                 _ => ()
             }
@@ -114,9 +141,11 @@ fn main() {
                 UDP => {
                     match self.client.tx() {
                         Some(ebuf) => {
+                            /*
                             if let Ok((msg,_)) = Message::from_buf(ebuf.buf.as_slice(), MessageDirection::FromClient) {
-//                                println!("TX: {:?}", msg);
+                                println!("TX: {:?}", msg);
                             } //TODO else println(ERROR:malformed message); eloop_shutdown();
+                            */
                             self.counter += 1;
                             //if self.counter % 3 == 0 {
                                 let mut buf = mio::buf::SliceBuf::wrap(ebuf.buf.as_slice());
@@ -186,8 +215,12 @@ fn main() {
     let mut eloop = mio::EventLoop::new().ok().expect("eloop.new");
     eloop.register_opt(&sock, UDP, mio::Interest::readable() | mio::Interest::writable(), mio::PollOpt::level()).ok().expect("eloop.register(udp)");
 
+    let addr: std::net::SocketAddr = str::FromStr::from_str("127.0.0.1:33000").ok().expect("any.from_str");
+    let tcp_listener = mio::tcp::TcpListener::bind(&addr).unwrap();
+    eloop.register_opt(&tcp_listener, TCP, mio::Interest::readable(), mio::PollOpt::edge() | mio::PollOpt::oneshot()).unwrap();
+
     let ip = client.serv_ip;
-    let mut handler = UdpHandler::new(sock, &mut client, std::net::SocketAddr::new(ip, 1870));
+    let mut handler = UdpHandler::new(sock, tcp_listener, &mut client, std::net::SocketAddr::new(ip, 1870));
     handler.client.connect().ok().expect("client.connect()");
 
     /*
@@ -196,18 +229,6 @@ fn main() {
         return;
     }
     */
-
-    /*
-    let unix_sock = match mio::unix::UnixListener::bind(&std::path::PathBuf::from(".socket")) {
-        Ok(sock) => { sock }
-        Err(e) => { println!("couldn't connect unix socket: {}", e); return; }
-    };
-    eloop.register_opt(&unix_sock, UNIX, mio::Interest::readable(), mio::PollOpt::edge() | mio::PollOpt::oneshot()).ok().expect("eloop.register(unix)");
-    */
-
-    let addr: std::net::SocketAddr = str::FromStr::from_str("127.0.0.1:33000").ok().expect("any.from_str");
-    let srv = mio::tcp::TcpListener::bind(&addr).unwrap();
-    eloop.register_opt(&srv, TCP, mio::Interest::readable(), mio::PollOpt::edge() | mio::PollOpt::oneshot()).unwrap();
 
     info!("run event loop");
     eloop.run(&mut handler).ok().expect("Failed to run the event loop");
