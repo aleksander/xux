@@ -583,12 +583,6 @@ impl Client {
         self.tx_buf.pop_back()
     }
     
-    /*
-    pub fn txed (&self) {
-        println!("TXed!");
-    }
-    */
-
     /*    
     pub fn ready_to_go (&self) -> bool {
         let mut ret = false;
