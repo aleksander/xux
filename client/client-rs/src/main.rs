@@ -1,4 +1,4 @@
-#![feature(rustc_private)]
+//#![feature(rustc_private)]
 #![feature(convert)]
 #![feature(ip_addr)]
 #![feature(collections)]
@@ -11,13 +11,14 @@ use rustc_serialize::hex::ToHex;
 
 extern crate mio;
 use mio::Handler;
-use mio::Socket;
+//use mio::Socket;
 use mio::Token;
-use mio::NonBlock;
+//use mio::NonBlock;
 use mio::EventLoop;
 use mio::Interest;
 use mio::PollOpt;
 use mio::ReadHint;
+use mio::TryRead;
 use mio::TryWrite;
 use mio::buf::Buf;
 use mio::buf::ByteBuf;
@@ -27,15 +28,13 @@ use mio::buf::SliceBuf;
 use mio::tcp::TcpListener;
 use mio::tcp::TcpStream;
 use mio::udp::UdpSocket;
-use mio::udp::bind;
+//use mio::udp::bind;
 use mio::util::Slab;
 
 //#[macro_use]
 //extern crate log;
 
 use std::str;
-use std::io::Read;
-use std::io::Write;
 
 mod salem;
 use salem::client::*;
@@ -105,7 +104,7 @@ impl ControlConn {
 }
 
 struct AnyHandler<'a> {
-    sock: NonBlock<UdpSocket>,
+    sock: UdpSocket,
     addr: std::net::SocketAddr,
     client: &'a mut Client,
     counter: usize,
@@ -114,7 +113,7 @@ struct AnyHandler<'a> {
 }
 
 impl<'a> AnyHandler<'a> {
-    fn new(sock: NonBlock<UdpSocket>, tcp_listener: TcpListener, client: &'a mut Client, addr: std::net::SocketAddr) -> AnyHandler<'a> {
+    fn new(sock: UdpSocket, tcp_listener: TcpListener, client: &'a mut Client, addr: std::net::SocketAddr) -> AnyHandler<'a> {
         AnyHandler {
             sock: sock,
             addr: addr,
@@ -127,8 +126,8 @@ impl<'a> AnyHandler<'a> {
 
     fn accept (&mut self, eloop: &mut EventLoop<AnyHandler>) -> std::io::Result<()> {
         println!("TCP: new connection");
-        let (sock,_) = self.tcp_listener.accept().unwrap();
-        let conn = ControlConn::new(sock);
+        let tcp_stream = self.tcp_listener.accept().unwrap().unwrap();
+        let conn = ControlConn::new(tcp_stream);
         let tok = self.conns.insert(conn).ok().expect("could not add connection to slab");
         self.conns[tok].token = Some(tok);
         eloop.register_opt(&self.conns[tok].sock, tok, Interest::readable(), PollOpt::edge() | PollOpt::oneshot()).ok().expect("could not register socket with event loop");
@@ -245,10 +244,10 @@ fn main() {
     */
 
     let any = str::FromStr::from_str("0.0.0.0:0").ok().expect("any.from_str");
-    let sock = bind(&any).ok().expect("bind");
+    let sock = UdpSocket::bound(&any).ok().expect("udp::bound");
 
     //FIXME sock.connect(&addr);
-    sock.set_reuseaddr(true).ok().expect("set_reuseaddr");
+    //FIXME sock.set_reuseaddr(true).ok().expect("set_reuseaddr");
 
     //TODO return Result and match
     let mut client = Client::new();

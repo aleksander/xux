@@ -9,16 +9,16 @@ authors = ["Aleksander Usov <aleksander.usov@gmail.com>"]
 rustc-serialize = "*"
 byteorder = "*"
 openssl = "*"
-mio = "*"
+#mio = "*"
 
 #[dependencies.openssl]
 #openssl = "0.5.5"
 #git = "git://github.com/sfackler/rust-openssl"
 
-#[dependencies.mio]
+[dependencies.mio]
 #git = "https://github.com/AngryLawyer/rust-sdl2"
 #mio = "0.3.0"
-#git = "https://github.com/carllerche/mio"
+git = "https://github.com/carllerche/mio"
 #git = "https://github.com/fhartwig/mio.git"
 
 #git = "https://github.com/aleksander/mio.git"
