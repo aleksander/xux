@@ -22,6 +22,7 @@ use mio::TryRead;
 use mio::TryWrite;
 use mio::buf::Buf;
 use mio::buf::ByteBuf;
+use mio::buf::MutBuf;
 use mio::buf::MutByteBuf;
 use mio::buf::RingBuf;
 use mio::buf::SliceBuf;
@@ -33,6 +34,9 @@ use mio::util::Slab;
 
 //#[macro_use]
 //extern crate log;
+
+//extern crate bytes;
+//use bytes::Buf;
 
 use std::str;
 
@@ -80,14 +84,15 @@ impl ControlConn {
         event_loop.reregister(&self.sock, self.token.unwrap(), self.interest, PollOpt::edge() | PollOpt::oneshot())
     }
 
-    fn readable (&mut self, event_loop: &mut EventLoop<AnyHandler>) -> std::io::Result<()> {
+    fn readable (&mut self, eloop: &mut EventLoop<AnyHandler>) -> std::io::Result<()> {
         let mut buf = self.mut_buf.take().unwrap();
         match self.sock.read(&mut buf) {
             Ok(None) => {
-                panic!("We just got readable, but were unable to read from the socket?");
+                println!("We just got readable, but were unable to read from the socket?");
+                eloop.shutdown();
             }
             Ok(Some(r)) => {
-                println!("CONN : we read {} bytes!", r);
+                println!("CONN: we read {} bytes: {:?}", r, buf.mut_bytes());
                 self.interest.remove(Interest::readable());
                 self.interest.insert(Interest::writable());
             }
@@ -99,7 +104,7 @@ impl ControlConn {
         };
         // prepare to provide this to writable
         self.buf = Some(buf.flip());
-        event_loop.reregister(&self.sock, self.token.unwrap(), self.interest, PollOpt::edge())
+        eloop.reregister(&self.sock, self.token.unwrap(), self.interest, PollOpt::edge())
     }
 }
 
@@ -135,12 +140,12 @@ impl<'a> AnyHandler<'a> {
     }
     
     fn conn_readable (&mut self, eloop: &mut EventLoop<AnyHandler>, tok: Token) -> std::io::Result<()> {
-        println!("server conn readable; tok={:?}", tok);
+        println!("conn readable; tok={:?}", tok);
         self.conn(tok).readable(eloop)
     }
 
     fn conn_writable (&mut self, eloop: &mut EventLoop<AnyHandler>, tok: Token) -> std::io::Result<()> {
-        println!("server conn writable; tok={:?}", tok);
+        println!("conn writable; tok={:?}", tok);
         self.conn(tok).writable(eloop)
     }
 
@@ -219,6 +224,7 @@ impl<'a> Handler for AnyHandler<'a> {
 }
 
 fn main() {
+    //TODO use PollOpt::edge() | PollOpt::oneshot() for UDP connection and not PollOpt::level() (see how this is doing for TCP conns)
     //TODO handle keyboard interrupt
     //TODO replace all unwraps with normal error handling
     //TODO ADD tests:
