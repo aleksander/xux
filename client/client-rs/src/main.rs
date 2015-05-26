@@ -19,7 +19,7 @@ use mio::Interest;
 use mio::PollOpt;
 use mio::ReadHint;
 use mio::TryRead;
-//use mio::TryWrite;
+use mio::TryWrite;
 use mio::buf::Buf;
 use mio::buf::ByteBuf;
 use mio::buf::MutBuf;
@@ -66,28 +66,55 @@ impl ControlConn {
         }
     }
 
-    /*
-    fn writable (&mut self, event_loop: &mut EventLoop<AnyHandler>) -> std::io::Result<()> {
-        let mut buf = self.buf.take().unwrap();
-        match self.sock.write(&mut buf) {
+    fn writable (&mut self, eloop: &mut EventLoop<AnyHandler>, client: &Client) -> std::io::Result<()> {
+        println!("{:?}: writable", self.token);
+        //let mut buf = self.buf.take().unwrap();
+
+        //let mut buf = ByteBuf::mut_with_capacity(2048);
+        //buf.write_slice(b"hello there!\n");
+
+        /* TODO
+           Ok(Control::Dump) => {
+        */
+        let mut buf = Vec::new();
+        for o in client.objects.values() {
+            let (x,y) = o.xy;
+            let resid = o.resid;
+            let resname = match client.resources.get(&o.resid) {
+                Some(res) => res.as_str(),
+                None      => "null"
+            };
+            //buf.write_slice(format!("({:7},{:7}) {:7} {}\n", x, y, resid, resname).as_bytes());
+            buf.push_all(format!("({:7},{:7}) {:7} {}\n", x, y, resid, resname).as_bytes());
+        }
+
+        //match self.sock.write(&mut buf.flip()) {
+        match self.sock.write(&mut ByteBuf::from_slice(&buf)) {
             Ok(None) => {
                 println!("client flushing buf; WOULDBLOCK");
-                self.buf = Some(buf);
-                self.interest.insert(Interest::writable());
+                //self.buf = Some(buf);
+                //self.interest.insert(Interest::writable());
+                if let Err(e) = eloop.reregister(&self.sock, self.token.unwrap(), Interest::writable(), PollOpt::edge() | PollOpt::oneshot()) {
+                    println!("ERROR: failed to re-reg for write: {}", e);
+                }
             }
             Ok(Some(r)) => {
-                println!("CONN : we wrote {} bytes!", r);
-                self.mut_buf = Some(buf.flip());
-                self.interest.insert(Interest::readable());
-                self.interest.remove(Interest::writable());
+                println!("CONN: we wrote {} bytes!", r);
+                //self.mut_buf = Some(buf.flip());
+                //self.interest.insert(Interest::readable());
+                //self.interest.remove(Interest::writable());
+                if let Err(e) = eloop.reregister(&self.sock, self.token.unwrap(), Interest::readable(), PollOpt::edge() | PollOpt::oneshot()) {
+                    println!("ERROR: failed to re-reg for read: {}", e);
+                }
             }
             Err(e) => println!("not implemented; client err={:?}", e),
         }
-        event_loop.reregister(&self.sock, self.token.unwrap(), self.interest, PollOpt::edge() | PollOpt::oneshot())
+        //eloop.reregister(&self.sock, self.token.unwrap(), self.interest, PollOpt::edge() | PollOpt::oneshot())
+        Ok(())
     }
-    */
 
     fn readable (&mut self, eloop: &mut EventLoop<AnyHandler>) -> std::io::Result<()> {
+        println!("{:?}: readable", self.token);
         //let mut buf = self.mut_buf.take().expect("mut_buf.take");
         let mut buf = ByteBuf::mut_with_capacity(2048);
         match self.sock.read(&mut buf) {
@@ -97,7 +124,9 @@ impl ControlConn {
             }
             Ok(Some(0)) => {
                 println!("read zero bytes. de-reg this conn");
-                let _ = eloop.deregister(&self.sock);
+                if let Err(e) = eloop.deregister(&self.sock) {
+                    println!("deregister error: {}", e);
+                }
                 return Err(Error::new(ErrorKind::Other, "read zero bytes"));
             }
             Ok(Some(/*r*/_)) => {
@@ -106,7 +135,7 @@ impl ControlConn {
                 println!("CONN {} bytes in buf: {:?}", buf.remaining(), buf.bytes());
                 //self.interest.remove(Interest::readable());
                 //self.interest.insert(Interest::writable());
-                eloop.reregister(&self.sock, self.token.unwrap(), Interest::readable(), PollOpt::edge()).unwrap();
+                eloop.reregister(&self.sock, self.token.unwrap(), Interest::writable(), PollOpt::edge()).unwrap();
             }
             Err(e) => {
                 println!("not implemented; client err={:?}", e);
@@ -162,14 +191,11 @@ impl<'a> AnyHandler<'a> {
         Ok(())
     }
 
-    /*
     fn conn_writable (&mut self, eloop: &mut EventLoop<AnyHandler>, tok: Token) -> std::io::Result<()> {
         println!("conn writable; tok={:?}", tok);
         //self.conn(tok).writable(eloop)
-        //self.conns[tok].writable(eloop)
-        Ok(())
+        self.conns[tok].writable(eloop, self.client)
     }
-    */
 
     /*
     fn conn<'b> (&'b mut self, tok: Token) -> &'b mut ControlConn {
@@ -237,8 +263,16 @@ impl<'a> Handler for AnyHandler<'a> {
                     },
                     None => {}
                 }
-            },
-            _ => ()
+            }
+            TCP => {
+                println!("ERROR: writable on tcp listener");
+                eloop.shutdown();
+            }
+            _ => {
+                if let Err(e) = self.conn_writable(eloop, token) {
+                    println!("ERROR: {:?} conn_writable: {}", token, e);
+                }
+            }
         }
     }
 
@@ -259,19 +293,6 @@ fn main() {
     //        }
     //TODO FIXME add username/password prompt, remove plain text username/password from sources
 
-    /* TODO
-    Ok(Control::Dump) => {
-        for o in objects.values() {
-            let (x,y) = o.xy;
-            let resid = o.resid;
-            let resname = match resources.get(&o.resid) {
-                Some(res) => { res.as_slice() },
-                None      => { "null" },
-            };
-            client.control_tx.send(format!("({:7},{:7}) {:7} {}", x, y, resid, resname));
-        }
-    },
-    */
 
     let any = str::FromStr::from_str("0.0.0.0:0").ok().expect("any.from_str");
     let sock = UdpSocket::bound(&any).ok().expect("udp::bound");
