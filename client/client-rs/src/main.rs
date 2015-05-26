@@ -85,26 +85,36 @@ impl ControlConn {
     }
 
     fn readable (&mut self, eloop: &mut EventLoop<AnyHandler>) -> std::io::Result<()> {
-        let mut buf = self.mut_buf.take().unwrap();
+        //let mut buf = self.mut_buf.take().expect("mut_buf.take");
+        let mut buf = ByteBuf::mut_with_capacity(2048);
         match self.sock.read(&mut buf) {
             Ok(None) => {
                 println!("We just got readable, but were unable to read from the socket?");
                 eloop.shutdown();
             }
+            Ok(Some(0)) => {
+                println!("read zero bytes. de-reg this conn");
+                eloop.deregister(&self.sock);
+            }
             Ok(Some(r)) => {
-                println!("CONN: we read {} bytes: {:?}", r, buf.mut_bytes());
-                self.interest.remove(Interest::readable());
-                self.interest.insert(Interest::writable());
+                //println!("CONN: we read {} bytes", r);
+                let buf = buf.flip();
+                println!("CONN {} bytes in buf: {:?}", buf.remaining(), buf.bytes());
+                //self.interest.remove(Interest::readable());
+                //self.interest.insert(Interest::writable());
+                eloop.reregister(&self.sock, self.token.unwrap(), Interest::readable(), PollOpt::edge()).unwrap();
             }
             Err(e) => {
                 println!("not implemented; client err={:?}", e);
-                self.interest.remove(Interest::readable());
+                //self.interest.remove(Interest::readable());
+                eloop.shutdown();
             }
 
         };
         // prepare to provide this to writable
-        self.buf = Some(buf.flip());
-        eloop.reregister(&self.sock, self.token.unwrap(), self.interest, PollOpt::edge())
+        //FIXME self.buf = Some(buf);
+        //FIXME eloop.reregister(&self.sock, self.token.unwrap(), self.interest, PollOpt::edge())
+        Ok(())
     }
 }
 
