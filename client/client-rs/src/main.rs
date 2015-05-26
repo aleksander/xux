@@ -19,11 +19,11 @@ use mio::Interest;
 use mio::PollOpt;
 use mio::ReadHint;
 use mio::TryRead;
-use mio::TryWrite;
+//use mio::TryWrite;
 use mio::buf::Buf;
 use mio::buf::ByteBuf;
 use mio::buf::MutBuf;
-use mio::buf::MutByteBuf;
+//use mio::buf::MutByteBuf;
 use mio::buf::RingBuf;
 use mio::buf::SliceBuf;
 use mio::tcp::TcpListener;
@@ -39,6 +39,7 @@ use mio::util::Slab;
 //use bytes::Buf;
 
 use std::str;
+use std::io::{Error, ErrorKind};
 
 mod salem;
 use salem::client::*;
@@ -48,23 +49,24 @@ const TCP: Token = Token(1);
 
 struct ControlConn {
     sock: TcpStream,
-    buf: Option<ByteBuf>,
-    mut_buf: Option<MutByteBuf>,
+    //buf: Option<ByteBuf>,
+    //mut_buf: Option<MutByteBuf>,
     token: Option<Token>,
-    interest: Interest,
+    //interest: Interest,
 }
 
 impl ControlConn {
     fn new(sock: TcpStream) -> ControlConn {
         ControlConn {
             sock: sock,
-            buf: None,
-            mut_buf: Some(ByteBuf::mut_with_capacity(2048)),
+            //buf: None,
+            //mut_buf: Some(ByteBuf::mut_with_capacity(2048)),
             token: None,
-            interest: Interest::hup()
+            //interest: Interest::hup()
         }
     }
 
+    /*
     fn writable (&mut self, event_loop: &mut EventLoop<AnyHandler>) -> std::io::Result<()> {
         let mut buf = self.buf.take().unwrap();
         match self.sock.write(&mut buf) {
@@ -83,6 +85,7 @@ impl ControlConn {
         }
         event_loop.reregister(&self.sock, self.token.unwrap(), self.interest, PollOpt::edge() | PollOpt::oneshot())
     }
+    */
 
     fn readable (&mut self, eloop: &mut EventLoop<AnyHandler>) -> std::io::Result<()> {
         //let mut buf = self.mut_buf.take().expect("mut_buf.take");
@@ -94,9 +97,10 @@ impl ControlConn {
             }
             Ok(Some(0)) => {
                 println!("read zero bytes. de-reg this conn");
-                eloop.deregister(&self.sock);
+                let _ = eloop.deregister(&self.sock);
+                return Err(Error::new(ErrorKind::Other, "read zero bytes"));
             }
-            Ok(Some(r)) => {
+            Ok(Some(/*r*/_)) => {
                 //println!("CONN: we read {} bytes", r);
                 let buf = buf.flip();
                 println!("CONN {} bytes in buf: {:?}", buf.remaining(), buf.bytes());
@@ -145,23 +149,33 @@ impl<'a> AnyHandler<'a> {
         let conn = ControlConn::new(tcp_stream);
         let tok = self.conns.insert(conn).ok().expect("could not add connection to slab");
         self.conns[tok].token = Some(tok);
-        eloop.register_opt(&self.conns[tok].sock, tok, Interest::readable(), PollOpt::edge() | PollOpt::oneshot()).ok().expect("could not register socket with event loop");
+        eloop.register_opt(&self.conns[tok].sock, tok, Interest::readable(), PollOpt::edge() | PollOpt::oneshot()).ok().expect("could not reg IO for new conn");
         Ok(())
     }
     
     fn conn_readable (&mut self, eloop: &mut EventLoop<AnyHandler>, tok: Token) -> std::io::Result<()> {
         println!("conn readable; tok={:?}", tok);
-        self.conn(tok).readable(eloop)
+        //if let Err(e) = self.conn(tok).readable(eloop) {
+        if let Err(_) = self.conns[tok].readable(eloop) {
+            self.conns.remove(tok);
+        }
+        Ok(())
     }
 
+    /*
     fn conn_writable (&mut self, eloop: &mut EventLoop<AnyHandler>, tok: Token) -> std::io::Result<()> {
         println!("conn writable; tok={:?}", tok);
-        self.conn(tok).writable(eloop)
+        //self.conn(tok).writable(eloop)
+        //self.conns[tok].writable(eloop)
+        Ok(())
     }
+    */
 
+    /*
     fn conn<'b> (&'b mut self, tok: Token) -> &'b mut ControlConn {
         &mut self.conns[tok]
     }
+    */
 }
 
 impl<'a> Handler for AnyHandler<'a> {
@@ -279,7 +293,7 @@ fn main() {
 
     let addr: std::net::SocketAddr = str::FromStr::from_str("127.0.0.1:33000").ok().expect("any.from_str");
     let tcp_listener = TcpListener::bind(&addr).unwrap();
-    eloop.register_opt(&tcp_listener, TCP, Interest::readable(), PollOpt::edge() | PollOpt::oneshot()).unwrap();
+    eloop.register_opt(&tcp_listener, TCP, Interest::readable(), PollOpt::edge()).unwrap();
 
     let ip = client.serv_ip;
     let mut handler = AnyHandler::new(sock, tcp_listener, &mut client, std::net::SocketAddr::new(ip, 1870));
