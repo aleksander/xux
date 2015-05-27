@@ -22,7 +22,7 @@ use mio::TryRead;
 use mio::TryWrite;
 use mio::buf::Buf;
 use mio::buf::ByteBuf;
-use mio::buf::MutBuf;
+//use mio::buf::MutBuf;
 //use mio::buf::MutByteBuf;
 use mio::buf::RingBuf;
 use mio::buf::SliceBuf;
@@ -53,6 +53,7 @@ struct ControlConn {
     //mut_buf: Option<MutByteBuf>,
     token: Option<Token>,
     //interest: Interest,
+    url: Option<String>,
 }
 
 impl ControlConn {
@@ -62,7 +63,8 @@ impl ControlConn {
             //buf: None,
             //mut_buf: Some(ByteBuf::mut_with_capacity(2048)),
             token: None,
-            //interest: Interest::hup()
+            //interest: Interest::hup(),
+            url: None,
         }
     }
 
@@ -76,20 +78,60 @@ impl ControlConn {
         /* TODO
            Ok(Control::Dump) => {
         */
-        let mut buf = Vec::new();
-        for o in client.objects.values() {
-            let (x,y) = o.xy;
-            let resid = o.resid;
-            let resname = match client.resources.get(&o.resid) {
-                Some(res) => res.as_str(),
-                None      => "null"
-            };
-            //buf.write_slice(format!("({:7},{:7}) {:7} {}\n", x, y, resid, resname).as_bytes());
-            buf.push_all(format!("({:7},{:7}) {:7} {}\n", x, y, resid, resname).as_bytes());
-        }
+
+        let buf = match self.url {
+            Some(ref url) => {
+                if url == "/" {
+                    let body = "\
+                    <html> \r\n\
+                        <head> \r\n\
+                            <title></title> \r\n\
+                            <script src=\"http://code.jquery.com/jquery-1.11.3.min.js\" stype=\"text/javascript\"></script> \r\n\
+                            <script type=\"text/javascript\"> \r\n\
+                                $(document).ready(function(){ \r\n\
+                                    $('#getdata-button').on('click', function(){ \r\n\
+                                        $.get('http://localhost:33000/data', function(data) { \r\n\
+                                            $('#showdata').html(\"<p>\"+data+\"</p>\"); \r\n\
+                                        }); \r\n\
+                                    }); \r\n\
+                                }); \r\n\
+                            </script> \r\n\
+                        </head> \r\n\
+                        <body> \r\n\
+                            <a href=\"#\" id=\"getdata-button\">C</a> \r\n\
+                            <div id=\"showdata\"></div> \r\n\
+                        </body> \r\n\
+                    </html>\r\n\r\n";
+                    format!("HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\n\r\n", body.len()) + &body
+                }
+                else if url == "/data" {
+                    let mut body = String::new();
+                    //buf.push_all(b"<p><b>Test text</b></p>\r\n");
+                    for o in client.objects.values() {
+                        let (x,y) = o.xy;
+                        let resid = o.resid;
+                        let resname = match client.resources.get(&o.resid) {
+                            Some(res) => res.as_str(),
+                            None      => "null"
+                        };
+                        //buf.write_slice(format!("({:7},{:7}) {:7} {}\n", x, y, resid, resname).as_bytes());
+                        //body.push_all(format!("({:7},{:7}) {:7} {}\r\n", x, y, resid, resname).as_bytes());
+                        body = body + &format!("{{ \"x\" : {}, \"y\" : {}, \"resid\" : {}, \"resname\" : \"{}\" }}, ", x, y, resid, resname);
+                    }
+                    //let mut buf = Vec::new();
+                    body = "[ ".to_string() + &body[..body.len()-2] + " ]";
+                    format!("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\n\r\n", body.len()) + &body
+                }
+                else {
+                    "HTTP/1.1 404 Not Found\r\n\r\n".to_string()
+                }
+            }
+            None => { return Err(Error::new(ErrorKind::Other, "writable with empty URL")); }
+        };
+
 
         //match self.sock.write(&mut buf.flip()) {
-        match self.sock.write(&mut ByteBuf::from_slice(&buf)) {
+        match self.sock.write(&mut ByteBuf::from_slice(buf.as_bytes())) {
             Ok(None) => {
                 println!("client flushing buf; WOULDBLOCK");
                 //self.buf = Some(buf);
@@ -132,7 +174,13 @@ impl ControlConn {
             Ok(Some(/*r*/_)) => {
                 //println!("CONN: we read {} bytes", r);
                 let buf = buf.flip();
-                println!("CONN {} bytes in buf: {}", buf.remaining(), String::from_utf8_lossy(buf.bytes()));
+                let buf = String::from_utf8_lossy(buf.bytes());
+                println!("CONN read: {}", buf);
+                if buf.starts_with("GET / ") {
+                    self.url = Some("/".to_string());
+                } else if buf.starts_with("GET /data ") {
+                    self.url = Some("/data".to_string());
+                }
                 //self.interest.remove(Interest::readable());
                 //self.interest.insert(Interest::writable());
                 eloop.reregister(&self.sock, self.token.unwrap(), Interest::writable(), PollOpt::edge()).unwrap();

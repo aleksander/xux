@@ -1,0 +1,28 @@
+<html>
+<meta charset="UTF-8">
+<head>
+<title></title>
+<script src="http://code.jquery.com/jquery-2.1.4.min.js"></script>
+<script type="text/javascript">
+$(document).ready(function(){
+    $('#getdata-button').on('click', function(){
+        $.getJSON('http://localhost:33000/data', function(data) {
+            var h = "";
+            for (var i=0; i<data.length; ++i) {
+                e = data[i];
+                h += "("+e.x+","+e.y+") "+e.resid+" "+e.resname+"<br>";
+            }
+            $('#showdata').html("<p>"+h+"</p>");
+        });
+    });
+});
+$(document).ajaxError(function(e, xhr, settings, exception){
+    console.log('ERROR: ' + settings.url + ', ' + exception);
+}); 
+</script>
+</head>
+<body>
+<a href="#" id="getdata-button">C</a>
+<div id="showdata"></div>
+</body>
+</html>
