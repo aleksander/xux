@@ -132,7 +132,7 @@ impl ControlConn {
             Ok(Some(/*r*/_)) => {
                 //println!("CONN: we read {} bytes", r);
                 let buf = buf.flip();
-                println!("CONN {} bytes in buf: {:?}", buf.remaining(), buf.bytes());
+                println!("CONN {} bytes in buf: {}", buf.remaining(), String::from_utf8_lossy(buf.bytes()));
                 //self.interest.remove(Interest::readable());
                 //self.interest.insert(Interest::writable());
                 eloop.reregister(&self.sock, self.token.unwrap(), Interest::writable(), PollOpt::edge()).unwrap();
