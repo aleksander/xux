@@ -31,7 +31,7 @@
                     //ctx.strokeStyle = '#ffffff';
                     //ctx.arc(10+x,10+y,3,0,2*Math.PI,true);
                     //ctx.fill();
-                    h += "("+x+","+y+") "+e.resid+" "+e.resname+"<br>";
+                    h += "("+e.x+","+e.y+") "+"("+x+","+y+") "+e.resid+" "+e.resname+"<br>";
                 }
                 $('#show').html("<p>"+h+"</p>");
             });
@@ -52,6 +52,28 @@
             $.get('http://localhost:33000/quit');
         });
 
+        var redraw = function(){
+            $.getJSON('http://localhost:33000/objects', function(data){
+                var minx = data[0].x;
+                var miny = data[0].y;
+                for (var i=1; i<data.length; ++i) {
+                    e = data[i];
+                    if (e.x < minx) { minx = e.x; }
+                    if (e.y < miny) { miny = e.y; }
+                }
+                ctx.fillRect(0, 0, canv.width, canv.height);
+                ctx.strokeStyle = '#000000';
+                for (var i=0; i<data.length; ++i) {
+                    e = data[i];
+                    var x = e.x - minx;
+                    var y = e.y - miny;
+                    ctx.strokeRect(10+x-5, 10+y-5, 10, 10);
+                }
+                setTimeout(redraw, 300);
+            });
+        }
+
+        redraw();
     });
     $(document).ajaxError(function(e, xhr, settings, exception){
         console.log('ERROR: ' + settings.url + ', ' + exception);

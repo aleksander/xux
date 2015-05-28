@@ -86,56 +86,6 @@ impl Client {
             enqueue_seq: 0,
             rel_cache: HashMap::new(),
         }
-
-        /*
-        Thread::spawn(move || {
-            let path = Path::new("/tmp/socket");
-            if path.exists() {
-                fs::unlink(&path);
-            }
-            let socket = UnixListener::bind(&path);
-            let mut listener = socket.listen();
-            let mut stream = listener.accept();
-            //TODO FIXME after stream accepted:
-            // create new channel and send it
-            // through another channel(which is constant)
-            let mut stream_tx = stream.clone();
-            // control stream TX
-            Thread::spawn(move || {
-                loop {
-                    let s:String = control_from_main.recv().unwrap();
-                    stream_tx.write_line(s.as_slice()).unwrap();
-                    stream_tx.flush().unwrap();
-                }
-            });
-            loop {
-                // control stream RX
-                match stream.read_byte() {
-                    Ok(b) => {
-                        println!("reader: read: {}", b);
-                        match b {
-                            b'e' | b'q' => {
-                                println!("reader: exit requested");
-                                reader_to_main.send(()); //FIXME remove this channel at all
-                                control_to_main.send(Control::Quit);
-                                //break 'outer;
-                            },
-                            b'o' => {
-                                println!("reader: objects dump requested");
-                                control_to_main.send(Control::Dump);
-                            },
-                            _ => {},
-                        }
-                        stream.write_u8(b).unwrap();
-                    },
-                    Err(e) => {
-                        println!("reader: error: {}", e);
-                        break;
-                    },
-                }
-            }
-        });
-        */
     }
 
     pub fn authorize (&mut self, user: &'static str, pass: &str, hostname: &str, port: u16) -> Result<(), Error> {
@@ -602,8 +552,9 @@ impl Client {
         }
         return ret;
     }
+    */
     
-    pub fn go (&mut self) -> Result<(),Error> {
+    pub fn go (&mut self, x: i32, y: i32) -> Result<(),Error> {
         println!("let's GO somewhere!");
         //TODO let mut rel = Rel::new(seq,id,name);
         let mut rel = Rel{seq:self.seq, rel:Vec::new()};
@@ -611,16 +562,15 @@ impl Client {
         let name : String = "click".to_string();
         let mut args : Vec<MsgList> = Vec::new();
         args.push(MsgList::tCOORD((907, 755)));
-        args.push(MsgList::tCOORD((39683, 36377)));
+        args.push(MsgList::tCOORD((x, y)));
         args.push(MsgList::tINT(1));
         args.push(MsgList::tINT(0));
         let elem = RelElem::WDGMSG(WdgMsg{ id : id, name : name, args : args });
         rel.rel.push(elem);
-        try!(self.enqueue_to_send(Message::REL(rel), Some(100)));
+        try!(self.enqueue_to_send(Message::REL(rel)));
         self.charlist.clear();
         Ok(())
     }
-    */
 }
 
 /*

@@ -77,7 +77,7 @@ impl ControlConn {
         }
     }
 
-    fn writable (&mut self, eloop: &mut EventLoop<AnyHandler>, client: &Client) -> std::io::Result<()> {
+    fn writable (&mut self, eloop: &mut EventLoop<AnyHandler>, client: &mut Client) -> std::io::Result<()> {
         println!("{:?}: writable", self.token);
         //let mut buf = self.buf.take().unwrap();
 
@@ -145,8 +145,10 @@ impl ControlConn {
                     }
                     &Url::Go(x,y) => {
                         println!("GO: {} {}", x, y);
-                        //TODO
-                        "HTTP/1.1 404 Not Implemented\r\n\r\n".to_string()
+                        if let Err(e) = client.go(x,y) {
+                            println!("ERROR: client.go: {:?}", e);
+                        }
+                        "HTTP/1.1 200 OK\r\n\r\n".to_string()
                     }
                     //else {
                     //    "HTTP/1.1 404 Not Found\r\n\r\n".to_string()
@@ -160,7 +162,8 @@ impl ControlConn {
 
 
         //match self.sock.write(&mut buf.flip()) {
-        match self.sock.write(&mut ByteBuf::from_slice(buf.as_bytes())) {
+        //match self.sock.write(&mut ByteBuf::from_slice(buf.as_bytes())) {
+        match self.sock.try_write_buf(&mut ByteBuf::from_slice(buf.as_bytes())) {
             Ok(None) => {
                 println!("client flushing buf; WOULDBLOCK");
                 //self.buf = Some(buf);
@@ -188,7 +191,7 @@ impl ControlConn {
         println!("{:?}: readable", self.token);
         //let mut buf = self.mut_buf.take().expect("mut_buf.take");
         let mut buf = ByteBuf::mut_with_capacity(2048);
-        match self.sock.read(&mut buf) {
+        match self.sock.try_read_buf(&mut buf) {
             Ok(None) => {
                 println!("We just got readable, but were unable to read from the socket?");
                 eloop.shutdown();
