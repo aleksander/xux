@@ -31,7 +31,8 @@ use self::rustc_serialize::hex::ToHex;
 
 pub struct Obj {
     pub resid : u16,
-    pub xy : (i32,i32),
+    pub x : i32,
+    pub y : i32,
 }
 
 #[derive(Clone)]
@@ -241,7 +242,7 @@ impl Client {
                     Message::ACK(_) |
                     Message::BEAT |
                     Message::OBJACK(_) |
-                    Message::CLOSE(_) => {
+                    Message::CLOSE => {
                         let ebuf = EnqueuedBuffer{buf : buf, timeout : None};
                         self.tx_buf.push_front(ebuf);
                     }
@@ -319,14 +320,14 @@ impl Client {
                 try!(self.enqueue_to_send(Message::OBJACK(ObjAck::new(&objdata)))); // send OBJACKs
                 for o in objdata.obj.iter() {
                     if !self.objects.contains_key(&o.id) {
-                        self.objects.insert(o.id, Obj{resid:0, xy:(0,0)});
+                        self.objects.insert(o.id, Obj{resid:0, x:0, y:0});
                     }
                     if let Some(obj) = self.objects.get_mut(&o.id) {
                         //TODO check for o.frame vs obj.frame
                         for prop in o.prop.iter() {
                             match *prop {
                                 ObjProp::odREM => { /*FIXME objects.remove(&o.id); break;*/ },
-                                ObjProp::odMOVE(xy,_) => { obj.xy = xy; },
+                                ObjProp::odMOVE(xy,_) => { let (x,y) = xy; obj.x = x; obj.y = y; },
                                 ObjProp::odRES(resid) => { obj.resid = resid; },
                                 ObjProp::odCOMPOSE(resid) => { obj.resid = resid; },
                                 _ => {},
@@ -337,9 +338,8 @@ impl Client {
                 
                 let mut tmp = Vec::new();
                 for o in self.objects.values() {
-                    let (x,y) = o.xy;
-                    let gx:i32 = x / 1100;
-                    let gy:i32 = y / 1100;
+                    let gx:i32 = o.x / 1100;
+                    let gy:i32 = o.y / 1100;
                     if !self.grids.contains(&(gx,gy)) {
                         tmp.push((gx,gy));
                         self.grids.insert((gx,gy));
@@ -350,7 +350,7 @@ impl Client {
                 }
             },
             Message::OBJACK(_)  => {},
-            Message::CLOSE(_)   => {
+            Message::CLOSE => {
                 println!("RX: CLOSE");
                 //TODO return Status::EndOfSession instead of Error
                 return Err(Error{source:"session closed",detail:None});
@@ -582,7 +582,15 @@ impl Client {
     pub fn tx (&mut self) -> Option<EnqueuedBuffer> {
         self.tx_buf.pop_back()
     }
-    
+
+    pub fn shutdown (&mut self) -> Result<(),Error> {
+        //TODO FIXME set CLOSE re-enqueueable, send only one, and wait for RX:CLOSE
+        try!(self.enqueue_to_send(Message::CLOSE));
+        try!(self.enqueue_to_send(Message::CLOSE));
+        try!(self.enqueue_to_send(Message::CLOSE));
+        Ok(())
+    }
+
     /*    
     pub fn ready_to_go (&self) -> bool {
         let mut ret = false;

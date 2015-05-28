@@ -11,8 +11,8 @@
         ctx.fillStyle = 'rgba(200,200,200,1)';
         ctx.fillRect(0, 0, canv.width, canv.height);
 
-        $('#getdata-button').on('click', function(){
-            $.getJSON('http://localhost:33000/data', function(data) {
+        $('#get-objects').on('click', function(){
+            $.getJSON('http://localhost:33000/objects', function(data) {
                 var h = "";
                 var minx = data[0].x;
                 var miny = data[0].y;
@@ -33,9 +33,25 @@
                     //ctx.fill();
                     h += "("+x+","+y+") "+e.resid+" "+e.resname+"<br>";
                 }
-                $('#showdata').html("<p>"+h+"</p>");
+                $('#show').html("<p>"+h+"</p>");
             });
         });
+
+        $('#get-widgets').on('click', function(){
+            $.getJSON('http://localhost:33000/widgets', function(data) {
+                var h = "";
+                for (var i=1; i<data.length; ++i) {
+                    e = data[i];
+                    h += e.id+" "+e.name+"<br>";
+                }
+                $('#show').html("<p>"+h+"</p>");
+            });
+        });
+
+        $('#quit').on('click', function(){
+            $.get('http://localhost:33000/quit');
+        });
+
     });
     $(document).ajaxError(function(e, xhr, settings, exception){
         console.log('ERROR: ' + settings.url + ', ' + exception);
@@ -43,8 +59,10 @@
 </script>
 </head>
 <body>
-<a href="#" id="getdata-button">C</a>
+<a href="#" id="get-objects">Objects</a>
+<a href="#" id="get-widgets">Widgets</a>
+<a href="#" id="quit">Quit</a>
 <div><canvas height='920' width='920' id='canvas'>Canvas</canvas></div>
-<div id="showdata"></div>
+<div id="show"></div>
 </body>
 </html>

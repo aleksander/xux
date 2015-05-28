@@ -525,8 +525,9 @@ pub struct ObjAckElem {
     pub id : u32,
     pub frame : i32,
 }
-#[derive(Debug)]
-pub struct Close;
+
+//#[derive(Debug)]
+//pub struct Close;
 
 #[allow(non_camel_case_types)]
 #[derive(Debug)]
@@ -541,7 +542,7 @@ pub enum Message {
     MAPDATA( MapData ),
     OBJDATA( ObjData ),
     OBJACK( ObjAck ),
-    CLOSE( Close ),
+    CLOSE/*( Close )*/,
 }
 
 #[allow(non_camel_case_types)]
@@ -957,7 +958,7 @@ impl Message {
                 Ok( Message::OBJACK(ObjAck{obj:Vec::new()}) )
             },
             8 /*CLOSE*/ => {
-                Ok( Message::CLOSE(Close) )
+                Ok( Message::CLOSE/*(Close)*/ )
             },
             _ /*UNKNOWN*/ => { Err( Error{ source:"unknown message type", detail:None } ) }
         };
@@ -1024,6 +1025,10 @@ impl Message {
                     w.write_u32::<le>(o.id).unwrap();
                     w.write_i32::<le>(o.frame).unwrap();
                 }
+                Ok(w)
+            }
+            &Message::CLOSE => {
+                try!(w.write_u8(8)); //CLOSE
                 Ok(w)
             }
             _ => {

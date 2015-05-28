@@ -47,13 +47,22 @@ use salem::client::*;
 const UDP: Token = Token(0);
 const TCP: Token = Token(1);
 
+enum Url {
+    Root,
+    Objects,
+    Widgets,
+    Resources,
+    Go(i32,i32),
+    //Quit
+}
+
 struct ControlConn {
     sock: TcpStream,
     //buf: Option<ByteBuf>,
     //mut_buf: Option<MutByteBuf>,
     token: Option<Token>,
     //interest: Interest,
-    url: Option<String>,
+    url: Option<Url>,
 }
 
 impl ControlConn {
@@ -81,52 +90,72 @@ impl ControlConn {
 
         let buf = match self.url {
             Some(ref url) => {
-                if url == "/" {
-                    let body = "\
-                    <html> \r\n\
-                        <head> \r\n\
-                            <title></title> \r\n\
-                            <script src=\"http://code.jquery.com/jquery-1.11.3.min.js\" stype=\"text/javascript\"></script> \r\n\
-                            <script type=\"text/javascript\"> \r\n\
-                                $(document).ready(function(){ \r\n\
-                                    $('#getdata-button').on('click', function(){ \r\n\
-                                        $.get('http://localhost:33000/data', function(data) { \r\n\
-                                            $('#showdata').html(\"<p>\"+data+\"</p>\"); \r\n\
-                                        }); \r\n\
-                                    }); \r\n\
-                                }); \r\n\
-                            </script> \r\n\
-                        </head> \r\n\
-                        <body> \r\n\
-                            <a href=\"#\" id=\"getdata-button\">C</a> \r\n\
-                            <div id=\"showdata\"></div> \r\n\
-                        </body> \r\n\
-                    </html>\r\n\r\n";
-                    format!("HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\n\r\n", body.len()) + &body
-                }
-                else if url == "/data" {
-                    let mut body = String::new();
-                    //buf.push_all(b"<p><b>Test text</b></p>\r\n");
-                    for o in client.objects.values() {
-                        let (x,y) = o.xy;
-                        let resid = o.resid;
-                        let resname = match client.resources.get(&o.resid) {
-                            Some(res) => res.as_str(),
-                            None      => "null"
-                        };
-                        //buf.write_slice(format!("({:7},{:7}) {:7} {}\n", x, y, resid, resname).as_bytes());
-                        //body.push_all(format!("({:7},{:7}) {:7} {}\r\n", x, y, resid, resname).as_bytes());
-                        body = body + &format!("{{ \"x\" : {}, \"y\" : {}, \"resid\" : {}, \"resname\" : \"{}\" }}, ", x, y, resid, resname);
+                match url {
+                    &Url::Root => { 
+                        let body = "<html> \r\n\
+                                        <head> \r\n\
+                                            <title></title> \r\n\
+                                            <script src=\"http://code.jquery.com/jquery-1.11.3.min.js\" stype=\"text/javascript\"></script> \r\n\
+                                            <script type=\"text/javascript\"> \r\n\
+                                                $(document).ready(function(){ \r\n\
+                                                    $('#getdata-button').on('click', function(){ \r\n\
+                                                        $.get('http://localhost:33000/data', function(data) { \r\n\
+                                                            $('#showdata').html(\"<p>\"+data+\"</p>\"); \r\n\
+                                                        }); \r\n\
+                                                    }); \r\n\
+                                                }); \r\n\
+                                            </script> \r\n\
+                                        </head> \r\n\
+                                        <body> \r\n\
+                                            <a href=\"#\" id=\"getdata-button\">C</a> \r\n\
+                                            <div id=\"showdata\"></div> \r\n\
+                                        </body> \r\n\
+                                    </html>\r\n\r\n";
+                        format!("HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\n\r\n", body.len()) + &body
                     }
-                    //let mut buf = Vec::new();
-                    body = "[ ".to_string() + &body[..body.len()-2] + " ]";
-                    format!("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\n\r\n", body.len()) + &body
-                }
-                else {
-                    "HTTP/1.1 404 Not Found\r\n\r\n".to_string()
+                    &Url::Resources => {
+                        //TODO
+                        "HTTP/1.1 404 Not Implemented\r\n\r\n".to_string()
+                    }
+                    &Url::Objects => {
+                        let mut body = String::new();
+                        //buf.push_all(b"<p><b>Test text</b></p>\r\n");
+                        for o in client.objects.values() {
+                            //let (x,y) = o.xy;
+                            //let resid = o.resid;
+                            let resname = match client.resources.get(&o.resid) {
+                                Some(res) => res.as_str(),
+                                None      => "null"
+                            };
+                            //buf.write_slice(format!("({:7},{:7}) {:7} {}\n", x, y, resid, resname).as_bytes());
+                            //body.push_all(format!("({:7},{:7}) {:7} {}\r\n", x, y, resid, resname).as_bytes());
+                            body = body + &format!("{{\"x\":{},\"y\":{},\"resid\":{},\"resname\":\"{}\"}},", o.x, o.y, o.resid, resname);
+                        }
+                        //let mut buf = Vec::new();
+                        body = "[ ".to_string() + &body[..body.len()-1] + " ]";
+                        format!("HTTP/1.1 200 OK\r\nContent-Type: text/json\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\n\r\n", body.len()) + &body
+                    }
+                    &Url::Widgets => {
+                        let mut body = String::new();
+                        for (id,name) in &client.widgets {
+                            body = body + &format!("{{\"id\":{},\"name\":\"{}\"}},", id, name);
+                        }
+                        body = "[ ".to_string() + &body[..body.len()-1] + " ]";
+                        format!("HTTP/1.1 200 OK\r\nContent-Type: text/json\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\n\r\n", body.len()) + &body
+                    }
+                    &Url::Go(x,y) => {
+                        println!("GO: {} {}", x, y);
+                        //TODO
+                        "HTTP/1.1 404 Not Implemented\r\n\r\n".to_string()
+                    }
+                    //else {
+                    //    "HTTP/1.1 404 Not Found\r\n\r\n".to_string()
+                    //}
                 }
             }
-            None => { return Err(Error::new(ErrorKind::Other, "writable with empty URL")); }
+            None => {
+                return Err(Error::new(ErrorKind::Other, "writable with empty URL"));
+            }
         };
 
 
@@ -155,7 +184,7 @@ impl ControlConn {
         Ok(())
     }
 
-    fn readable (&mut self, eloop: &mut EventLoop<AnyHandler>) -> std::io::Result<()> {
+    fn readable (&mut self, eloop: &mut EventLoop<AnyHandler>, client: &mut Client) -> std::io::Result<()> {
         println!("{:?}: readable", self.token);
         //let mut buf = self.mut_buf.take().expect("mut_buf.take");
         let mut buf = ByteBuf::mut_with_capacity(2048);
@@ -171,15 +200,26 @@ impl ControlConn {
                 }
                 return Err(Error::new(ErrorKind::Other, "read zero bytes"));
             }
-            Ok(Some(/*r*/_)) => {
-                //println!("CONN: we read {} bytes", r);
+            Ok(Some(r)) => {
+                println!("{:?}: read {} bytes", self.token, r);
                 let buf = buf.flip();
                 let buf = String::from_utf8_lossy(buf.bytes());
-                println!("CONN read: {}", buf);
+                //println!("CONN read: {}", buf);
                 if buf.starts_with("GET / ") {
-                    self.url = Some("/".to_string());
-                } else if buf.starts_with("GET /data ") {
-                    self.url = Some("/data".to_string());
+                    self.url = Some(Url::Root);
+                } else if buf.starts_with("GET /objects ") {
+                    self.url = Some(Url::Objects);
+                } else if buf.starts_with("GET /widgets ") {
+                    self.url = Some(Url::Widgets);
+                } else if buf.starts_with("GET /resources ") {
+                    self.url = Some(Url::Resources);
+                } else if buf.starts_with("GET /go/") {
+                    self.url = Some(Url::Go(0,0));
+                } else if buf.starts_with("GET /quit ") {
+                    //self.url = Some(Url::Quit);
+                    if let Err(e) = client.shutdown() {
+                        println!("ERROR: client.shutdown: {:?}", e);
+                    }
                 }
                 //self.interest.remove(Interest::readable());
                 //self.interest.insert(Interest::writable());
@@ -233,7 +273,7 @@ impl<'a> AnyHandler<'a> {
     fn conn_readable (&mut self, eloop: &mut EventLoop<AnyHandler>, tok: Token) -> std::io::Result<()> {
         println!("conn readable; tok={:?}", tok);
         //if let Err(e) = self.conn(tok).readable(eloop) {
-        if let Err(_) = self.conns[tok].readable(eloop) {
+        if let Err(_) = self.conns[tok].readable(eloop, self.client) {
             self.conns.remove(tok);
         }
         Ok(())
