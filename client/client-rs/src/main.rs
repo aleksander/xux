@@ -214,12 +214,24 @@ impl ControlConn {
                 } else if buf.starts_with("GET /resources ") {
                     self.url = Some(Url::Resources);
                 } else if buf.starts_with("GET /go/") {
-                    self.url = Some(Url::Go(0,0));
+                    let tmp1: Vec<&str> = buf.split(' ').collect();
+                    println!("TMP1: {:?}", tmp1);
+                    let tmp2: Vec<&str> = tmp1[1].split('/').collect();
+                    println!("TMP2: {:?}", tmp2);
+                    if tmp2.len() > 3 {
+                        let x: i32 = match str::FromStr::from_str(tmp2[2]) { Ok(v) => v, Err(_) => 0 };
+                        let y: i32 = match str::FromStr::from_str(tmp2[3]) { Ok(v) => v, Err(_) => 0 };
+                        self.url = Some(Url::Go(x,y));
+                    } else {
+                        self.url = Some(Url::Go(0,0));
+                    }
                 } else if buf.starts_with("GET /quit ") {
                     //self.url = Some(Url::Quit);
                     if let Err(e) = client.shutdown() {
                         println!("ERROR: client.shutdown: {:?}", e);
                     }
+                } else {
+                    //TODO pass buf to Lua interpreter
                 }
                 //self.interest.remove(Interest::readable());
                 //self.interest.insert(Interest::writable());
