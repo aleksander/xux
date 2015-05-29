@@ -56,7 +56,8 @@ pub struct Widget {
 pub struct Client {
     //TODO do all fileds PRIVATE and use callback interface
     pub serv_ip    : IpAddr,
-    pub user       : &'static str,
+    pub user       : String,
+    pub pass       : String,
     pub cookie     : Vec<u8>,
     pub widgets    : HashMap<u16,Widget>,
     pub objects    : HashMap<u32,Obj>,
@@ -72,13 +73,14 @@ pub struct Client {
 }
 
 impl Client {
-    pub fn new () -> Client {
+    pub fn new (user: String, pass: String) -> Client {
         let mut widgets = HashMap::new();
         widgets.insert(0, Widget{ id:0, name:"root".to_string(), parent:0 });
 
         Client {
             serv_ip: IpAddr::V4(Ipv4Addr::new(0,0,0,0)),
-            user: "",
+            user: user,
+            pass: pass,
             cookie: Vec::new(),
             widgets: widgets, 
             objects: HashMap::new(),
@@ -94,19 +96,19 @@ impl Client {
         }
     }
 
-    pub fn authorize (&mut self, user: &'static str, pass: &str, hostname: &str, port: u16) -> Result<(), Error> {
+    pub fn authorize (&mut self, hostname: &str, port: u16) -> Result<(), Error> {
         let host = {
             let mut ips = ::std::net::lookup_host(hostname).ok().expect("lookup_host");
             ips.next().expect("ip.next").ok().expect("ip.next.ok")
         };
+        
         println!("connect to {}", host.ip());
 
-        self.user = user;
         self.serv_ip = host.ip();
         //self.pass = pass;
         //let auth_addr: SocketAddr = SocketAddr {ip: ip, port: port};
         let auth_addr = SocketAddr::new(self.serv_ip, port);
-        println!("authorize {} @ {}", user, auth_addr);
+        println!("authorize {} @ {}", self.user, auth_addr);
         //TODO add method connect(SocketAddr) to TcpStream
         //let stream = tryio!("tcp.connect" TcpStream::connect(self.auth_addr));
         let stream = TcpStream::connect(auth_addr).unwrap();
@@ -114,7 +116,7 @@ impl Client {
         let mut stream = SslStream::new(&context, stream).unwrap();
 
         // send 'pw' command
-        let user = user.as_bytes();
+        let user = self.user.as_bytes();
         let buf_len = (3 + user.len() + 1 + 32) as u16;
         let mut buf: Vec<u8> = Vec::with_capacity((2 + buf_len) as usize);
         buf.write_u16::<be>(buf_len).unwrap();
@@ -122,7 +124,7 @@ impl Client {
         buf.push(0);
         buf.push_all(user);
         buf.push(0);
-        let pass_hash = hash(Type::SHA256, pass.as_bytes());
+        let pass_hash = hash(Type::SHA256, self.pass.as_bytes());
         assert!(pass_hash.len() == 32);
         buf.push_all(pass_hash.as_slice());
         stream.write(buf.as_slice()).unwrap();
@@ -497,7 +499,8 @@ impl Client {
         //TODO send SESS until reply
         //TODO get username from server responce, not from auth username
         let cookie = self.cookie.clone();
-        try!(self.enqueue_to_send(Message::C_SESS(cSess{login:self.user.to_string(), cookie:cookie})));
+        let user = self.user.clone();
+        try!(self.enqueue_to_send(Message::C_SESS(cSess{login:user, cookie:cookie})));
         Ok(())
     }
 
