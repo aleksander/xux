@@ -186,7 +186,8 @@ impl Client {
                 match msg {
                     Message::C_SESS(_) |
                     Message::REL(_) |
-                    Message::MAPREQ(_) => {
+                    Message::MAPREQ(_) |
+                    Message::CLOSE => {
                         //TODO maybe we should increase timeout in the case of MAPREQ?
                         let ebuf = EnqueuedBuffer{buf : buf, timeout : Some(Timeout{ms : 100, seq : self.enqueue_seq})};
                         if self.que.is_empty() {
@@ -197,8 +198,7 @@ impl Client {
                     }
                     Message::ACK(_) |
                     Message::BEAT |
-                    Message::OBJACK(_) |
-                    Message::CLOSE => {
+                    Message::OBJACK(_) => {
                         let ebuf = EnqueuedBuffer{buf : buf, timeout : None};
                         self.tx_buf.push_front(ebuf);
                     }
@@ -540,10 +540,7 @@ impl Client {
         self.tx_buf.pop_back()
     }
 
-    pub fn shutdown (&mut self) -> Result<(),Error> {
-        //TODO FIXME set CLOSE re-enqueueable, send only one, and wait for RX:CLOSE
-        try!(self.enqueue_to_send(Message::CLOSE));
-        try!(self.enqueue_to_send(Message::CLOSE));
+    pub fn close (&mut self) -> Result<(),Error> {
         try!(self.enqueue_to_send(Message::CLOSE));
         Ok(())
     }

@@ -230,8 +230,8 @@ impl ControlConn {
                     }
                 } else if buf.starts_with("GET /quit ") {
                     //self.url = Some(Url::Quit);
-                    if let Err(e) = client.shutdown() {
-                        println!("ERROR: client.shutdown: {:?}", e);
+                    if let Err(e) = client.close() {
+                        println!("ERROR: client.close: {:?}", e);
                     }
                 } else {
                     //TODO pass buf to Lua interpreter
