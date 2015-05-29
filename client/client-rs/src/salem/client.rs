@@ -345,13 +345,15 @@ impl Client {
         
     fn dispatch_rel (&mut self, rel: &Rel) {
         println!("dispatch REL {}-{}", rel.seq, rel.seq + ((rel.rel.len() as u16) - 1));
-        println!("RX: {:?}", rel);
+        //println!("RX: {:?}", rel);
         for r in rel.rel.iter() {
             match *r {
                 RelElem::NEWWDG(ref wdg) => {
+                    println!("      {:?}", wdg);
                     self.widgets.insert(wdg.id, Widget{id:wdg.id, name:wdg.kind.clone(), parent:wdg.parent});
                 },
                 RelElem::WDGMSG(ref msg) => {
+                    println!("      {:?}", msg);
                     //TODO match against widget.type and message.type
                     match self.widgets.get(&(msg.id)) {
                         None => {},
@@ -370,6 +372,7 @@ impl Client {
                     }
                 },
                 RelElem::DSTWDG(ref wdg) => {
+                    println!("      {:?}", wdg);
                     self.widgets.remove(&wdg.id);
                 },
                 RelElem::MAPIV(_) => {},
