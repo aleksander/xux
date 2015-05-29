@@ -4,6 +4,13 @@
 <title></title>
 <script src="http://code.jquery.com/jquery-2.1.4.min.js"></script>
 <script type="text/javascript">
+
+    if (typeof String.prototype.startsWith != 'function') {
+      String.prototype.startsWith = function (str){
+        return this.slice(0, str.length) == str;
+      };
+    }
+    
     $(document).ready(function(){
         //var canv = $('#canvas');
         var canv = document.getElementById('canvas');
@@ -28,9 +35,6 @@
                     var y = e.y - miny;
                     ctx.strokeStyle = '#000000';
                     ctx.strokeRect(10+x-5, 10+y-5, 10, 10);
-                    //ctx.strokeStyle = '#ffffff';
-                    //ctx.arc(10+x,10+y,3,0,2*Math.PI,true);
-                    //ctx.fill();
                     h += "("+e.x+","+e.y+") "+"("+x+","+y+") "+e.resid+" "+e.resname+"<br>";
                 }
                 $('#show').html("<p>"+h+"</p>");
@@ -61,14 +65,26 @@
                     if (e.x < minx) { minx = e.x; }
                     if (e.y < miny) { miny = e.y; }
                 }
+                ctx.fillStyle = 'rgba(200,200,200,1)';
                 ctx.fillRect(0, 0, canv.width, canv.height);
-                ctx.strokeStyle = '#000000';
+                var borka = "";
                 for (var i=0; i<data.length; ++i) {
                     e = data[i];
                     var x = e.x - minx;
                     var y = e.y - miny;
-                    ctx.strokeRect(10+x-5, 10+y-5, 10, 10);
+                    if (e.resname.startsWith('gfx/borka')) {
+                        borka = "( "+e.x+" , "+e.y+" )";
+                        //ctx.strokeStyle = '#000000';
+                        //ctx.strokeRect(10+x-5, 10+y-5, 10, 10);
+                        ctx.fillStyle = 'rgba(0,0,255,0.5)';
+                    } else if (e.resname.startsWith('gfx/kritter')) {
+                        ctx.fillStyle = 'rgba(255,0,0,0.5)';
+                    } else {
+                        ctx.fillStyle = 'rgba(0,255,0,0.5)';
+                    }
+                    ctx.fillRect(10+x-5, 10+y-5, 10, 10);
                 }
+                $('#borka').html(borka);
                 setTimeout(redraw, 300);
             });
         }
@@ -84,6 +100,7 @@
 <a href="#" id="get-objects">Objects</a>
 <a href="#" id="get-widgets">Widgets</a>
 <a href="#" id="quit">Quit</a>
+<div id="borka"></div>
 <div><canvas height='920' width='920' id='canvas'>Canvas</canvas></div>
 <div id="show"></div>
 </body>
