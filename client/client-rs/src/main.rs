@@ -137,8 +137,8 @@ impl ControlConn {
                     }
                     &Url::Widgets => {
                         let mut body = String::new();
-                        for (id,name) in &client.widgets {
-                            body = body + &format!("{{\"id\":{},\"name\":\"{}\"}},", id, name);
+                        for (id,w) in &client.widgets {
+                            body = body + &format!("{{\"id\":{},\"name\":\"{}\",\"parent\":\"{}\"}},", id, w.name, w.parent);
                         }
                         body = "[ ".to_string() + &body[..body.len()-1] + " ]";
                         format!("HTTP/1.1 200 OK\r\nContent-Type: text/json\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\n\r\n", body.len()) + &body

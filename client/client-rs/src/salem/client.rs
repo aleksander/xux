@@ -46,13 +46,19 @@ pub struct EnqueuedBuffer {
     pub buf : Vec<u8>,
     pub timeout : Option<Timeout>,
 }
+
+pub struct Widget {
+    pub id : u16,
+    pub name : String,
+    pub parent : u16,
+}
     
 pub struct Client {
     //TODO do all fileds PRIVATE and use callback interface
     pub serv_ip    : IpAddr,
     pub user       : &'static str,
     pub cookie     : Vec<u8>,
-    pub widgets    : HashMap<u16,String>,
+    pub widgets    : HashMap<u16,Widget>,
     pub objects    : HashMap<u32,Obj>,
     pub grids      : HashSet<(i32,i32)>,
     pub charlist   : Vec<String>,
@@ -68,7 +74,7 @@ pub struct Client {
 impl Client {
     pub fn new () -> Client {
         let mut widgets = HashMap::new();
-        widgets.insert(0, "root".to_string());
+        widgets.insert(0, Widget{ id:0, name:"root".to_string(), parent:0 });
 
         Client {
             serv_ip: IpAddr::V4(Ipv4Addr::new(0,0,0,0)),
@@ -260,8 +266,8 @@ impl Client {
             },
             Message::BEAT       => { println!("     !!! client must not receive BEAT !!!"); },
             Message::MAPREQ(_)  => { println!("     !!! client must not receive MAPREQ !!!"); },
-            Message::MAPDATA(mapdata) => {
-                println!("RX: MAPDATA {:?}", mapdata);
+            Message::MAPDATA(/*mapdata*/_) => {
+                println!("RX: MAPDATA");
                 //TODO FIXME remove MAPREQ only after all MAPDATA pieces collected
                 self.remove_mapreq_from_que();
             },
@@ -339,17 +345,18 @@ impl Client {
         
     fn dispatch_rel (&mut self, rel: &Rel) {
         println!("dispatch REL {}-{}", rel.seq, rel.seq + ((rel.rel.len() as u16) - 1));
+        println!("RX: {:?}", rel);
         for r in rel.rel.iter() {
             match *r {
                 RelElem::NEWWDG(ref wdg) => {
-                    self.widgets.insert(wdg.id, wdg.kind.clone()/*FIXME String -> &str*/);
+                    self.widgets.insert(wdg.id, Widget{id:wdg.id, name:wdg.kind.clone(), parent:wdg.parent});
                 },
                 RelElem::WDGMSG(ref msg) => {
                     //TODO match against widget.type and message.type
                     match self.widgets.get(&(msg.id)) {
                         None => {},
-                        Some(c) => {
-                            if (c == "charlist") && (msg.name == "add") {
+                        Some(w) => {
+                            if (w.name == "charlist") && (msg.name == "add") {
                                 match msg.args[0] {
                                     MsgList::tSTR(ref char_name) => {
                                         println!("    add char '{}'", char_name);
@@ -456,8 +463,8 @@ impl Client {
     }
 
     pub fn widget_id_by_name (&self, name:&str) -> Option<u16> {
-        for (id,n) in self.widgets.iter() {
-            if n == name {
+        for (id,w) in self.widgets.iter() {
+            if w.name == name {
                 return Some(*id)
             }
         }

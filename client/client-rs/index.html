@@ -46,7 +46,7 @@
                 var h = "";
                 for (var i=1; i<data.length; ++i) {
                     e = data[i];
-                    h += e.id+" "+e.name+"<br>";
+                    h += e.id+"     "+e.name+'     '+e.parent+"<br>";
                 }
                 $('#show').html("<p>"+h+"</p>");
             });
