@@ -274,7 +274,7 @@ impl Client {
                 self.remove_mapreq_from_que();
             },
             Message::OBJDATA(objdata) => {
-                //println!("RX: OBJDATA {:?}", objdata);
+                println!("RX: OBJDATA {:?}", objdata);
                 try!(self.enqueue_to_send(Message::OBJACK(ObjAck::new(&objdata)))); // send OBJACKs
                 for o in objdata.obj.iter() {
                     if !self.objects.contains_key(&o.id) {
