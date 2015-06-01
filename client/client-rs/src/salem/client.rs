@@ -260,7 +260,7 @@ impl Client {
             Message::ACK(ack)   => {
                 println!("RX: ACK {}", ack.seq);
                 if ack.seq == self.seq {
-                    println!("our rel {} acked", self.seq);
+                    //println!("our rel {} acked", self.seq);
                     self.remove_rel_from_que();
                     //FIXME self.seq += last_rel.rels.len()
                     self.seq += 1;
@@ -407,11 +407,11 @@ impl Client {
             self.que.pop_back();
             match self.que.back() {
                 Some(buf) => {
-                    println!("enqueue next packet");
+                    //println!("enqueue next packet");
                     self.tx_buf.push_front(buf.clone());
                 }
                 None => {
-                    println!("remove_sess: empty que");
+                    //println!("remove_sess: empty que");
                 }
             }
         }
@@ -432,11 +432,11 @@ impl Client {
             self.que.pop_back();
             match self.que.back() {
                 Some(buf) => {
-                    println!("enqueue next packet");
+                    //println!("enqueue next packet");
                     self.tx_buf.push_front(buf.clone());
                 }
                 None => {
-                    println!("remove_rel: empty que");
+                    //println!("remove_rel: empty que");
                 }
             }
         }
@@ -457,11 +457,11 @@ impl Client {
             self.que.pop_back();
             match self.que.back() {
                 Some(buf) => {
-                    println!("enqueue next packet");
+                    //println!("enqueue next packet");
                     self.tx_buf.push_front(buf.clone());
                 }
                 None => {
-                    println!("remove_mapreq: empty que");
+                    //println!("remove_mapreq: empty que");
                 }
             }
         }
@@ -525,10 +525,10 @@ impl Client {
                 match buf.timeout {
                     Some(ref timeout) => {
                         if timeout.seq == seq {
-                            println!("timeout {}: re-enqueue", seq);
+                            //println!("timeout {}: re-enqueue", seq);
                             self.tx_buf.push_front(buf.clone());
                         } else {
-                            println!("timeout {}: packet dropped", seq);
+                            //println!("timeout {}: packet dropped", seq);
                         }
                     }
                     None => {
@@ -537,7 +537,7 @@ impl Client {
                 }
             }
             None => {
-                println!("timeout {}: empty que", seq);
+                //println!("timeout {}: empty que", seq);
             }
         }
     }

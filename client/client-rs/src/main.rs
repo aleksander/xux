@@ -331,7 +331,7 @@ impl<'a> Handler for AnyHandler<'a> {
                         //if self.counter % 3 == 0 {
                             let mut buf = SliceBuf::wrap(ebuf.buf.as_slice());
                             if let Err(e) = self.sock.send_to(&mut buf, &self.addr) {
-                                println!("send_to error: {}", e);
+                                println!("ERROR: send_to error: {}", e);
                                 eloop.shutdown();
                             }
                         //} else {
@@ -340,7 +340,7 @@ impl<'a> Handler for AnyHandler<'a> {
                         
                         if let Some(timeout) = ebuf.timeout {
                             //TODO use returned timeout handle to cancel timeout
-                            println!("set {} timeout {} ms", timeout.seq, timeout.ms);
+                            //println!("set {} timeout {} ms", timeout.seq, timeout.ms);
                             if let Err(e) = eloop.timeout_ms(timeout.seq, timeout.ms) {
                                 println!("eloop.timeout FAILED: {:?}", e);
                                 eloop.shutdown();
