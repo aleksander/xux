@@ -62,6 +62,11 @@ pub struct Hero {
     pub inventory: HashMap<(i32,i32),u16>,
 }
 
+pub struct MapPieces {
+    len: u16,
+    pieces: HashMap<u16,Vec<u8>>,
+}
+    
 pub struct Client {
     //TODO do all fileds PRIVATE and use callback interface
     pub serv_ip     : IpAddr,
@@ -80,6 +85,7 @@ pub struct Client {
     pub enqueue_seq : usize,
     pub rel_cache   : HashMap<u16,Rel>,
     pub hero        : Hero,
+    pub mapdata     : HashMap<i32,MapPieces>,
 }
 
 impl Client {
@@ -111,6 +117,7 @@ impl Client {
                 hearthfire: None,
                 inventory: HashMap::new(),
             },
+            mapdata: HashMap::new(),
         }
     }
 
@@ -286,9 +293,13 @@ impl Client {
             },
             Message::BEAT       => { println!("     !!! client must not receive BEAT !!!"); },
             Message::MAPREQ(_)  => { println!("     !!! client must not receive MAPREQ !!!"); },
-            Message::MAPDATA(/*mapdata*/_) => {
-                println!("RX: MAPDATA");
+            Message::MAPDATA(mapdata) => {
+                println!("RX: MAPDATA {:?}", mapdata);
                 //TODO FIXME remove MAPREQ only after all MAPDATA pieces collected
+                {
+                    let pieces = self.mapdata.entry(mapdata.pktid).or_insert(MapPieces{len:mapdata.len,pieces:HashMap::new()});
+                    //pieces.insert(mapdata.off);
+                }
                 self.remove_mapreq_from_que();
             },
             Message::OBJDATA(objdata) => {

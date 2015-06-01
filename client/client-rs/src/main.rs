@@ -228,8 +228,11 @@ impl ControlConn {
                     }
                 } else {
                     //TODO pass buf to Lua interpreter
-                    self.url = None;
-                    self.text = Some("ok\n".to_string());
+                    if buf.starts_with("go ") {
+                        self.text = Some("ok\n".to_string());
+                    } else if buf.starts_with("inv") {
+                        self.text = Some("ok\n".to_string());
+                    }
                 }
                 //self.interest.remove(Interest::readable());
                 //self.interest.insert(Interest::writable());
