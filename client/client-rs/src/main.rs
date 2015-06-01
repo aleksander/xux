@@ -50,6 +50,7 @@ struct ControlConn {
     token: Option<Token>,
     //interest: Interest,
     url: Option<Url>,
+    text: Option<String>,
 }
 
 impl ControlConn {
@@ -61,6 +62,7 @@ impl ControlConn {
             token: None,
             //interest: Interest::hup(),
             url: None,
+            text: None,
         }
     }
 
@@ -139,7 +141,14 @@ impl ControlConn {
                 }
             }
             None => {
-                return Err(Error::new(ErrorKind::Other, "writable with empty URL"));
+                match self.text {
+                    Some(ref t) => {
+                        t.clone()
+                    }
+                    None => {
+                        return Err(Error::new(ErrorKind::Other, "writable with empty URL and TEXT"));
+                    }
+                }
             }
         };
 
@@ -155,8 +164,8 @@ impl ControlConn {
                     println!("ERROR: failed to re-reg for write: {}", e);
                 }
             }
-            Ok(Some(r)) => {
-                println!("CONN: we wrote {} bytes!", r);
+            Ok(Some(/*r*/_)) => {
+                //println!("CONN: we wrote {} bytes!", r);
                 //self.mut_buf = Some(buf.flip());
                 //self.interest.insert(Interest::readable());
                 //self.interest.remove(Interest::writable());
@@ -164,7 +173,7 @@ impl ControlConn {
                     println!("ERROR: failed to re-reg for read: {}", e);
                 }
             }
-            Err(e) => println!("not implemented; client err={:?}", e),
+            Err(e) => println!("ERROR: not implemented; client err={:?}", e),
         }
         //eloop.reregister(&self.sock, self.token.unwrap(), self.interest, PollOpt::edge() | PollOpt::oneshot())
         Ok(())
@@ -172,6 +181,8 @@ impl ControlConn {
 
     fn readable (&mut self, eloop: &mut EventLoop<AnyHandler>, client: &mut Client) -> std::io::Result<()> {
         println!("{:?}: readable", self.token);
+        self.url = None;
+        self.text = None;
         //let mut buf = self.mut_buf.take().expect("mut_buf.take");
         let mut buf = ByteBuf::mut_with_capacity(2048);
         match self.sock.try_read_buf(&mut buf) {
@@ -212,12 +223,13 @@ impl ControlConn {
                         self.url = Some(Url::Go(0,0));
                     }
                 } else if buf.starts_with("GET /quit ") {
-                    //self.url = Some(Url::Quit);
                     if let Err(e) = client.close() {
                         println!("ERROR: client.close: {:?}", e);
                     }
                 } else {
                     //TODO pass buf to Lua interpreter
+                    self.url = None;
+                    self.text = Some("ok\n".to_string());
                 }
                 //self.interest.remove(Interest::readable());
                 //self.interest.insert(Interest::writable());

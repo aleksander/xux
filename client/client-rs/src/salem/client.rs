@@ -53,23 +53,33 @@ pub struct Widget {
     pub parent : u16,
 }
     
+pub struct Hero {
+    pub name: Option<String>,
+    pub obj: Option<i32>,
+    pub weight: Option<u16>,
+    pub tmexp: Option<i32>,
+    pub hearthfire: Option<(i32,i32)>,
+    pub inventory: HashMap<(i32,i32),u16>,
+}
+
 pub struct Client {
     //TODO do all fileds PRIVATE and use callback interface
-    pub serv_ip    : IpAddr,
-    pub user       : String,
-    pub pass       : String,
-    pub cookie     : Vec<u8>,
-    pub widgets    : HashMap<u16,Widget>,
-    pub objects    : HashMap<u32,Obj>,
-    pub grids      : HashSet<(i32,i32)>,
-    pub charlist   : Vec<String>,
-    pub resources  : HashMap<u16,String>,
-    pub seq        : u16,
-    pub rx_rel_seq : u16,
-    pub que        : LinkedList<EnqueuedBuffer>,
-    pub tx_buf     : LinkedList<EnqueuedBuffer>,
-    pub enqueue_seq    : usize,
-    pub rel_cache  : HashMap<u16,Rel>,
+    pub serv_ip     : IpAddr,
+    pub user        : String,
+    pub pass        : String,
+    pub cookie      : Vec<u8>,
+    pub widgets     : HashMap<u16,Widget>,
+    pub objects     : HashMap<u32,Obj>,
+    pub grids       : HashSet<(i32,i32)>,
+    pub charlist    : Vec<String>,
+    pub resources   : HashMap<u16,String>,
+    pub seq         : u16,
+    pub rx_rel_seq  : u16,
+    pub que         : LinkedList<EnqueuedBuffer>,
+    pub tx_buf      : LinkedList<EnqueuedBuffer>,
+    pub enqueue_seq : usize,
+    pub rel_cache   : HashMap<u16,Rel>,
+    pub hero        : Hero,
 }
 
 impl Client {
@@ -93,6 +103,14 @@ impl Client {
             tx_buf: LinkedList::new(),
             enqueue_seq: 0,
             rel_cache: HashMap::new(),
+            hero: Hero {
+                name: None,
+                obj: None,
+                weight: None,
+                tmexp: None,
+                hearthfire: None,
+                inventory: HashMap::new(),
+            },
         }
     }
 
@@ -352,26 +370,11 @@ impl Client {
             match *r {
                 RelElem::NEWWDG(ref wdg) => {
                     println!("      {:?}", wdg);
-                    self.widgets.insert(wdg.id, Widget{id:wdg.id, name:wdg.kind.clone(), parent:wdg.parent});
+                    self.dispatch_newwdg(wdg);
                 },
                 RelElem::WDGMSG(ref msg) => {
                     println!("      {:?}", msg);
-                    //TODO match against widget.type and message.type
-                    match self.widgets.get(&(msg.id)) {
-                        None => {},
-                        Some(w) => {
-                            if (w.name == "charlist") && (msg.name == "add") {
-                                match msg.args[0] {
-                                    MsgList::tSTR(ref char_name) => {
-                                        println!("    add char '{}'", char_name);
-                                        /*FIXME rewrite without cloning*/
-                                        self.charlist.push(char_name.clone());
-                                    },
-                                    _ => {}
-                                }
-                            }
-                        }
-                    }
+                    self.dispatch_wdgmsg(msg);
                 },
                 RelElem::DSTWDG(ref wdg) => {
                     println!("      {:?}", wdg);
@@ -381,6 +384,7 @@ impl Client {
                 RelElem::GLOBLOB(_) => {},
                 RelElem::PAGINAE(_) => {},
                 RelElem::RESID(ref res) => {
+                    println!("      {:?}", res);
                     self.resources.insert(res.id, res.name.clone()/*FIXME String -> &str*/);
                 },
                 RelElem::PARTY(_) => {},
@@ -390,6 +394,78 @@ impl Client {
                 RelElem::TILES(_) => {},
                 RelElem::BUFF(_) => {},
                 RelElem::SESSKEY(_) => {},
+            }
+        }
+    }
+
+    fn dispatch_newwdg (&mut self, wdg: &NewWdg) {
+        self.widgets.insert(wdg.id, Widget{id:wdg.id, name:wdg.name.clone(), parent:wdg.parent});
+        match wdg.name.as_str() {
+            "gameui" => {
+                if let Some(&MsgList::tSTR(ref name)) = wdg.cargs.get(0) {
+                    self.hero.name = Some(name.clone());
+                    println!("HERO: name = '{:?}'", self.hero.name);
+                }
+                if let Some(&MsgList::tINT(obj)) = wdg.cargs.get(1) {
+                    self.hero.obj = Some(obj);
+                    println!("HERO: obj = '{:?}'", self.hero.obj);
+                }
+            }
+            "item" => {
+                if let Some(parent) = self.widgets.get(&(wdg.parent)) {
+                    if parent.name == "inv" {
+                        //8 "item", pargs: [tCOORD((2, 1))], cargs: [tUINT16(2529)] }
+                        if let Some(&MsgList::tCOORD((x,y))) = wdg.pargs.get(0) {
+                            if let Some(&MsgList::tUINT16(id)) = wdg.cargs.get(0) {
+                                self.hero.inventory.insert((x,y), id);
+                                println!("HERO: inventory: {:?}", self.hero.inventory);
+                            }
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn dispatch_wdgmsg (&mut self, msg: &WdgMsg) {
+        if let Some(w) = self.widgets.get(&(msg.id)) {
+            match w.name.as_str() {
+                "charlist" => {
+                    if msg.name == "add" {
+                        if let Some(&MsgList::tSTR(ref name)) = msg.args.get(0) {
+                            println!("    add char '{}'", name);
+                            /*FIXME rewrite without cloning*/
+                            self.charlist.push(name.clone());
+                        }
+                    }
+                }
+                "gameui" => {
+                    if msg.name == "weight" {
+                        if let Some(&MsgList::tUINT16(w)) = msg.args.get(0) {
+                            self.hero.weight = Some(w);
+                            println!("HERO: weight = '{:?}'", self.hero.weight);
+                        }
+                    }
+                }
+                "chr" => {
+                    if msg.name == "tmexp" {
+                        if let Some(&MsgList::tINT(i)) = msg.args.get(0) {
+                            self.hero.tmexp = Some(i);
+                            println!("HERO: tmexp = '{:?}'", self.hero.tmexp);
+                        }
+                    }
+                }
+                "ui/hrtptr:11" => {
+                    if msg.name == "upd" {
+                        if let Some(&MsgList::tCOORD((x,y))) = msg.args.get(0) {
+                            //self.objects.insert(0xffffffff, Obj{resid:0xffff, x:x, y:y});
+                            self.hero.hearthfire = Some((x,y));
+                            println!("HERO: heathfire = '{:?}'", self.hero.hearthfire);
+                        }
+                    }
+                }
+                _ => {}
             }
         }
     }

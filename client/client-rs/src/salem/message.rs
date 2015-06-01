@@ -35,7 +35,7 @@ impl From<::std::string::FromUtf8Error> for Error {
 #[derive(Debug)]
 pub struct NewWdg {
     pub id : u16,
-    pub kind : String,
+    pub name : String,
     pub parent : u16,
     pub pargs : Vec<MsgList>,
     pub cargs : Vec<MsgList>,
@@ -122,53 +122,13 @@ pub enum MsgList {
     tUINT8  (u8),
     tUINT16 (u16),
     tCOLOR  ((u8,u8,u8,u8)),
-    tTTOL   /*TODO (here should be sublist)*/,
+    tTTOL   (Vec<MsgList>),
     tINT8   (i8),
     tINT16  (i16),
     tNIL    /*(this is null)*/,
     tBYTES  (Vec<u8>),
     tFLOAT32(f32),
     tFLOAT64(f64),
-}
-
-//TODO FIXME merge with read_list function
-pub fn read_sublist (r : &mut ::std::io::Cursor<&[u8]> /*buf : &[u8]*/) {
-    let mut deep = 0;
-    loop {
-        let t = match r.read_u8() {
-            Ok(b) => {b}
-            Err(_) => {return;}
-        };
-        match t {
-            /*T_END    */  0  => { if deep == 0 { return; } else { deep -= 1; } },
-            /*T_INT    */  1  => { r.read_i32::<le>().unwrap(); },
-            /*T_STR    */  2  => { let mut tmp = Vec::new(); r.read_until(0, &mut tmp).unwrap(); tmp.pop(); },
-            /*T_COORD  */  3  => { r.read_i32::<le>().unwrap(); r.read_i32::<le>().unwrap(); },
-            /*T_UINT8  */  4  => { r.read_u8().unwrap(); },
-            /*T_UINT16 */  5  => { r.read_u16::<le>().unwrap(); },
-            /*T_COLOR  */  6  => { r.read_u8().unwrap(); r.read_u8().unwrap(); r.read_u8().unwrap(); r.read_u8().unwrap(); },
-            /*T_TTOL   */  8  => { deep += 1; },
-            /*T_INT8   */  9  => { r.read_i8().unwrap(); },
-            /*T_INT16  */  10 => { r.read_i16::<le>().unwrap(); },
-            /*T_NIL    */  12 => { },
-            /*T_BYTES  */  14 => {
-                let len = r.read_u8().unwrap();
-                if (len & 128) != 0 {
-                    let len = r.read_i32::<le>().unwrap();
-                    let mut bytes = vec![0; len as usize];
-                    let b = r.read(&mut bytes).unwrap();
-                    assert_eq!(b, len as usize);
-                } else {
-                    let mut bytes = vec![0; len as usize];
-                    let b = r.read(&mut bytes).unwrap();
-                    assert_eq!(b, len as usize);
-                }
-            },
-            /*T_FLOAT32*/  15 => { r.read_f32::<le>().unwrap(); },
-            /*T_FLOAT64*/  16 => { r.read_f64::<le>().unwrap(); },
-                           _  => { return; },
-        }
-    }
 }
 
 pub fn write_list (list:&[MsgList]) -> Result<Vec<u8>,Error> {
@@ -204,7 +164,7 @@ pub fn write_list (list:&[MsgList]) -> Result<Vec<u8>,Error> {
                 try!(w.write_u8(b));
                 try!(w.write_u8(a));
             },
-            MsgList::tTTOL => {
+            MsgList::tTTOL(_) => {
                 return Err(Error{source:"write_list is NOT implemented for tTTOL",detail:None});
             },
             MsgList::tINT8(i) => {
@@ -236,49 +196,67 @@ pub fn write_list (list:&[MsgList]) -> Result<Vec<u8>,Error> {
 }
 
 pub fn read_list (r : &mut Cursor<&[u8]>) -> Vec<MsgList> /*TODO return Result instead*/ {
-    let mut list = Vec::new();
+    let mut deep = 0;
+    let mut list: Vec<Vec<MsgList>> = Vec::new();
+    list.push(Vec::new());
     loop {
         let t = match r.read_u8() {
-            Ok(b) => {b}
-            Err(_) => {return list;}
+            Ok(b) => { b }
+            Err(_) => {
+                while deep > 0 {
+                    let tmp = list.remove(deep);
+                    deep -= 1;
+                    list[deep].push(MsgList::tTTOL(tmp));
+                }
+                return list.remove(0);
+            }
         };
         match t {
-            /*T_END    */  0  => { return list; },
+            /*T_END    */  0  => {
+                if deep > 0 {
+                    let tmp = list.remove(deep);
+                    deep -= 1;
+                    list[deep].push(MsgList::tTTOL(tmp));
+                } else {
+                    return list.remove(0);
+                }
+            },
+            /*T_TTOL   */  8  => {
+                list.push(Vec::new());
+                deep += 1;
+            },
             /*T_INT    */  1  => {
-                list.push(MsgList::tINT( r.read_i32::<le>().unwrap() ));
+                list[deep].push(MsgList::tINT( r.read_i32::<le>().unwrap() ));
             },
             /*T_STR    */  2  => {
                 let mut tmp = Vec::new();
                 r.read_until(0, &mut tmp).unwrap();
                 tmp.pop();
-                list.push(MsgList::tSTR( String::from_utf8(tmp).unwrap() ));
+                list[deep].push(MsgList::tSTR( String::from_utf8(tmp).unwrap() ));
             },
             /*T_COORD  */  3  => {
-                list.push(MsgList::tCOORD( (r.read_i32::<le>().unwrap(),r.read_i32::<le>().unwrap()) ));
+                list[deep].push(MsgList::tCOORD( (r.read_i32::<le>().unwrap(),r.read_i32::<le>().unwrap()) ));
             },
             /*T_UINT8  */  4  => {
-                list.push(MsgList::tUINT8( r.read_u8().unwrap() ));
+                list[deep].push(MsgList::tUINT8( r.read_u8().unwrap() ));
             },
             /*T_UINT16 */  5  => {
-                list.push(MsgList::tUINT16( r.read_u16::<le>().unwrap() ));
+                list[deep].push(MsgList::tUINT16( r.read_u16::<le>().unwrap() ));
             },
             /*T_COLOR  */  6  => {
-                list.push(MsgList::tCOLOR( (r.read_u8().unwrap(),
+                list[deep].push(MsgList::tCOLOR( (r.read_u8().unwrap(),
                                             r.read_u8().unwrap(),
                                             r.read_u8().unwrap(),
                                             r.read_u8().unwrap()) ));
             },
-            /*T_TTOL   */  8  => {
-                read_sublist(r); list.push(MsgList::tTTOL);
-            },
             /*T_INT8   */  9  => {
-                list.push(MsgList::tINT8( r.read_i8().unwrap() ));
+                list[deep].push(MsgList::tINT8( r.read_i8().unwrap() ));
             },
             /*T_INT16  */  10 => {
-                list.push(MsgList::tINT16( r.read_i16::<le>().unwrap() ));
+                list[deep].push(MsgList::tINT16( r.read_i16::<le>().unwrap() ));
             },
             /*T_NIL    */  12 => {
-                list.push(MsgList::tNIL);
+                list[deep].push(MsgList::tNIL);
             },
             /*T_BYTES  */  14 => {
                 let len = r.read_u8().unwrap();
@@ -287,23 +265,23 @@ pub fn read_list (r : &mut Cursor<&[u8]>) -> Vec<MsgList> /*TODO return Result i
                     let mut bytes = vec![0; len as usize];
                     let b = r.read(&mut bytes).unwrap();
                     assert_eq!(b, len as usize);
-                    list.push(MsgList::tBYTES( bytes ));
+                    list[deep].push(MsgList::tBYTES( bytes ));
                 } else {
                     let mut bytes = vec![0; len as usize];
                     let b = r.read(&mut bytes).unwrap();
                     assert_eq!(b, len as usize);
-                    list.push(MsgList::tBYTES( bytes ));
+                    list[deep].push(MsgList::tBYTES( bytes ));
                 }
             },
             /*T_FLOAT32*/  15 => {
-                list.push(MsgList::tFLOAT32( r.read_f32::<le>().unwrap() ));
+                list[deep].push(MsgList::tFLOAT32( r.read_f32::<le>().unwrap() ));
             },
             /*T_FLOAT64*/  16 => {
-                list.push(MsgList::tFLOAT64( r.read_f64::<le>().unwrap() ));
+                list[deep].push(MsgList::tFLOAT64( r.read_f64::<le>().unwrap() ));
             },
             /*UNKNOWN*/    _  => {
                 println!("    !!! UNKNOWN LIST ELEMENT !!!");
-                return list; /*TODO return Error instead*/
+                return list.remove(0); /*TODO return Error instead*/
             },
         }
     }
@@ -316,7 +294,7 @@ impl RelElem {
         match kind {
             0  /*NEWWDG*/  => {
                 let id = try!(r.read_u16::<le>());
-                let kind = {
+                let name = {
                     let mut tmp = Vec::new();
                     r.read_until(0, &mut tmp).unwrap();
                     tmp.pop();
@@ -325,7 +303,7 @@ impl RelElem {
                 let parent = try!(r.read_u16::<le>());
                 let pargs = read_list(&mut r);
                 let cargs = read_list(&mut r);
-                Ok( RelElem::NEWWDG( NewWdg{ id:id, kind:kind, parent:parent, pargs:pargs, cargs:cargs } ) )
+                Ok( RelElem::NEWWDG( NewWdg{ id:id, name:name, parent:parent, pargs:pargs, cargs:cargs } ) )
             },
             1  /*WDGMSG*/  => {
                 let id = try!(r.read_u16::<le>());
