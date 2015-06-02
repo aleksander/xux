@@ -13,6 +13,7 @@ openssl = "*"
 #bytes = "*"
 #nix = "*"
 flate2 = "*"
+image = "*"
 
 #[dependencies.openssl]
 #openssl = "0.5.5"

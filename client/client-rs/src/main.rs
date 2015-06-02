@@ -33,6 +33,13 @@ use std::io::Write;
 mod salem;
 use salem::client::*;
 
+extern crate image;
+use image::GenericImage;
+use image::ImageBuffer;
+use image::Rgb;
+use image::ImageRgb8;
+use image::PNG;
+
 const UDP: Token = Token(0);
 const TCP: Token = Token(1);
 
@@ -235,7 +242,8 @@ impl ControlConn {
                     } else if buf.starts_with("inv") {
                         //TODO
                         self.text = Some("ok\n".to_string());
-                    } else if buf.starts_with("ez") { // export current grid z coordinates to .OBJ
+                    } else if buf.starts_with("export z") { // export current grid z coordinates to .OBJ
+                        //TODO move to fn client.current_map
                         use std::fs::File;
                         let mut f = try!(File::create("z.obj"));
                         let hero_obj: &Obj = client.objects.get(&client.hero.obj.unwrap()).unwrap();
@@ -244,7 +252,7 @@ impl ControlConn {
                         let map = client.maps.get(&(mx,my)).unwrap();
                         for y in 0..100 {
                             for x in 0..100 {
-                                try!(f.write_all(format!("v {} {} {}\n", (x as f32)/100., (y as f32)/100., (map.z[x+y*100] as f32)/100.).as_bytes()));
+                                try!(f.write_all(format!("v {} {} {}\n", (y as f32)/50., (map.z[x+y*100] as f32)/200., (x as f32)/50.).as_bytes()));
                             }
                         }
                         for y in 0..99 {
@@ -256,6 +264,23 @@ impl ControlConn {
                                 try!(f.write_all(format!("f {} {} {} {}\n", a, b, c, d).as_bytes()));
                             }
                         }
+                        self.text = Some("ok\n".to_string());
+                    } else if buf.starts_with("export tiles") { // export current grid tiles to .PNG
+                        //TODO move to fn client.current_map
+                        use std::fs::File;
+                        let mut f = try!(File::create("tiles.png"));
+                        let mut img = ImageBuffer::new(100, 100);
+                        let hero_obj: &Obj = client.objects.get(&client.hero.obj.unwrap()).unwrap();
+                        let mx:i32 = hero_obj.x / 1100;
+                        let my:i32 = hero_obj.y / 1100;
+                        let map = client.maps.get(&(mx,my)).unwrap();
+                        for y in 0..100 {
+                            for x in 0..100 {
+                                let color = map.tiles[y*100+x];
+                                img.put_pixel(x as u32, y as u32, Rgb([color,color,color]));
+                            }
+                        }
+                        ImageRgb8(img).save(&mut f, PNG).unwrap();
                         self.text = Some("ok\n".to_string());
                     }
                 }
