@@ -63,7 +63,7 @@ pub struct Hero {
 }
 
 pub struct MapPieces {
-    len: u16,
+    total_len: u16,
     pieces: HashMap<u16,Vec<u8>>,
 }
     
@@ -297,8 +297,44 @@ impl Client {
                 println!("RX: MAPDATA {:?}", mapdata);
                 //TODO FIXME remove MAPREQ only after all MAPDATA pieces collected
                 {
-                    let pieces = self.mapdata.entry(mapdata.pktid).or_insert(MapPieces{len:mapdata.len,pieces:HashMap::new()});
-                    //pieces.insert(mapdata.off);
+                    // TODO move to fn mapdata_append () { ... }
+                    let map = self.mapdata.entry(mapdata.pktid).or_insert(MapPieces{total_len:mapdata.len,pieces:HashMap::new()});
+                    map.pieces.insert(mapdata.off, mapdata.buf);
+                    // TODO move to fn mapdata_complete () { ... }
+                    let mut len = 0u16;
+                    let mut complete = false;
+                    loop {
+                        match map.pieces.get(&len) {
+                            Some(buf) => { len += buf.len() as u16; if len == map.total_len { complete = true; break; } }
+                            None => { break; }
+                        }
+                    }
+                    if complete { //TODO if mapdata_complete() { ... }
+                        // TODO move to fn mapdata_assemble () { ... }
+                        //FIXME self.mapdata.remove(mapdata.pktid)
+                        len = 0;
+                        let mut buf: Vec<u8> = Vec::new();
+                        loop {
+                            match map.pieces.get(&len) {
+                                Some(b) => {
+                                    buf.push_all(b);
+                                    len += b.len() as u16;
+                                    if len == map.total_len {
+                                        break;
+                                    }
+                                }
+                                None => { break; }
+                            }
+                        }
+                        if buf.len() as u16 != map.total_len {
+                            println!("ERROR: buf.len() as u16 != map.total_len");
+                            return Err(Error{source:"buf.len() as u16 != map.total_len",detail:None});
+                        }
+                        let mut r = Cursor::new(buf);
+                        let x = r.read_i32::<le>().unwrap();
+                        let y = r.read_i32::<le>().unwrap();
+                        println!("MAP COMPLETE ({},{})", x, y);
+                    }
                 }
                 self.remove_mapreq_from_que();
             },
