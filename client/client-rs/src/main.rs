@@ -28,6 +28,7 @@ use mio::util::Slab;
 
 use std::str;
 use std::io::{Error, ErrorKind};
+use std::io::Write;
 
 mod salem;
 use salem::client::*;
@@ -146,7 +147,7 @@ impl ControlConn {
                         t.clone()
                     }
                     None => {
-                        return Err(Error::new(ErrorKind::Other, "writable with empty URL and TEXT"));
+                        "ERROR: writable with empty URL and TEXT\n".to_string()
                     }
                 }
             }
@@ -222,15 +223,39 @@ impl ControlConn {
                     } else {
                         self.url = Some(Url::Go(0,0));
                     }
-                } else if buf.starts_with("GET /quit ") {
+                } else if buf.starts_with("GET /quit ") || buf.starts_with("quit") {
                     if let Err(e) = client.close() {
                         println!("ERROR: client.close: {:?}", e);
                     }
                 } else {
                     //TODO pass buf to Lua interpreter
                     if buf.starts_with("go ") {
+                        //TODO
                         self.text = Some("ok\n".to_string());
                     } else if buf.starts_with("inv") {
+                        //TODO
+                        self.text = Some("ok\n".to_string());
+                    } else if buf.starts_with("ez") { // export current grid z coordinates to .OBJ
+                        use std::fs::File;
+                        let mut f = try!(File::create("z.obj"));
+                        let hero_obj: &Obj = client.objects.get(&client.hero.obj.unwrap()).unwrap();
+                        let mx:i32 = hero_obj.x / 1100;
+                        let my:i32 = hero_obj.y / 1100;
+                        let map = client.maps.get(&(mx,my)).unwrap();
+                        for y in 0..100 {
+                            for x in 0..100 {
+                                try!(f.write_all(format!("v {} {} {}\n", (x as f32)/100., (y as f32)/100., (map.z[x+y*100] as f32)/100.).as_bytes()));
+                            }
+                        }
+                        for y in 0..99 {
+                            for x in 0..99 {
+                                let a = 1+y*100+x;
+                                let b = a+1;
+                                let c = b+100;
+                                let d = c-1;
+                                try!(f.write_all(format!("f {} {} {} {}\n", a, b, c, d).as_bytes()));
+                            }
+                        }
                         self.text = Some("ok\n".to_string());
                     }
                 }
@@ -382,6 +407,35 @@ impl<'a> Handler for AnyHandler<'a> {
     }
 }
 
+/* TODO
+extern crate nix;
+use nix::sys::socket::setsockopt;
+use nix::sys::socket::SockLevel;
+use nix::sys::socket::SockOpt;
+
+#[derive(Debug,Copy,Clone)]
+struct BindToDevice {
+    dev_name: &'static str
+}
+
+impl BindToDevice {
+    fn new (dev_name: &'static str) -> BindToDevice {
+        BindToDevice{ dev_name: dev_name}
+    }
+}
+
+impl SockOpt for BindToDevice {
+    type Val = &'static str;
+    fn get (&self, fd: RawFd, level: c_int) -> Result<&'static str> { ... }
+    fn set () -> ? { ... }
+}
+
+//char *opt;
+//opt = "eth0";
+//setsockopt(sd, SOL_SOCKET, SO_BINDTODEVICE, opt, 4);
+nix::sys::socket::setsockopt(sock.as_raw_fd, SockLevel::Socket, BindToDevice::new("wlan0"));
+*/
+
 fn main () {
     //TODO use PollOpt::edge() | PollOpt::oneshot() for UDP connection and not PollOpt::level() (see how this is doing for TCP conns)
     //TODO handle keyboard interrupt
@@ -392,6 +446,10 @@ fn main () {
     //            v.push(i);
     //            println!("{}", Message::from_buf(v.as_slice()));
     //        }
+    //TODO highlight ERRORs with RED console color
+    //TODO various formatters for Message and other structs output (full, short, type only)
+
+    //TODO export MAPDATA to simple 3D format (Wavefront .OBJ) and open in Blender3D
 
     let args: Vec<String> = std::env::args().collect();
     if args.len() < 3 {

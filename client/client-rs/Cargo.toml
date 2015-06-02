@@ -11,6 +11,8 @@ byteorder = "*"
 openssl = "*"
 #mio = "*"
 #bytes = "*"
+#nix = "*"
+flate2 = "*"
 
 #[dependencies.openssl]
 #openssl = "0.5.5"
