@@ -281,6 +281,27 @@ impl ControlConn {
                         }
                         ImageRgb8(img).save(&mut f, PNG).unwrap();
                         self.text = Some("ok\n".to_string());
+                    } else if buf.starts_with("obj") {
+                        let mut minx = std::i32::MAX;
+                        let mut miny = std::i32::MAX;
+                        for o in client.objects.values() {
+                            if o.x < minx { minx = o.x; }
+                            if o.y < miny { miny = o.y; }
+                        }
+                        let mut s = String::new();
+                        for o in client.objects.values() {
+                            let resname = match client.resources.get(&o.resid) {
+                                Some(res) => res.as_str(),
+                                None      => "null"
+                            };
+                            //TODO let (x,y) = o.xy - client.hero.xy;
+                            let (hx,hy) = client.hero_xy();
+                            let rx = o.x - hx;
+                            let ry = o.y - hy;
+                            let distance = ((rx*rx + ry*ry) as f32).sqrt(); //TODO dist(o.xy, client.hero.xy);
+                            s = s + &format!("({:7}, {:7}) ({:4}, {:4}) {:5.1} {}\n", o.x, o.y, rx, ry, distance, /*o.resid,*/ resname);
+                        }
+                        self.text = Some(s);
                     } /*else if buf.starts_with("export ol") { // export current grid ol to .txt
                         //TODO move to fn client.current_map
                         let mut f = try!(File::create("ol.txt"));
@@ -495,8 +516,6 @@ fn main () {
     //        }
     //TODO highlight ERRORs with RED console color
     //TODO various formatters for Message and other structs output (full, short, type only)
-
-    //TODO export MAPDATA to simple 3D format (Wavefront .OBJ) and open in Blender3D
 
     let args: Vec<String> = std::env::args().collect();
     if args.len() < 3 {

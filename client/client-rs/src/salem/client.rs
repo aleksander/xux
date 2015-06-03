@@ -809,6 +809,13 @@ impl Client {
         self.charlist.clear();
         Ok(())
     }
+    
+    pub fn hero_xy (&self) -> (i32,i32) /*FIXME return Option */ {
+        let hero: &Obj = self.objects.get(&self.hero.obj.unwrap()).unwrap();
+        (hero.x,hero.y)
+        //let mx:i32 = hero.x / 1100;
+        //let my:i32 = hero.y / 1100;
+    }
 }
 
 /*
