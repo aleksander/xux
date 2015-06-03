@@ -1,7 +1,7 @@
 use std::net::IpAddr;
 use std::net::Ipv4Addr;
 use std::collections::hash_map::HashMap;
-use std::collections::hash_set::HashSet;
+//use std::collections::hash_set::HashSet;
 use std::collections::LinkedList;
 use std::net::TcpStream;
 use std::net::SocketAddr;
@@ -79,6 +79,122 @@ pub struct Surface {
     pub id: i64,
     pub tiles: Vec<u8>,
     pub z: Vec<i16>,
+    //pub ol: Vec<u8>,
+}
+
+pub type PacketId = i32;
+
+pub struct Map {
+    pub partial: HashMap<PacketId,MapPieces>, //TODO somehow clean up from old pieces (periodically or whatever)
+    pub grids: HashMap<(i32,i32),Surface>,
+}
+
+impl Map {
+    fn append (&mut self, mapdata: MapData) {
+        let map = self.partial.entry(mapdata.pktid).or_insert(MapPieces{total_len:mapdata.len,pieces:HashMap::new()});
+        map.pieces.insert(mapdata.off, mapdata.buf);
+    }
+
+    fn complete (&self, pktid: i32) -> bool {
+        let map = match self.partial.get(&pktid) {
+            Some(m) => { m }
+            None => { return false; }
+        };
+        let mut len = 0u16;
+        loop {
+            match map.pieces.get(&len) {
+                Some(buf) => {
+                    len += buf.len() as u16;
+                    if len == map.total_len { return true; }
+                }
+                None => { return false; }
+            }
+        }
+    }
+
+    fn assemble (&mut self, pktid: i32) -> Vec<u8> /*TODO return Result*/ {
+        let map = match self.partial.remove(&pktid) {
+            Some(map) => { map }
+            None => { return Vec::new(); }
+        };
+        let mut len = 0;
+        let mut buf: Vec<u8> = Vec::new();
+        loop {
+            match map.pieces.get(&len) {
+                Some(b) => {
+                    buf.push_all(b);
+                    len += b.len() as u16;
+                    if len == map.total_len {
+                        break;
+                    }
+                }
+                None => { break; }
+            }
+        }
+        if buf.len() as u16 != map.total_len {
+            println!("ERROR: buf.len() as u16 != map.total_len");
+            //return Err(Error{source:"buf.len() as u16 != map.total_len",detail:None});
+        }
+        buf
+    }
+
+    //XXX ??? move to message ?
+    fn from_buf (&self, buf: Vec<u8>) -> Surface {
+        let mut r = Cursor::new(buf);
+        let x = r.read_i32::<le>().unwrap();
+        let y = r.read_i32::<le>().unwrap();
+        let mmname = {
+            let mut tmp = Vec::new();
+            r.read_until(0, &mut tmp).unwrap();
+            tmp.pop();
+            String::from_utf8(tmp).unwrap()
+        };
+        //let mut pfl = vec![0; 256];
+        loop {
+            let pidx = r.read_u8().unwrap();
+            if pidx == 255 { break; }
+            /*pfl[pidx as usize]*/let _ = r.read_u8().unwrap();
+        }
+        let mut decoder = ZlibDecoder::new(r);
+        let mut unzipped = Vec::new();
+        let /*unzipped_len*/ _ = decoder.read_to_end(&mut unzipped).unwrap();
+        //TODO check unzipped_len
+        let mut r = Cursor::new(unzipped);
+        let id = r.read_i64::<le>().unwrap();
+        let mut tiles = Vec::with_capacity(100*100);
+        for _ in 0..100*100 {
+            tiles.push(r.read_u8().unwrap());
+        }
+        let mut z = Vec::with_capacity(100*100);
+        for _ in 0..100*100 {
+            z.push(r.read_i16::<le>().unwrap());
+        }
+        /*
+        let mut ol = vec![0; 100*100];
+        loop {
+            let pidx = r.read_u8().unwrap();
+            if pidx == 255 { break; }
+            let fl = pfl[pidx as usize];
+            let typ = r.read_u8().unwrap();
+            let (x1,y1) = (r.read_u8().unwrap() as usize, r.read_u8().unwrap() as usize);
+            let (x2,y2) = (r.read_u8().unwrap() as usize, r.read_u8().unwrap() as usize);
+            println!("#### {} ({},{}) - ({},{})", typ, x1, y1, x2, y2);
+            let oli = match typ {
+                0 => if (fl & 1) == 1 { 2 } else { 1 },
+                1 => if (fl & 1) == 1 { 8 } else { 4 },
+                2 => 16,
+                _ => { println!("ERROR: unknown plot type {}", typ); break; }
+            };
+            for y in y1..y2+1 {
+                for x in x1..x2+1 {
+                    ol[x+y*100] |= oli;
+                }
+            }
+        }
+        */
+        Surface{x:x,y:y,name:mmname,id:id,tiles:tiles,z:z/*,ol:ol*/}
+    }
+
 }
 
 pub struct Client {
@@ -89,7 +205,6 @@ pub struct Client {
     pub cookie      : Vec<u8>,
     pub widgets     : HashMap<u16,Widget>,
     pub objects     : HashMap<u32,Obj>,
-    pub grids       : HashSet<(i32,i32)>,   //TODO FIXME merge with maps
     pub charlist    : Vec<String>,
     pub resources   : HashMap<u16,String>,
     pub seq         : u16,
@@ -99,8 +214,7 @@ pub struct Client {
     pub enqueue_seq : usize,
     pub rel_cache   : HashMap<u16,Rel>,
     pub hero        : Hero,
-    pub mapdata     : HashMap<i32,MapPieces>,   //TODO FIXME merge with maps
-    pub maps        : HashMap<(i32,i32),Surface>,
+    pub map         : Map,
 }
 
 impl Client {
@@ -115,7 +229,6 @@ impl Client {
             cookie: Vec::new(),
             widgets: widgets, 
             objects: HashMap::new(),
-            grids: HashSet::new(),
             charlist: Vec::new(),
             resources: HashMap::new(),
             seq: 0,
@@ -132,8 +245,7 @@ impl Client {
                 hearthfire: None,
                 inventory: HashMap::new(),
             },
-            mapdata: HashMap::new(),
-            maps: HashMap::new(),
+            map: Map{ partial: HashMap::new(), grids: HashMap::new() },
         }
     }
 
@@ -312,14 +424,14 @@ impl Client {
             Message::MAPDATA(mapdata) => {
                 println!("RX: MAPDATA {:?}", mapdata);
                 let pktid = mapdata.pktid;
-                self.mapdata_append(mapdata);
+                self.map.append(mapdata);
                 //TODO if self.mapdata.complete() { ... }
-                if self.mapdata_complete(pktid) {
+                if self.map.complete(pktid) {
                     //TODO let map = self.mapdata.assemble(pktid).to_map();
-                    let map_buf = self.mapdata_assemble(pktid);
-                    let map = self.mapdata_to_map(map_buf);
+                    let map_buf = self.map.assemble(pktid);
+                    let map = self.map.from_buf(map_buf);
                     println!("MAP COMPLETE ({},{}) name='{}' id={} tiles=[..{}] z=[..{}]", map.x, map.y, map.name, map.id, map.tiles.len(), map.z.len());
-                    self.maps.insert((map.x,map.y),map);
+                    self.map.grids.insert((map.x,map.y),map);
                     //TODO complete map only if (x,y) == requested (x,y)
                     self.remove_mapreq_from_que();
                 }
@@ -344,24 +456,6 @@ impl Client {
                         }
                     };
                 }
-                
-                //TODO FIXME
-                //  let (x,y) = self.object_xy(hero.obj) / 1100; //TODO idea struct Coord {x,y} impl {fn divide(v){Coord{x:x/v,y:y/v}}}
-                //  self.mapreq(x-1,y-1); self.mapreq(x,y-1); self.mapreq(x+1,y-1);
-                //  self.mapreq(x-1,y);   self.mapreq(x,y);   self.mapreq(x+1,y);
-                //  self.mapreq(x-1,y+1); self.mapreq(x,y+1); self.mapreq(x+1,y+1);
-                let mut tmp = Vec::new();
-                for o in self.objects.values() {
-                    let gx:i32 = o.x / 1100;
-                    let gy:i32 = o.y / 1100;
-                    if !self.grids.contains(&(gx,gy)) {
-                        tmp.push((gx,gy));
-                        self.grids.insert((gx,gy));
-                    }
-                }
-                for (x,y) in tmp {
-                     try!(self.mapreq(x, y));
-                }
             },
             Message::OBJACK(_)  => {},
             Message::CLOSE => {
@@ -373,87 +467,6 @@ impl Client {
 
         //TODO return Status::Continue/AllOk instead of ()
         Ok(())
-    }
-
-    fn mapdata_append (&mut self, mapdata: MapData) {
-        let map = self.mapdata.entry(mapdata.pktid).or_insert(MapPieces{total_len:mapdata.len,pieces:HashMap::new()});
-        map.pieces.insert(mapdata.off, mapdata.buf);
-    }
-
-    fn mapdata_complete (&self, pktid: i32) -> bool {
-        let map = match self.mapdata.get(&pktid) {
-            Some(m) => { m }
-            None => { return false; }
-        };
-        let mut len = 0u16;
-        loop {
-            match map.pieces.get(&len) {
-                Some(buf) => {
-                    len += buf.len() as u16;
-                    if len == map.total_len { return true; }
-                }
-                None => { return false; }
-            }
-        }
-    }
-
-    fn mapdata_assemble (&mut self, pktid: i32) -> Vec<u8> /*TODO return Result*/ {
-        let map = match self.mapdata.remove(&pktid) {
-            Some(map) => { map }
-            None => { return Vec::new(); }
-        };
-        let mut len = 0;
-        let mut buf: Vec<u8> = Vec::new();
-        loop {
-            match map.pieces.get(&len) {
-                Some(b) => {
-                    buf.push_all(b);
-                    len += b.len() as u16;
-                    if len == map.total_len {
-                        break;
-                    }
-                }
-                None => { break; }
-            }
-        }
-        if buf.len() as u16 != map.total_len {
-            println!("ERROR: buf.len() as u16 != map.total_len");
-            //return Err(Error{source:"buf.len() as u16 != map.total_len",detail:None});
-        }
-        buf
-    }
-
-    //TODO ??? move to message ?
-    fn mapdata_to_map (&self, buf: Vec<u8>) -> Surface {
-        let mut r = Cursor::new(buf);
-        let x = r.read_i32::<le>().unwrap();
-        let y = r.read_i32::<le>().unwrap();
-        let mmname = {
-            let mut tmp = Vec::new();
-            r.read_until(0, &mut tmp).unwrap();
-            tmp.pop();
-            String::from_utf8(tmp).unwrap()
-        };
-        loop {
-            let pidx = r.read_u8().unwrap();
-            if pidx == 255 { break; }
-            let _ = r.read_u8().unwrap();
-        }
-        let mut decoder = ZlibDecoder::new(r);
-        let mut unzipped = Vec::new();
-        let /*unzipped_len*/ _ = decoder.read_to_end(&mut unzipped).unwrap();
-        //TODO check unzipped_len
-        let mut r = Cursor::new(unzipped);
-        let id = r.read_i64::<le>().unwrap();
-        let mut tiles = Vec::with_capacity(100*100);
-        for _ in 0..100*100 {
-            tiles.push(r.read_u8().unwrap());
-        }
-        let mut z = Vec::with_capacity(100*100);
-        for _ in 0..100*100 {
-            z.push(r.read_i16::<le>().unwrap());
-        }
-        Surface{x:x,y:y,name:mmname,id:id,tiles:tiles,z:z}
     }
 
     fn cache_rel (&mut self, rel: Rel) {
@@ -529,6 +542,23 @@ impl Client {
                     //FIXME BUG: object ID is uint32 but here it is int32 WHY??? XXX
                     self.hero.obj = Some(obj as u32);
                     println!("HERO: obj = '{:?}'", self.hero.obj);
+                    
+                    //TODO move to fn client.update_grids_around(...) { ... }
+                    //     if client.hero.current_grid_is_changed() { client.update_grids_around(); }
+                    let (x,y):(i32,i32) = {
+                        let hero_obj: &Obj = self.objects.get(&self.hero.obj.unwrap()).unwrap();
+                        //TODO IDEA: struct Coord {x,y} impl {fn divide(v){Coord{x:x/v,y:y/v}}}
+                        (hero_obj.x / 1100, hero_obj.y / 1100)
+                    };
+                    self.mapreq(x,y).unwrap();
+                    self.mapreq(x-1,y-1).unwrap();
+                    self.mapreq(x,y-1).unwrap();
+                    self.mapreq(x+1,y-1).unwrap();
+                    self.mapreq(x-1,y).unwrap();
+                    self.mapreq(x+1,y).unwrap();
+                    self.mapreq(x-1,y+1).unwrap();
+                    self.mapreq(x,y+1).unwrap();
+                    self.mapreq(x+1,y+1).unwrap();
                 }
             }
             "item" => {
@@ -701,10 +731,12 @@ impl Client {
     }
 
     pub fn mapreq (&mut self, x:i32, y:i32) -> Result<(),Error> {
-        //TODO send until reply
         //TODO replace with client.send(Message::MapReq::new(x,y).to_buf())
         //     or client.send(Message::mapreq(x,y).to_buf())
-        try!(self.enqueue_to_send(Message::MAPREQ(MapReq{x:x,y:y})));
+        //TODO add "force" flag to update this grid forcelly
+        if !self.map.grids.contains_key(&(x,y)) {
+            try!(self.enqueue_to_send(Message::MAPREQ(MapReq{x:x,y:y})));
+        }
         Ok(())
     }
 

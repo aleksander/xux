@@ -29,6 +29,7 @@ use mio::util::Slab;
 use std::str;
 use std::io::{Error, ErrorKind};
 use std::io::Write;
+use std::fs::File;
 
 mod salem;
 use salem::client::*;
@@ -244,12 +245,11 @@ impl ControlConn {
                         self.text = Some("ok\n".to_string());
                     } else if buf.starts_with("export z") { // export current grid z coordinates to .OBJ
                         //TODO move to fn client.current_map
-                        use std::fs::File;
                         let mut f = try!(File::create("z.obj"));
                         let hero_obj: &Obj = client.objects.get(&client.hero.obj.unwrap()).unwrap();
                         let mx:i32 = hero_obj.x / 1100;
                         let my:i32 = hero_obj.y / 1100;
-                        let map = client.maps.get(&(mx,my)).unwrap();
+                        let map = client.map.grids.get(&(mx,my)).unwrap();
                         for y in 0..100 {
                             for x in 0..100 {
                                 try!(f.write_all(format!("v {} {} {}\n", (y as f32)/50., (map.z[x+y*100] as f32)/200., (x as f32)/50.).as_bytes()));
@@ -267,13 +267,12 @@ impl ControlConn {
                         self.text = Some("ok\n".to_string());
                     } else if buf.starts_with("export tiles") { // export current grid tiles to .PNG
                         //TODO move to fn client.current_map
-                        use std::fs::File;
                         let mut f = try!(File::create("tiles.png"));
                         let mut img = ImageBuffer::new(100, 100);
                         let hero_obj: &Obj = client.objects.get(&client.hero.obj.unwrap()).unwrap();
                         let mx:i32 = hero_obj.x / 1100;
                         let my:i32 = hero_obj.y / 1100;
-                        let map = client.maps.get(&(mx,my)).unwrap();
+                        let map = client.map.grids.get(&(mx,my)).unwrap();
                         for y in 0..100 {
                             for x in 0..100 {
                                 let color = map.tiles[y*100+x];
@@ -282,7 +281,30 @@ impl ControlConn {
                         }
                         ImageRgb8(img).save(&mut f, PNG).unwrap();
                         self.text = Some("ok\n".to_string());
-                    }
+                    } /*else if buf.starts_with("export ol") { // export current grid ol to .txt
+                        //TODO move to fn client.current_map
+                        let mut f = try!(File::create("ol.txt"));
+                        let hero_obj: &Obj = client.objects.get(&client.hero.obj.unwrap()).unwrap();
+                        let mx:i32 = hero_obj.x / 1100;
+                        let my:i32 = hero_obj.y / 1100;
+                        let map = client.maps.get(&(mx,my)).unwrap();
+                        for y in 0..100 {
+                            for x in 0..100 {
+                                let symbol = match map.ol[x+y*100] {
+                                    0 => b" ",
+                                    1 => b"+",
+                                    2 => b"-",
+                                    4 => b"=",
+                                    8 => b"O",
+                                    16 => b"!",
+                                    _ => b"~",
+                                };
+                                try!(f.write_all(symbol));
+                            }
+                            try!(f.write_all(b"\n"));
+                        }
+                        self.text = Some("ok\n".to_string());
+                    } */
                 }
                 //self.interest.remove(Interest::readable());
                 //self.interest.insert(Interest::writable());
