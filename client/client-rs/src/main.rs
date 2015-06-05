@@ -358,7 +358,7 @@ impl ControlConn {
                             let rx = o.x - hx;
                             let ry = o.y - hy;
                             let distance = ((rx*rx + ry*ry) as f32).sqrt(); //TODO dist(o.xy, client.hero.xy);
-                            s = s + &format!("({:7}, {:7}) ({:4}, {:4}) {:5.1} {}\n", o.x, o.y, rx, ry, distance, /*o.resid,*/ resname);
+                            s = s + &format!("({:7}, {:7}) ({:2},{:2}) ({:4}, {:4}) {:5.1} {}\n", o.x, o.y, o.x%11, o.y%11, rx, ry, distance, /*o.resid,*/ resname);
                         }
                         self.text = Some(s);
                     } else if buf.starts_with("s") {

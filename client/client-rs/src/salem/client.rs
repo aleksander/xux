@@ -379,7 +379,7 @@ impl Client {
         if let Some(remains) = remains {
             println!("                 REMAINS {} bytes", remains.len());
         }
-
+        
         match msg {
             Message::S_SESS(sess) => {
                 println!("RX: S_SESS {:?}", sess.err);
