@@ -52,6 +52,7 @@ enum Url {
     Widgets,
     Resources,
     Go(i32,i32),
+    Env,
 }
 
 struct ControlConn {
@@ -78,7 +79,7 @@ impl ControlConn {
     }
 
     fn writable (&mut self, eloop: &mut EventLoop<AnyHandler>, client: &mut Client) -> std::io::Result<()> {
-        println!("{:?}: writable", self.token);
+        //println!("{:?}: writable", self.token);
         //let mut buf = self.buf.take().unwrap();
 
         //let mut buf = ByteBuf::mut_with_capacity(2048);
@@ -133,6 +134,57 @@ impl ControlConn {
                         body = "[ ".to_string() + &body[..body.len()-1] + " ]";
                         format!("HTTP/1.1 200 OK\r\nContent-Type: text/json\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\n\r\n", body.len()) + &body
                     }
+                    &Url::Env => {
+                        // {
+                        //   res:[{id:id,name:name}],
+                        //   obj:[{},{}],
+                        //   wid:[{},{}],
+                        //   map:[z,z,...,z]
+                        // }
+
+                        let mut body = "{\"res\":[".to_string();
+
+                        let mut period = "";
+                        for (id,name) in &client.resources {
+                            body = body + &format!("\r\n{}{{\"id\":{},\"name\":\"{}\"}}", period, id, name);
+                            period = ",";
+                        }
+                        
+                        body = body + "],\"obj\":[";
+
+                        period = "";
+                        for o in client.objects.values() {
+                            let resname = match client.resources.get(&o.resid) {
+                                Some(res) => res.as_str(),
+                                None      => "null"
+                            };
+                            body = body + &format!("\r\n{}{{\"x\":{},\"y\":{},\"resid\":{},\"resname\":\"{}\"}}", period, o.x, o.y, o.resid, resname);
+                            period = ",";
+                        }
+
+                        body = body + "],\"wid\":[";
+
+                        period = "";
+                        for (id,w) in &client.widgets {
+                            body = body + &format!("\r\n{}{{\"id\":{},\"name\":\"{}\",\"parent\":\"{}\"}}", period, id, w.name, w.parent);
+                            period = ",";
+                        }
+
+                        body = body + "],\"map\":[";
+
+                        period = "";
+                        let (x,y) = client.hero_xy();
+                        let map = client.map.grids.get(&(x/1100,y/1100)).unwrap();
+                        for y in 0..100 {
+                            for x in 0..100 {
+                                body = body + &format!("{}{}", period, map.z[x+y*100]);
+                                period = ",";
+                            }
+                        }
+
+                        body = body + "]}";
+                        format!("HTTP/1.1 200 OK\r\nContent-Type: text/json\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\n\r\n", body.len()) + &body
+                    }
                     &Url::Go(x,y) => {
                         println!("GO: {} {}", x, y);
                         if let Err(e) = client.go(x,y) {
@@ -185,7 +237,7 @@ impl ControlConn {
     }
 
     fn readable (&mut self, eloop: &mut EventLoop<AnyHandler>, client: &mut Client) -> std::io::Result<()> {
-        println!("{:?}: readable", self.token);
+        //println!("{:?}: readable", self.token);
         self.url = None;
         self.text = None;
         //let mut buf = self.mut_buf.take().expect("mut_buf.take");
@@ -203,12 +255,14 @@ impl ControlConn {
                 return Err(Error::new(ErrorKind::Other, "read zero bytes"));
             }
             Ok(Some(r)) => {
-                println!("{:?}: read {} bytes", self.token, r);
+                //println!("{:?}: read {} bytes", self.token, r);
                 let buf = buf.flip();
                 let buf = String::from_utf8_lossy(buf.bytes());
                 //println!("CONN read: {}", buf);
                 if buf.starts_with("GET / ") {
                     self.url = Some(Url::Root);
+                } else if buf.starts_with("GET /env ") {
+                    self.url = Some(Url::Env);
                 } else if buf.starts_with("GET /objects ") {
                     self.url = Some(Url::Objects);
                 } else if buf.starts_with("GET /widgets ") {
@@ -227,13 +281,18 @@ impl ControlConn {
                     } else {
                         self.url = Some(Url::Go(0,0));
                     }
-                } else if buf.starts_with("GET /quit ") || buf.starts_with("quit") {
+                } else if buf.starts_with("GET /quit ") {
                     if let Err(e) = client.close() {
                         println!("ERROR: client.close: {:?}", e);
                     }
                 } else {
                     //TODO pass buf to Lua interpreter
-                    if buf.starts_with("go ") {
+                    if buf.starts_with("q") {
+                        match client.close() {
+                            Ok(_) => self.text = Some("ok\n".to_string()),
+                            Err(_) => self.text = Some("ERROR\n".to_string()),
+                        }
+                    } else if buf.starts_with("g ") {
                         //TODO
                         let tmp: Vec<&str> = buf.split(' ').collect();
                         if tmp.len() > 2 {
@@ -247,7 +306,7 @@ impl ControlConn {
                         } else {
                             self.text = Some("ERROR\n".to_string());
                         }
-                    } else if buf.starts_with("inv") {
+                    } else if buf.starts_with("i") {
                         //TODO
                         self.text = Some("ok\n".to_string());
                     } else if buf.starts_with("export z") { // export current grid z coordinates to .OBJ
@@ -288,7 +347,7 @@ impl ControlConn {
                         }
                         ImageRgb8(img).save(&mut f, PNG).unwrap();
                         self.text = Some("ok\n".to_string());
-                    } else if buf.starts_with("obj") {
+                    } else if buf.starts_with("o") {
                         let mut minx = std::i32::MAX;
                         let mut miny = std::i32::MAX;
                         for o in client.objects.values() {
@@ -309,17 +368,17 @@ impl ControlConn {
                             s = s + &format!("({:7}, {:7}) ({:4}, {:4}) {:5.1} {}\n", o.x, o.y, rx, ry, distance, /*o.resid,*/ resname);
                         }
                         self.text = Some(s);
-                    } else if buf.starts_with("st") {
+                    } else if buf.starts_with("s") {
                         let mut s = String::new();
                         //TODO let (x,y) = o.xy - client.hero.xy;
-                        let (hx,hy) = client.hero_xy();
+                        let (x,y) = client.hero_xy();
                         let mut mindist = std::f32::MAX;
                         let mut obj = None;
                         for o in client.objects.values() {
                             if o.id != client.hero.obj.unwrap() {
-                                let rx = o.x - hx;
-                                let ry = o.y - hy;
-                                let distance = ((rx*rx + ry*ry) as f32).sqrt(); //TODO dist(o.xy, client.hero.xy);
+                                let dx = o.x - x;
+                                let dy = o.y - y;
+                                let distance = ((dx*dx + dy*dy) as f32).sqrt(); //TODO dist(o.xy, client.hero.xy);
                                 if distance < mindist {
                                     mindist = distance;
                                     obj = Some(o);
@@ -330,12 +389,18 @@ impl ControlConn {
                             Some(res) => res.as_str(),
                             None      => "null"
                         };
-                        let gx = hx / 1100;
-                        let gy = hy / 1100;
-                        let tx = (hx - gx * 1100) / 11;
-                        let ty = (hy - gy * 1100) / 11;
-                        s = s + &format!("xy:   {},{}\ngrid: {},{}\ntile: {},{}\nnear: ({}, {}) {:5.1} {}\n",
-                                          hx, hy, gx, gy, tx, ty, obj.unwrap().x, obj.unwrap().y, mindist, resname);
+                        s = s + &format!("        xy: {},{}\n      \
+                                          grid: {},{}\n\
+                                          xy in grid: {} {}\n      \
+                                          tile: {},{}\n\
+                                          xy in tile: {} {}\n\
+                                          near: ({}, {}) {:5.1} {}\n",
+                                                      x, y,
+                                                      x/1100, y/1100,
+                                                      x%1100, y%1100,
+                                                      x/11, y/11,
+                                                      x%11, y%11,
+                                                      obj.unwrap().x, obj.unwrap().y, mindist, resname);
                         self.text = Some(s);
                     } /*else if buf.starts_with("export ol") { // export current grid ol to .txt
                         //TODO move to fn client.current_map
@@ -412,7 +477,7 @@ impl<'a> AnyHandler<'a> {
     }
     
     fn conn_readable (&mut self, eloop: &mut EventLoop<AnyHandler>, tok: Token) -> std::io::Result<()> {
-        println!("conn readable; tok={:?}", tok);
+        //println!("conn readable; tok={:?}", tok);
         //if let Err(e) = self.conn(tok).readable(eloop) {
         if let Err(_) = self.conns[tok].readable(eloop, self.client) {
             self.conns.remove(tok);
@@ -421,7 +486,7 @@ impl<'a> AnyHandler<'a> {
     }
 
     fn conn_writable (&mut self, eloop: &mut EventLoop<AnyHandler>, tok: Token) -> std::io::Result<()> {
-        println!("conn writable; tok={:?}", tok);
+        //println!("conn writable; tok={:?}", tok);
         //self.conn(tok).writable(eloop)
         self.conns[tok].writable(eloop, self.client)
     }
@@ -465,9 +530,11 @@ impl<'a> Handler for AnyHandler<'a> {
             UDP => {
                 match self.client.tx() {
                     Some(ebuf) => {
+                        /*
                         if let Ok((msg,_)) = Message::from_buf(ebuf.buf.as_slice(), MessageDirection::FromClient) {
                             println!("TX: {:?}", msg);
                         } //TODO else println(ERROR:malformed message); eloop_shutdown();
+                        */
                         self.counter += 1;
                         //if self.counter % 3 == 0 {
                             let mut buf = SliceBuf::wrap(ebuf.buf.as_slice());

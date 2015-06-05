@@ -439,7 +439,7 @@ impl Client {
             },
             Message::OBJDATA(objdata) => {
                 //FIXME do NOT add hero object
-                println!("RX: OBJDATA {:?}", objdata);
+                //println!("RX: OBJDATA {:?}", objdata);
                 try!(self.enqueue_to_send(Message::OBJACK(ObjAck::new(&objdata)))); // send OBJACKs
                 for o in objdata.obj.iter() {
                     //FIXME rewrite this more rusty
