@@ -14,8 +14,6 @@
     $(document).ready(function(){
         var canv = document.getElementById('canvas');
         var ctx = canv.getContext('2d');
-        ctx.fillStyle = 'rgba(200,200,200,1)';
-        ctx.fillRect(0, 0, canv.width, canv.height);
 
         $('#get-objects').on('click', function(){
             $.getJSON('http://localhost:33000/objects', function(data) {
@@ -63,14 +61,6 @@
 
         var redraw = function(){
             $.getJSON('http://localhost:33000/env', function(data){
-                //var minx = data.obj[0].x;
-                //var miny = data.obj[0].y;
-                //for (var i=1; i<data.length; ++i) {
-                //    e = data.obj[i];
-                //    if (e.x < minx) { minx = e.x; }
-                //    if (e.y < miny) { miny = e.y; }
-                //}
-
                 ctx.fillStyle = 'rgb(200,200,200)';
                 ctx.fillRect(0, 0, canv.width, canv.height);
 
@@ -86,12 +76,8 @@
                         var d = data.map[index];
                         var high = Math.max(Math.max(a,b),Math.max(c,d));
                         var low  = Math.min(Math.min(a,b),Math.min(c,d));
-                        var g = high - low;
-                        if (g < 255) {
-                            g = 255 - g;
-                        } else {
-                            g = 0;
-                        }
+                        var g = (high - low) * 10;
+                        if (g < 255) { g = 255 - g; } else { g = 0; }
                         ctx.fillStyle = 'rgb('+g+','+g+','+g+')';
                         ctx.fillRect(x*11, y*11, 11, 11);
                     }
@@ -100,10 +86,8 @@
                 var borka = "";
                 for (var i=0; i<data.obj.length; ++i) {
                     e = data.obj[i];
-                    //var x = e.x - minx;
-                    //var y = e.y - miny;
-                    var x = e.x % 1100;
-                    var y = e.y % 1100;
+                    var x = e.x % 1100; if (x < 0) x = -x;
+                    var y = e.y % 1100; if (y < 0) y = -y;
                     if (e.resname.startsWith('gfx/borka')) {
                         borka = "( "+e.x+" , "+e.y+" )";
                         ctx.fillStyle = 'rgb(0,0,255)';
@@ -114,7 +98,7 @@
                     } else {
                         ctx.fillStyle = 'rgb(0,255,255)';
                     }
-                    ctx.fillRect(x-4, y-4, 8, 8);
+                    ctx.fillRect(x-3, y-3, 7, 7);
                 }
                 $('#borka').html(borka);
 
@@ -136,7 +120,7 @@
 <a href="#" id="get-env">Env</a>
 <a href="#" id="quit">Quit</a>
 <div id="borka"></div>
-<div><canvas height='920' width='920' id='canvas'>Canvas</canvas></div>
+<div><canvas height='1100' width='1100' id='canvas'>Canvas</canvas></div>
 <div id="show"></div>
 </body>
 </html>

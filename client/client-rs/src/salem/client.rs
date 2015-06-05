@@ -548,11 +548,7 @@ impl Client {
                     
                     //TODO move to fn client.update_grids_around(...) { ... }
                     //     if client.hero.current_grid_is_changed() { client.update_grids_around(); }
-                    let (x,y):(i32,i32) = {
-                        let hero_obj: &Obj = self.objects.get(&self.hero.obj.unwrap()).unwrap();
-                        //TODO IDEA: struct Coord {x,y} impl {fn divide(v){Coord{x:x/v,y:y/v}}}
-                        (hero_obj.x / 1100, hero_obj.y / 1100)
-                    };
+                    let (x,y) = self.hero_grid_xy();
                     self.mapreq(x,y).unwrap();
                     self.mapreq(x-1,y-1).unwrap();
                     self.mapreq(x,y-1).unwrap();
@@ -816,9 +812,21 @@ impl Client {
     pub fn hero_xy (&self) -> (i32,i32) /*FIXME return Option */ {
         let hero: &Obj = self.objects.get(&self.hero.obj.unwrap()).unwrap();
         (hero.x,hero.y)
-        //let mx:i32 = hero.x / 1100;
-        //let my:i32 = hero.y / 1100;
     }
+    
+    pub fn hero_grid_xy (&self) -> (i32,i32) /*FIXME return Option */ {
+        grid(self.hero_xy())
+    }
+    
+    pub fn hero_grid (&self) -> &Surface /*FIXME return Option */ {
+        self.map.grids.get(&self.hero_grid_xy()).unwrap()
+    }
+}
+
+pub fn grid ((x,y): (i32,i32)) -> (i32,i32) {
+    let mut gx = x / 1100; if x < 0 { gx -= 1; }
+    let mut gy = y / 1100; if y < 0 { gy -= 1; }
+    (gx,gy)
 }
 
 /*

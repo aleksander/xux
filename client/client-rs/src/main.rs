@@ -33,8 +33,8 @@ use std::fs::File;
 
 mod salem;
 use salem::client::*;
-use salem::message::Message;
-use salem::message::MessageDirection;
+//use salem::message::Message;
+//use salem::message::MessageDirection;
 
 extern crate image;
 use image::GenericImage;
@@ -173,8 +173,7 @@ impl ControlConn {
                         body = body + "],\"map\":[";
 
                         period = "";
-                        let (x,y) = client.hero_xy();
-                        let map = client.map.grids.get(&(x/1100,y/1100)).unwrap();
+                        let map = client.map.grids.get(&grid(client.hero_xy())).unwrap();
                         for y in 0..100 {
                             for x in 0..100 {
                                 body = body + &format!("{}{}", period, map.z[x+y*100]);
@@ -254,7 +253,7 @@ impl ControlConn {
                 }
                 return Err(Error::new(ErrorKind::Other, "read zero bytes"));
             }
-            Ok(Some(r)) => {
+            Ok(Some(/*r*/ _)) => {
                 //println!("{:?}: read {} bytes", self.token, r);
                 let buf = buf.flip();
                 let buf = String::from_utf8_lossy(buf.bytes());
@@ -312,13 +311,10 @@ impl ControlConn {
                     } else if buf.starts_with("export z") { // export current grid z coordinates to .OBJ
                         //TODO move to fn client.current_map
                         let mut f = try!(File::create("z.obj"));
-                        let hero_obj: &Obj = client.objects.get(&client.hero.obj.unwrap()).unwrap();
-                        let mx:i32 = hero_obj.x / 1100;
-                        let my:i32 = hero_obj.y / 1100;
-                        let map = client.map.grids.get(&(mx,my)).unwrap();
+                        let grid = client.hero_grid();
                         for y in 0..100 {
                             for x in 0..100 {
-                                try!(f.write_all(format!("v {} {} {}\n", (y as f32)/50., (map.z[x+y*100] as f32)/200., (x as f32)/50.).as_bytes()));
+                                try!(f.write_all(format!("v {} {} {}\n", (y as f32)/50., (grid.z[x+y*100] as f32)/200., (x as f32)/50.).as_bytes()));
                             }
                         }
                         for y in 0..99 {
@@ -335,13 +331,10 @@ impl ControlConn {
                         //TODO move to fn client.current_map
                         let mut f = try!(File::create("tiles.png"));
                         let mut img = ImageBuffer::new(100, 100);
-                        let hero_obj: &Obj = client.objects.get(&client.hero.obj.unwrap()).unwrap();
-                        let mx:i32 = hero_obj.x / 1100;
-                        let my:i32 = hero_obj.y / 1100;
-                        let map = client.map.grids.get(&(mx,my)).unwrap();
+                        let grid = client.hero_grid();
                         for y in 0..100 {
                             for x in 0..100 {
-                                let color = map.tiles[y*100+x];
+                                let color = grid.tiles[y*100+x];
                                 img.put_pixel(x as u32, y as u32, Rgb([color,color,color]));
                             }
                         }
@@ -389,17 +382,20 @@ impl ControlConn {
                             Some(res) => res.as_str(),
                             None      => "null"
                         };
+                        let (gridx,gridy) = client.hero_grid_xy();
+                        let relx = x - gridx * 1100;
+                        let rely = y - gridy * 1100;
                         s = s + &format!("        xy: {},{}\n      \
-                                          grid: {},{}\n\
-                                          xy in grid: {} {}\n      \
+                                          grid: {},{}\n    \
+                                          rel xy: {} {}\n      \
                                           tile: {},{}\n\
                                           xy in tile: {} {}\n\
                                           near: ({}, {}) {:5.1} {}\n",
                                                       x, y,
-                                                      x/1100, y/1100,
-                                                      x%1100, y%1100,
-                                                      x/11, y/11,
-                                                      x%11, y%11,
+                                                      gridx, gridy,
+                                                      relx, rely,
+                                                      relx / 11, rely / 11,
+                                                      relx % 11, rely % 11,
                                                       obj.unwrap().x, obj.unwrap().y, mindist, resname);
                         self.text = Some(s);
                     } /*else if buf.starts_with("export ol") { // export current grid ol to .txt
