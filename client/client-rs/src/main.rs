@@ -33,6 +33,8 @@ use std::fs::File;
 
 mod salem;
 use salem::client::*;
+use salem::message::Message;
+use salem::message::MessageDirection;
 
 extern crate image;
 use image::GenericImage;
@@ -113,19 +115,13 @@ impl ControlConn {
                     }
                     &Url::Objects => {
                         let mut body = String::new();
-                        //buf.push_all(b"<p><b>Test text</b></p>\r\n");
                         for o in client.objects.values() {
-                            //let (x,y) = o.xy;
-                            //let resid = o.resid;
                             let resname = match client.resources.get(&o.resid) {
                                 Some(res) => res.as_str(),
                                 None      => "null"
                             };
-                            //buf.write_slice(format!("({:7},{:7}) {:7} {}\n", x, y, resid, resname).as_bytes());
-                            //body.push_all(format!("({:7},{:7}) {:7} {}\r\n", x, y, resid, resname).as_bytes());
                             body = body + &format!("{{\"x\":{},\"y\":{},\"resid\":{},\"resname\":\"{}\"}},", o.x, o.y, o.resid, resname);
                         }
-                        //let mut buf = Vec::new();
                         body = "[ ".to_string() + &body[..body.len()-1] + " ]";
                         format!("HTTP/1.1 200 OK\r\nContent-Type: text/json\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\n\r\n", body.len()) + &body
                     }
@@ -239,7 +235,18 @@ impl ControlConn {
                     //TODO pass buf to Lua interpreter
                     if buf.starts_with("go ") {
                         //TODO
-                        self.text = Some("ok\n".to_string());
+                        let tmp: Vec<&str> = buf.split(' ').collect();
+                        if tmp.len() > 2 {
+                            let x: i32 = match str::FromStr::from_str(tmp[1]) { Ok(v) => v, Err(_) => 0 };
+                            let y: i32 = match str::FromStr::from_str(tmp[2]) { Ok(v) => v, Err(_) => 0 };
+                            let (hx,hy) = client.hero_xy();
+                            if let Err(e) = client.go(hx+x,hy+y) {
+                                println!("ERROR: client.go: {:?}", e);
+                            }
+                            self.text = Some("ok\n".to_string());
+                        } else {
+                            self.text = Some("ERROR\n".to_string());
+                        }
                     } else if buf.starts_with("inv") {
                         //TODO
                         self.text = Some("ok\n".to_string());
@@ -301,6 +308,34 @@ impl ControlConn {
                             let distance = ((rx*rx + ry*ry) as f32).sqrt(); //TODO dist(o.xy, client.hero.xy);
                             s = s + &format!("({:7}, {:7}) ({:4}, {:4}) {:5.1} {}\n", o.x, o.y, rx, ry, distance, /*o.resid,*/ resname);
                         }
+                        self.text = Some(s);
+                    } else if buf.starts_with("st") {
+                        let mut s = String::new();
+                        //TODO let (x,y) = o.xy - client.hero.xy;
+                        let (hx,hy) = client.hero_xy();
+                        let mut mindist = std::f32::MAX;
+                        let mut obj = None;
+                        for o in client.objects.values() {
+                            if o.id != client.hero.obj.unwrap() {
+                                let rx = o.x - hx;
+                                let ry = o.y - hy;
+                                let distance = ((rx*rx + ry*ry) as f32).sqrt(); //TODO dist(o.xy, client.hero.xy);
+                                if distance < mindist {
+                                    mindist = distance;
+                                    obj = Some(o);
+                                }
+                            }
+                        }
+                        let resname = match client.resources.get(&obj.unwrap().resid) {
+                            Some(res) => res.as_str(),
+                            None      => "null"
+                        };
+                        let gx = hx / 1100;
+                        let gy = hy / 1100;
+                        let tx = (hx - gx * 1100) / 11;
+                        let ty = (hy - gy * 1100) / 11;
+                        s = s + &format!("xy:   {},{}\ngrid: {},{}\ntile: {},{}\nnear: ({}, {}) {:5.1} {}\n",
+                                          hx, hy, gx, gy, tx, ty, obj.unwrap().x, obj.unwrap().y, mindist, resname);
                         self.text = Some(s);
                     } /*else if buf.starts_with("export ol") { // export current grid ol to .txt
                         //TODO move to fn client.current_map
@@ -430,11 +465,9 @@ impl<'a> Handler for AnyHandler<'a> {
             UDP => {
                 match self.client.tx() {
                     Some(ebuf) => {
-                        /*
                         if let Ok((msg,_)) = Message::from_buf(ebuf.buf.as_slice(), MessageDirection::FromClient) {
                             println!("TX: {:?}", msg);
                         } //TODO else println(ERROR:malformed message); eloop_shutdown();
-                        */
                         self.counter += 1;
                         //if self.counter % 3 == 0 {
                             let mut buf = SliceBuf::wrap(ebuf.buf.as_slice());

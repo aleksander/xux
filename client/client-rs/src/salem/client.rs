@@ -35,6 +35,7 @@ extern crate flate2;
 use self::flate2::read::ZlibDecoder;
 
 pub struct Obj {
+    pub id : u32,
     pub resid : u16,
     pub x : i32,
     pub y : i32,
@@ -437,11 +438,13 @@ impl Client {
                 }
             },
             Message::OBJDATA(objdata) => {
+                //FIXME do NOT add hero object
                 println!("RX: OBJDATA {:?}", objdata);
                 try!(self.enqueue_to_send(Message::OBJACK(ObjAck::new(&objdata)))); // send OBJACKs
                 for o in objdata.obj.iter() {
+                    //FIXME rewrite this more rusty
                     if !self.objects.contains_key(&o.id) {
-                        self.objects.insert(o.id, Obj{resid:0, x:0, y:0});
+                        self.objects.insert(o.id, Obj{id:o.id, resid:0, x:0, y:0});
                     }
                     if let Some(obj) = self.objects.get_mut(&o.id) {
                         //TODO check for o.frame vs obj.frame
@@ -809,7 +812,7 @@ impl Client {
         self.charlist.clear();
         Ok(())
     }
-    
+
     pub fn hero_xy (&self) -> (i32,i32) /*FIXME return Option */ {
         let hero: &Obj = self.objects.get(&self.hero.obj.unwrap()).unwrap();
         (hero.x,hero.y)
