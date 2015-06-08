@@ -129,7 +129,7 @@ impl ControlConn {
                     &Url::Widgets => {
                         let mut body = String::new();
                         for (id,w) in &client.widgets {
-                            body = body + &format!("{{\"id\":{},\"name\":\"{}\",\"parent\":\"{}\"}},", id, w.name, w.parent);
+                            body = body + &format!("{{\"id\":{},\"name\":\"{}\",\"parent\":\"{}\"}},", id, w.typ, w.parent);
                         }
                         body = "[ ".to_string() + &body[..body.len()-1] + " ]";
                         format!("HTTP/1.1 200 OK\r\nContent-Type: text/json\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\n\r\n", body.len()) + &body
@@ -166,7 +166,7 @@ impl ControlConn {
 
                         period = "";
                         for (id,w) in &client.widgets {
-                            body = body + &format!("\r\n{}{{\"id\":{},\"name\":\"{}\",\"parent\":\"{}\"}}", period, id, w.name, w.parent);
+                            body = body + &format!("\r\n{}{{\"id\":{},\"name\":\"{}\",\"parent\":\"{}\"}}", period, id, w.typ, w.parent);
                             period = ",";
                         }
 
@@ -256,7 +256,9 @@ impl ControlConn {
             Ok(Some(/*r*/ _)) => {
                 //println!("{:?}: read {} bytes", self.token, r);
                 let buf = buf.flip();
-                let buf = String::from_utf8_lossy(buf.bytes());
+                let mut buf = String::from_utf8_lossy(buf.bytes()).into_owned();
+                let l = buf.len()-1;
+                buf.truncate(l);
                 //println!("CONN read: {}", buf);
                 if buf.starts_with("GET / ") {
                     self.url = Some(Url::Root);
@@ -285,14 +287,18 @@ impl ControlConn {
                         println!("ERROR: client.close: {:?}", e);
                     }
                 } else {
+
+                    //FIXME
                     //TODO pass buf to Lua interpreter
-                    if buf.starts_with("q") {
+                    //FIXME
+
+                    if buf.starts_with("q") { // quit
                         match client.close() {
                             Ok(_) => self.text = Some("ok\n".to_string()),
                             Err(_) => self.text = Some("ERROR\n".to_string()),
                         }
-                    } else if buf.starts_with("g ") {
-                        //TODO
+                    } else if buf.starts_with("g ") { // go
+                        //FIXME use something more siutable. like sscanf()
                         let tmp: Vec<&str> = buf.split(' ').collect();
                         if tmp.len() > 2 {
                             let x: i32 = match str::FromStr::from_str(tmp[1]) { Ok(v) => v, Err(_) => 0 };
@@ -305,9 +311,41 @@ impl ControlConn {
                         } else {
                             self.text = Some("ERROR\n".to_string());
                         }
-                    } else if buf.starts_with("i") {
-                        //TODO
-                        self.text = Some("ok\n".to_string());
+                    } else if buf.starts_with("p ") { // pick
+                        //FIXME use something more siutable. like sscanf()
+                        let tmp: Vec<&str> = buf.split(' ').collect();
+                        if tmp.len() > 1 {
+                            let obj_id: u32 = match str::FromStr::from_str(tmp[1]) { Ok(v) => v, Err(_) => 0 };
+                            if let Err(e) = client.pick(obj_id) {
+                                println!("ERROR: client.pick: {:?}", e);
+                            }
+                            self.text = Some("ok\n".to_string());
+                        } else {
+                            self.text = Some("ERROR\n".to_string());
+                        }
+                    } else if buf.starts_with("cp ") { // choose pick
+                        //FIXME use something more siutable. like sscanf()
+                        let tmp: Vec<&str> = buf.split(' ').collect();
+                        if tmp.len() > 1 {
+                            let widget_id: u16 = match str::FromStr::from_str(tmp[1]) { Ok(v) => v, Err(_) => 0 };
+                            if let Err(e) = client.choose_pick(widget_id) {
+                                println!("ERROR: client.choose_pick: {:?}", e);
+                            }
+                            self.text = Some("ok\n".to_string());
+                        } else {
+                            self.text = Some("ERROR\n".to_string());
+                        }
+                    } else if buf.starts_with("i") { // inventory
+                        let mut s = String::new();
+                        for (xy,resid) in &client.hero.inventory {
+                            let &(x,y) = xy;
+                            let resname = match client.resources.get(&resid) {
+                                Some(res) => res.as_str(),
+                                None      => "null"
+                            };
+                            s = s + &format!("({:2} {:2}) {}\n", x, y, resname);
+                        }
+                        self.text = Some(s);
                     } else if buf.starts_with("export z") { // export current grid z coordinates to .OBJ
                         //TODO move to fn client.current_map
                         let mut f = try!(File::create("z.obj"));
@@ -340,7 +378,7 @@ impl ControlConn {
                         }
                         ImageRgb8(img).save(&mut f, PNG).unwrap();
                         self.text = Some("ok\n".to_string());
-                    } else if buf.starts_with("o") {
+                    } else if buf.starts_with("o") { // print objects
                         let mut minx = std::i32::MAX;
                         let mut miny = std::i32::MAX;
                         for o in client.objects.values() {
@@ -359,6 +397,16 @@ impl ControlConn {
                             let ry = o.y - hy;
                             let distance = ((rx*rx + ry*ry) as f32).sqrt(); //TODO dist(o.xy, client.hero.xy);
                             s = s + &format!("({:7}, {:7}) ({:2},{:2}) ({:4}, {:4}) {:5.1} {}\n", o.x, o.y, o.x%11, o.y%11, rx, ry, distance, /*o.resid,*/ resname);
+                        }
+                        self.text = Some(s);
+                    } else if buf.starts_with("w") { // print widgets
+                        let mut s = String::new();
+                        for (id,w) in &client.widgets {
+                            let name = match w.name {
+                                Some(ref n) => { n.clone() }
+                                None        => { "-".to_string() }
+                            };
+                            s = s + &format!("{:3}<{:3} {:12} {:4}\n", id, w.parent, w.typ, name);
                         }
                         self.text = Some(s);
                     } else if buf.starts_with("s") {
@@ -385,18 +433,19 @@ impl ControlConn {
                         let (gridx,gridy) = client.hero_grid_xy();
                         let relx = x - gridx * 1100;
                         let rely = y - gridy * 1100;
+                        let obj = obj.unwrap();
                         s = s + &format!("        xy: {},{}\n      \
                                           grid: {},{}\n    \
                                           rel xy: {} {}\n      \
                                           tile: {},{}\n\
                                           xy in tile: {} {}\n\
-                                          near: ({}, {}) {:5.1} {}\n",
+                                          near: ({}, {}) {:5.1} {} {}\n",
                                                       x, y,
                                                       gridx, gridy,
                                                       relx, rely,
                                                       relx / 11, rely / 11,
                                                       relx % 11, rely % 11,
-                                                      obj.unwrap().x, obj.unwrap().y, mindist, resname);
+                                                      obj.x, obj.y, mindist, obj.id, resname);
                         self.text = Some(s);
                     } /*else if buf.starts_with("export ol") { // export current grid ol to .txt
                         //TODO move to fn client.current_map

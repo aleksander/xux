@@ -1,0 +1,751 @@
+
+CLIENT
+ REL  seq=3
+  WDGMSG
+   id=6 name=click                 (id=6 type=mapview parent=5) (id=5 type=gameui parent=0)
+     COORD : [628, 475]
+     COORD : [59501, 93368]
+     INT : 1
+     INT : 0
+
+CLIENT
+ REL  seq=4
+  WDGMSG
+   id=6 name=click
+     COORD : [575, 491]
+     COORD : [59463, 93379]
+     INT : 3
+     INT : 0
+     INT : 0
+     INT : 82733410                  (82733410 [59466, 93384] gfx/invobjs/herbs/blackberry)
+     COORD : [59466, 93384]
+     INT : 0
+     INT : -1
+
+SERVER
+ REL  seq=258
+  NEWWDG
+   id=18 type=sm parent=0
+    pargs:
+     COORD : [575, 491]
+    cargs:
+     STR : Pick
+
+CLIENT
+ REL  seq=5
+  WDGMSG len=15
+   id=18 name=cl
+     INT : 0
+     INT : 0
+
+SERVER
+ REL  seq=259
+  WDGMSG len=14
+   id=18 name=act
+     UINT8 : 0
+rel remains: bytearray(b'\x00\x00\x00\x00\x00')
+
+SERVER
+ REL  seq=263
+  NEWWDG
+   id=19 type=item parent=7
+    pargs:
+     COORD : [1, 0]
+    cargs:
+     UINT16 : 2628                  (gfx/invobjs/herbs/blackberry)
+  WDGMSG
+   id=19 name=tt
+     TTOL : [
+       UINT16 : 493
+     ]
+     TTOL : [
+       UINT16 : 489
+       FLOAT32 : 0.0
+       FLOAT32 : 0.35065361857414246
+       FLOAT32 : 0.3306456208229065
+       FLOAT32 : 0.31870073080062866
+     ]
+     TTOL : [
+       UINT16 : 488
+       UINT16 : 2500
+       UINT16 : 2500
+       UINT16 : 2500
+       UINT16 : 2500
+     ]
+     TTOL : [
+       UINT16 : 490
+       UINT8 : 0
+       UINT8 : 0
+       UINT8 : 0
+       UINT8 : 0
+       UINT8 : 0
+       UINT8 : 0
+       UINT16 : 5000
+       UINT16 : 6000
+       NIL : null
+       UINT16 : 360
+       TTOL : [
+         TTOL : [
+           UINT16 : 491
+           UINT16 : 4407
+           UINT8 : 50
+         ]
+       ]
+       UINT8 : 50
+     ]
+  WDGMSG len=12
+   id=5 name=weight
+     UINT16 : 1450
+
+CLIENT
+ REL  seq=6
+  WDGMSG len=65
+   id=6 name=click
+     COORD : [628, 437]
+     COORD : [59478, 93424]
+     INT : 3
+     INT : 0
+     INT : 0
+     INT : 82733419                      (id=82733419 [59479, 93426] resid=1382 gfx/terobjs/herbs/flint)
+     COORD : [59479, 93426]
+     INT : 0
+     INT : -1
+
+SERVER
+ REL  seq=273
+  NEWWDG len=23
+   id=20 type=sm parent=0
+    pargs:
+     COORD : [628, 437]
+    cargs:
+     STR : Pick
+
+CLIENT
+ REL  seq=7
+  WDGMSG len=15
+   id=20 name=cl
+     INT : 0
+     INT : 0
+
+SERVER
+ REL  seq=274
+  WDGMSG len=14
+   id=20 name=act
+     UINT8 : 0
+rel remains: bytearray(b'\x00\x00\x00\x00\x00')
+
+SERVER
+ REL  seq=279
+  NEWWDG len=22
+   id=21 type=item parent=7
+    pargs:
+     COORD : [2, 0]
+    cargs:
+     UINT16 : 2608
+  WDGMSG len=35
+   id=21 name=tt
+     TTOL : [
+       UINT16 : 493
+     ]
+     TTOL : [
+       UINT16 : 489
+       FLOAT32 : 0.0
+       FLOAT32 : 0.5133441686630249
+       FLOAT32 : 0.18055932223796844
+       FLOAT32 : 0.30609649419784546
+     ]
+  WDGMSG len=12
+   id=5 name=weight
+     UINT16 : 1950
+
+CLIENT
+ REL  seq=8
+  WDGMSG len=65
+   id=6 name=click
+     COORD : [586, 254]
+     COORD : [59473, 93528]
+     INT : 3
+     INT : 0
+     INT : 0
+     INT : 82733431
+     COORD : [59475, 93525]
+     INT : 0
+     INT : -1
+
+
+SERVER
+ REL  seq=283
+  NEWWDG len=23
+   id=22 type=sm parent=0
+    pargs:
+     COORD : [586, 254]
+    cargs:
+     STR : Pick
+
+
+CLIENT
+ REL  seq=9
+  WDGMSG len=15
+   id=22 name=cl
+     INT : 0
+     INT : 0
+
+
+SERVER
+ REL  seq=284
+  WDGMSG len=14
+   id=22 name=act
+     UINT8 : 0
+rel remains: bytearray(b'\x00\x00\x00\x00\x00')
+
+
+SERVER
+ REL  seq=293
+  NEWWDG len=22
+   id=23 type=item parent=7
+    pargs:
+     COORD : [3, 0]
+    cargs:
+     UINT16 : 2638
+  WDGMSG len=10
+   id=23 name=tt
+     TTOL : [
+       UINT16 : 493
+     ]
+  WDGMSG len=12
+   id=5 name=weight
+     UINT16 : 2600
+  WDGMSG len=14
+   id=7 name=sz
+     COORD : [5, 4]
+
+
+CLIENT
+ REL  seq=10
+  WDGMSG len=65
+   id=6 name=click
+     COORD : [866, 448]
+     COORD : [59448, 93544]
+     INT : 3
+     INT : 0
+     INT : 0
+     INT : 82270412
+     COORD : [59449, 93538]
+     INT : 0
+     INT : -1
+
+
+SERVER
+ REL  seq=299
+  RESID len=26
+   id=387 name=sfx/terobjs/openstump ver=1
+  NEWWDG len=40
+   id=24 type=wnd parent=5
+    pargs:
+     STR : misc
+     COORD : [450, 50]
+    cargs:
+     COORD : [0, 0]
+     STR : Stump
+  NEWWDG len=27
+   id=25 type=inv parent=24
+    pargs:
+     COORD : [0, 0]
+    cargs:
+     COORD : [2, 3]
+  WDGMSG len=7
+   id=24 name=pack
+
+
+SERVER
+ REL  seq=303
+  WDGMSG len=13
+   id=12 name=tmexp
+     INT : 207000
+  WDGMSG len=15
+   id=17 name=upd
+     COORD : [59009, 94427]
+
+
+CLIENT
+ REL  seq=11
+  WDGMSG len=13
+   id=5 name=focus
+     INT : 6
+
+
+SERVER
+ REL  seq=305
+  WDGMSG len=14
+   id=12 name=tmexp
+     INT : 207000
+
+
+CLIENT
+ REL  seq=12
+  WDGMSG len=36
+   id=6 name=click
+     COORD : [742, 479]
+     COORD : [59471, 93540]
+     INT : 1
+     INT : 0
+
+
+SERVER
+ REL  seq=306
+  DSTWDG len=2
+   id=25
+  DSTWDG len=9
+   id=24
+rel remains: bytearray(b'\x00\x00\x00\x00\x00\x00\x00')
+
+
+CLIENT
+ REL  seq=13
+  WDGMSG len=36
+   id=6 name=click
+     COORD : [796, 374]
+     COORD : [59479, 93627]
+     INT : 1
+     INT : 0
+
+
+CLIENT
+ REL  seq=14
+  WDGMSG len=36
+   id=6 name=click
+     COORD : [569, 359]
+     COORD : [59466, 93750]
+     INT : 1
+     INT : 0
+
+
+CLIENT
+ REL  seq=15
+  WDGMSG len=65
+   id=6 name=click
+     COORD : [834, 441]
+     COORD : [59424, 93760]
+     INT : 3
+     INT : 0
+     INT : 0
+     INT : 82274728
+     COORD : [59428, 93756]
+     INT : 0
+     INT : -1
+
+
+SERVER
+ REL  seq=322
+  NEWWDG len=36
+   id=26 type=sm parent=0
+    pargs:
+     COORD : [834, 441]
+    cargs:
+     STR : Chop Blocks
+     STR : Open
+
+
+CLIENT
+ REL  seq=16
+  WDGMSG len=15
+   id=26 name=cl
+     INT : 1
+     INT : 0
+
+
+SERVER
+ REL  seq=324
+  WDGMSG len=14
+   id=26 name=act
+     UINT8 : 1
+rel remains: bytearray(b'\x00\x00\x00\x00\x00')
+
+
+SERVER
+ REL  seq=326
+  NEWWDG len=42
+   id=27 type=wnd parent=5
+    pargs:
+     STR : misc
+     COORD : [450, 50]
+    cargs:
+     COORD : [0, 0]
+     STR : Old Log
+  NEWWDG len=27
+   id=28 type=inv parent=27
+    pargs:
+     COORD : [0, 0]
+    cargs:
+     COORD : [4, 2]
+  RESID len=34
+   id=2637 name=gfx/invobjs/herbs/smoothstone ver=3
+  NEWWDG len=22
+   id=29 type=item parent=28
+    pargs:
+     COORD : [0, 0]
+    cargs:
+     UINT16 : 2637
+  RESID len=15
+   id=506 name=ui/tt/slot ver=8
+  RESID len=16
+   id=507 name=ui/tt/dattr ver=1
+  RESID len=16
+   id=492 name=ui/tt/curio ver=6
+  WDGMSG len=182
+   id=29 name=tt
+     TTOL : [
+       UINT16 : 493
+     ]
+     TTOL : [
+       UINT16 : 489
+       FLOAT32 : 0.0
+       FLOAT32 : 0.3333333432674408
+       FLOAT32 : 0.3333333432674408
+       FLOAT32 : 0.3333333432674408
+     ]
+     TTOL : [
+       UINT16 : 506
+       UINT8 : 90
+       UINT8 : 100
+       STR : cloak
+       STR : mine
+       TTOL : [
+         TTOL : [
+           UINT16 : 507
+           STR : Piercing power
+           UINT8 : 1
+           STR : Impact power
+           UINT8 : 1
+           STR : Blunt power
+           UINT8 : 3
+         ]
+       ]
+     ]
+     TTOL : [
+       UINT16 : 492
+       UINT16 : 2365
+       STR : natp
+       UINT8 : 220
+       STR : arts
+       UINT16 : 340
+       STR : nail
+       UINT16 : 350
+       STR : hung
+       UINT16 : 290
+       STR : mine
+       UINT16 : 475
+       STR : fire
+       UINT8 : 250
+       STR : wild
+       UINT16 : 440
+     ]
+  RESID len=26
+   id=2780 name=gfx/invobjs/rustycoin ver=3
+  NEWWDG len=22
+   id=30 type=item parent=28
+    pargs:
+     COORD : [2, 0]
+    cargs:
+     UINT16 : 2780
+  WDGMSG len=83
+   id=30 name=tt
+     TTOL : [
+       UINT16 : 493
+     ]
+     TTOL : [
+       UINT16 : 489
+       FLOAT32 : 0.0
+       FLOAT32 : 0.3333333432674408
+       FLOAT32 : 0.3333333432674408
+       FLOAT32 : 0.3333333432674408
+     ]
+     TTOL : [
+       UINT16 : 492
+       UINT16 : 745
+       STR : natp
+       UINT8 : 75
+       STR : arts
+       UINT8 : 50
+       STR : law
+       UINT16 : 290
+       STR : mine
+       UINT8 : 170
+       STR : fire
+       UINT8 : 160
+     ]
+  WDGMSG len=7
+   id=27 name=pack
+
+
+CLIENT
+ REL  seq=17
+  WDGMSG len=16
+   id=29 name=take
+     COORD : [19, 24]
+
+
+SERVER
+ REL  seq=338
+  DSTWDG len=2
+   id=29
+  NEWWDG len=28
+   id=31 type=item parent=5
+    pargs:
+     STR : hand
+     COORD : [15, 15]
+    cargs:
+     UINT16 : 2637
+  WDGMSG len=182
+   id=31 name=tt
+     TTOL : [
+       UINT16 : 493
+     ]
+     TTOL : [
+       UINT16 : 489
+       FLOAT32 : 0.0
+       FLOAT32 : 0.3333333432674408
+       FLOAT32 : 0.3333333432674408
+       FLOAT32 : 0.3333333432674408
+     ]
+     TTOL : [
+       UINT16 : 506
+       UINT8 : 90
+       UINT8 : 100
+       STR : cloak
+       STR : mine
+       TTOL : [
+         TTOL : [
+           UINT16 : 507
+           STR : Piercing power
+           UINT8 : 1
+           STR : Impact power
+           UINT8 : 1
+           STR : Blunt power
+           UINT8 : 3
+         ]
+       ]
+     ]
+     TTOL : [
+       UINT16 : 492
+       UINT16 : 2365
+       STR : natp
+       UINT8 : 220
+       STR : arts
+       UINT16 : 340
+       STR : nail
+       UINT16 : 350
+       STR : hung
+       UINT16 : 290
+       STR : mine
+       UINT16 : 475
+       STR : fire
+       UINT8 : 250
+       STR : wild
+       UINT16 : 440
+     ]
+  WDGMSG len=12
+   id=5 name=weight
+     UINT16 : 3100
+
+
+CLIENT
+ REL  seq=18
+  WDGMSG len=16
+   id=7 name=drop
+     COORD : [4, 0]
+
+
+SERVER
+ REL  seq=343
+  DSTWDG len=2
+   id=31
+  WDGMSG len=12
+   id=5 name=weight
+     UINT16 : 2600
+  NEWWDG len=22
+   id=32 type=item parent=7
+    pargs:
+     COORD : [4, 0]
+    cargs:
+     UINT16 : 2637
+  WDGMSG len=182
+   id=32 name=tt
+     TTOL : [
+       UINT16 : 493
+     ]
+     TTOL : [
+       UINT16 : 489
+       FLOAT32 : 0.0
+       FLOAT32 : 0.3333333432674408
+       FLOAT32 : 0.3333333432674408
+       FLOAT32 : 0.3333333432674408
+     ]
+     TTOL : [
+       UINT16 : 506
+       UINT8 : 90
+       UINT8 : 100
+       STR : cloak
+       STR : mine
+       TTOL : [
+         TTOL : [
+           UINT16 : 507
+           STR : Piercing power
+           UINT8 : 1
+           STR : Impact power
+           UINT8 : 1
+           STR : Blunt power
+           UINT8 : 3
+         ]
+       ]
+     ]
+     TTOL : [
+       UINT16 : 492
+       UINT16 : 2365
+       STR : natp
+       UINT8 : 220
+       STR : arts
+       UINT16 : 340
+       STR : nail
+       UINT16 : 350
+       STR : hung
+       UINT16 : 290
+       STR : mine
+       UINT16 : 475
+       STR : fire
+       UINT8 : 250
+       STR : wild
+       UINT16 : 440
+     ]
+  WDGMSG len=12
+   id=5 name=weight
+     UINT16 : 3100
+  WDGMSG len=14
+   id=7 name=sz
+     COORD : [6, 4]
+
+
+CLIENT
+ REL  seq=19
+  WDGMSG len=16
+   id=30 name=take
+     COORD : [18, 22]
+
+
+SERVER
+ REL  seq=349
+  DSTWDG len=2
+   id=30
+  NEWWDG len=28
+   id=33 type=item parent=5
+    pargs:
+     STR : hand
+     COORD : [15, 15]
+    cargs:
+     UINT16 : 2780
+  WDGMSG len=83
+   id=33 name=tt
+     TTOL : [
+       UINT16 : 493
+     ]
+     TTOL : [
+       UINT16 : 489
+       FLOAT32 : 0.0
+       FLOAT32 : 0.3333333432674408
+       FLOAT32 : 0.3333333432674408
+       FLOAT32 : 0.3333333432674408
+     ]
+     TTOL : [
+       UINT16 : 492
+       UINT16 : 745
+       STR : natp
+       UINT8 : 75
+       STR : arts
+       UINT8 : 50
+       STR : law
+       UINT16 : 290
+       STR : mine
+       UINT8 : 170
+       STR : fire
+       UINT8 : 160
+     ]
+  WDGMSG len=12
+   id=5 name=weight
+     UINT16 : 3120
+
+
+CLIENT
+ REL  seq=20
+  WDGMSG len=16
+   id=7 name=drop
+     COORD : [3, 1]
+
+
+SERVER
+ REL  seq=353
+  DSTWDG len=2
+   id=33
+  WDGMSG len=12
+   id=5 name=weight
+     UINT16 : 3100
+  NEWWDG len=22
+   id=34 type=item parent=7
+    pargs:
+     COORD : [3, 1]
+    cargs:
+     UINT16 : 2780
+  WDGMSG len=83
+   id=34 name=tt
+     TTOL : [
+       UINT16 : 493
+     ]
+     TTOL : [
+       UINT16 : 489
+       FLOAT32 : 0.0
+       FLOAT32 : 0.3333333432674408
+       FLOAT32 : 0.3333333432674408
+       FLOAT32 : 0.3333333432674408
+     ]
+     TTOL : [
+       UINT16 : 492
+       UINT16 : 745
+       STR : natp
+       UINT8 : 75
+       STR : arts
+       UINT8 : 50
+       STR : law
+       UINT16 : 290
+       STR : mine
+       UINT8 : 170
+       STR : fire
+       UINT8 : 160
+     ]
+  WDGMSG len=12
+   id=5 name=weight
+     UINT16 : 3120
+
+
+CLIENT
+ REL  seq=21
+  WDGMSG len=13
+   id=5 name=focus
+     INT : 6
+
+
+CLIENT
+ REL  seq=22
+  WDGMSG len=36
+   id=6 name=click
+     COORD : [750, 500]
+     COORD : [59445, 93756]
+     INT : 1
+     INT : 0
+
+
+SERVER
+ REL  seq=359
+  DSTWDG len=2
+   id=28
+  DSTWDG len=9
+   id=27
+rel remains: bytearray(b'\x00\x00\x00\x00\x00\x00\x00')

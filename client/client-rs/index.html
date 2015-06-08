@@ -84,6 +84,7 @@
                 }
 
                 var borka = "";
+                //FIXME for negative coordiantes all objects are mirrored
                 for (var i=0; i<data.obj.length; ++i) {
                     e = data.obj[i];
                     var x = e.x % 1100; if (x < 0) x = -x;

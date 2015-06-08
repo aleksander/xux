@@ -293,6 +293,7 @@ class SalemProtocolParser:
 	def rx_rel_globlob (self, data): # Glob.java +217
 		gmsg_types = {0:'TIME',2:'LIGHT',3:'SKY'}
 		inc = data.u8 != 0
+		return
 		while data.len > 0:
 			gmsg_type = data.u8
 			if gmsg_type not in gmsg_types:

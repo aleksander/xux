@@ -37,6 +37,7 @@ use self::flate2::read::ZlibDecoder;
 pub struct Obj {
     pub id : u32,
     pub resid : u16,
+    pub frame : i32,
     pub x : i32,
     pub y : i32,
 }
@@ -55,8 +56,9 @@ pub struct EnqueuedBuffer {
 
 pub struct Widget {
     pub id : u16,
-    pub name : String,
+    pub typ : String,
     pub parent : u16,
+    pub name : Option<String>,
 }
     
 pub struct Hero {
@@ -221,7 +223,7 @@ pub struct Client {
 impl Client {
     pub fn new (user: String, pass: String) -> Client {
         let mut widgets = HashMap::new();
-        widgets.insert(0, Widget{ id:0, name:"root".to_string(), parent:0 });
+        widgets.insert(0, Widget{ id:0, typ:"root".to_string(), parent:0, name:None });
 
         Client {
             serv_ip: IpAddr::V4(Ipv4Addr::new(0,0,0,0)),
@@ -438,26 +440,44 @@ impl Client {
                 }
             },
             Message::OBJDATA(objdata) => {
-                //FIXME do NOT add hero object
                 //println!("RX: OBJDATA {:?}", objdata);
                 try!(self.enqueue_to_send(Message::OBJACK(ObjAck::new(&objdata)))); // send OBJACKs
                 for o in objdata.obj.iter() {
-                    //FIXME rewrite this more rusty
-                    if !self.objects.contains_key(&o.id) {
-                        self.objects.insert(o.id, Obj{id:o.id, resid:0, x:0, y:0});
-                    }
-                    if let Some(obj) = self.objects.get_mut(&o.id) {
-                        //TODO check for o.frame vs obj.frame
+                    //FIXME ??? do NOT add hero object
+                    //TODO  if o.id == self.hero.id {
+                    //          ... do something with hero, not in objects ...
+                    //          if odMOVE {
+                    //              if hero.grid.is_changed() {
+                    //                  self.request_grids_around();
+                    //              }
+                    //          }
+                    //      }
+                    {
+                        let mut to_remove = false;
                         for prop in o.prop.iter() {
-                            match *prop {
-                                ObjProp::odREM => { /*FIXME objects.remove(&o.id); break;*/ },
-                                ObjProp::odMOVE(xy,_) => { let (x,y) = xy; obj.x = x; obj.y = y; },
-                                ObjProp::odRES(resid) => { obj.resid = resid; },
-                                ObjProp::odCOMPOSE(resid) => { obj.resid = resid; },
-                                _ => {},
+                            if let ObjProp::odREM = *prop {
+                                 to_remove = true;
+                                 break;
                             }
                         }
-                    };
+                        if to_remove {
+                            self.objects.remove(&o.id);
+                            continue;
+                        }
+                    }
+                    let obj = self.objects.entry(o.id).or_insert(Obj{id:o.id, frame:0, resid:0, x:0, y:0});
+                    //FIXME consider o.frame overflow !!!
+                    if o.frame <= obj.frame {
+                        continue;
+                    }
+                    for prop in o.prop.iter() {
+                        match *prop {
+                            ObjProp::odMOVE(xy,_) => { let (x,y) = xy; obj.x = x; obj.y = y; },
+                            ObjProp::odRES(resid) => { obj.resid = resid; },
+                            ObjProp::odCOMPOSE(resid) => { obj.resid = resid; },
+                            _ => {},
+                        }
+                    }
                 }
             },
             Message::OBJACK(_)  => {},
@@ -534,7 +554,7 @@ impl Client {
     }
 
     fn dispatch_newwdg (&mut self, wdg: &NewWdg) {
-        self.widgets.insert(wdg.id, Widget{id:wdg.id, name:wdg.name.clone(), parent:wdg.parent});
+        self.widgets.insert(wdg.id, Widget{id:wdg.id, typ:wdg.name.clone(), parent:wdg.parent, name:None});
         match wdg.name.as_str() {
             "gameui" => {
                 if let Some(&MsgList::tSTR(ref name)) = wdg.cargs.get(0) {
@@ -562,7 +582,7 @@ impl Client {
             }
             "item" => {
                 if let Some(parent) = self.widgets.get(&(wdg.parent)) {
-                    if parent.name == "inv" {
+                    if parent.typ == "inv" {
                         //8 "item", pargs: [tCOORD((2, 1))], cargs: [tUINT16(2529)] }
                         if let Some(&MsgList::tCOORD((x,y))) = wdg.pargs.get(0) {
                             if let Some(&MsgList::tUINT16(id)) = wdg.cargs.get(0) {
@@ -579,7 +599,7 @@ impl Client {
 
     fn dispatch_wdgmsg (&mut self, msg: &WdgMsg) {
         if let Some(w) = self.widgets.get(&(msg.id)) {
-            match w.name.as_str() {
+            match w.typ.as_str() {
                 "charlist" => {
                     if msg.name == "add" {
                         if let Some(&MsgList::tSTR(ref name)) = msg.args.get(0) {
@@ -692,9 +712,9 @@ impl Client {
         }
     }
 
-    pub fn widget_id_by_name (&self, name:&str) -> Option<u16> {
+    pub fn widget_id (&self, typ: &str, name: Option<String>) -> Option<u16> {
         for (id,w) in self.widgets.iter() {
-            if w.name == name {
+            if (w.typ == typ) && (w.name == name) {
                 return Some(*id)
             }
         }
@@ -702,13 +722,17 @@ impl Client {
     }
 
     pub fn react (&mut self) -> Result<(),Error> {
-        //TODO send REL until reply
+        //TODO implement state machine here or some kind of AI:
+        //     match state {
+        //         CHOOSING_CHARACTER => { ... }
+        //         GAMING => { ... }
+        //     }
         if self.charlist.len() > 0 {
             println!("send play '{}'", self.charlist[0]);
             //TODO let mut rel = Rel::new(seq,id,name);
             let char_name = self.charlist[0].clone();
             let mut rel = Rel{seq:self.seq, rel:Vec::new()};
-            let id = self.widget_id_by_name("charlist").expect("charlist widget is not found");
+            let id = self.widget_id("charlist", None).expect("charlist widget is not found");
             let name : String = "play".to_string();
             let mut args : Vec<MsgList> = Vec::new();
             args.push(MsgList::tSTR(char_name));
@@ -792,20 +816,59 @@ impl Client {
     */
     
     pub fn go (&mut self, x: i32, y: i32) -> Result<(),Error> {
-        println!("let's GO somewhere!");
+        println!("GO");
         //TODO let mut rel = Rel::new(seq,id,name);
         let mut rel = Rel{seq:self.seq, rel:Vec::new()};
-        let id = self.widget_id_by_name("mapview").expect("charlist widget is not found");
+        let id = self.widget_id("mapview", None).expect("mapview widget is not found");
         let name : String = "click".to_string();
         let mut args : Vec<MsgList> = Vec::new();
-        args.push(MsgList::tCOORD((907, 755)));
+        args.push(MsgList::tCOORD((907, 755))); //TODO set some random coords in the center of screen
         args.push(MsgList::tCOORD((x, y)));
         args.push(MsgList::tINT(1));
         args.push(MsgList::tINT(0));
         let elem = RelElem::WDGMSG(WdgMsg{ id : id, name : name, args : args });
         rel.rel.push(elem);
         try!(self.enqueue_to_send(Message::REL(rel)));
-        self.charlist.clear();
+        Ok(())
+    }
+
+    pub fn pick (&mut self, obj_id: u32) -> Result<(),Error> {
+        println!("PICK");
+        //TODO let mut rel = Rel::new(seq,id,name);
+        let mut rel = Rel{seq:self.seq, rel:Vec::new()};
+        let id = self.widget_id("mapview", None).expect("mapview widget is not found");
+        let name = "click".to_string();
+        let mut args = Vec::new();
+        let (obj_x,obj_y) = {
+            let obj = self.objects.get(&obj_id).unwrap();
+            (obj.x, obj.y)
+        };
+        args.push(MsgList::tCOORD((863, 832))); //TODO set some random coords in the center of screen
+        args.push(MsgList::tCOORD((obj_x-1, obj_y+1)));
+        args.push(MsgList::tINT(3));
+        args.push(MsgList::tINT(0));
+        args.push(MsgList::tINT(0));
+        args.push(MsgList::tINT(obj_id as i32));
+        args.push(MsgList::tCOORD((obj_x, obj_y)));
+        args.push(MsgList::tINT(0));
+        args.push(MsgList::tINT(-1));
+        let elem = RelElem::WDGMSG(WdgMsg{ id : id, name : name, args : args });
+        rel.rel.push(elem);
+        try!(self.enqueue_to_send(Message::REL(rel)));
+        Ok(())
+    }
+    
+    pub fn choose_pick (&mut self, wdg_id: u16) -> Result<(),Error> {
+        println!("GO");
+        //TODO let mut rel = Rel::new(seq,id,name);
+        let mut rel = Rel{seq:self.seq, rel:Vec::new()};
+        let name = "cl".to_string();
+        let mut args = Vec::new();
+        args.push(MsgList::tINT(0));
+        args.push(MsgList::tINT(0));
+        let elem = RelElem::WDGMSG(WdgMsg{ id : wdg_id, name : name, args : args });
+        rel.rel.push(elem);
+        try!(self.enqueue_to_send(Message::REL(rel)));
         Ok(())
     }
 
