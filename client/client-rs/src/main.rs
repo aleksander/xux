@@ -242,7 +242,7 @@ impl ControlConn {
         Ok(())
     }
 
-    fn readable (&mut self, eloop: &mut EventLoop<AnyHandler>, client: &mut Client) -> std::io::Result<()> {
+    fn readable (&mut self, eloop: &mut EventLoop<AnyHandler>, client: &mut Client, lua: &mut lua::State) -> std::io::Result<()> {
         //println!("{:?}: readable", self.token);
         self.url = None;
         self.text = None;
@@ -295,9 +295,13 @@ impl ControlConn {
                     }
                 } else {
 
+
                     //FIXME
                     //TODO pass buf to Lua interpreter
                     //FIXME
+                    let status = lua.do_string(buf.as_str());
+                    println!("{:?}", status);
+
 
                     if buf.starts_with("q") { // quit
                         match client.close() {
@@ -504,11 +508,11 @@ struct AnyHandler<'a> {
     counter: usize,
     tcp_listener: TcpListener,
     conns: Slab<ControlConn>,
-    lua: lua::State,
+    lua: &'a mut lua::State,
 }
 
 impl<'a> AnyHandler<'a> {
-    fn new(sock: UdpSocket, tcp_listener: TcpListener, client: &'a mut Client, addr: std::net::SocketAddr) -> AnyHandler<'a> {
+    fn new(sock: UdpSocket, tcp_listener: TcpListener, addr: std::net::SocketAddr, lua: &'a mut lua::State, client: &'a mut Client) -> AnyHandler<'a> {
         AnyHandler {
             sock: sock,
             addr: addr,
@@ -516,7 +520,7 @@ impl<'a> AnyHandler<'a> {
             counter: 0,
             tcp_listener: tcp_listener,
             conns: Slab::new_starting_at(Token(2), 128),
-            lua: lua::State::new(),
+            lua: lua,
         }
     }
 
@@ -533,7 +537,7 @@ impl<'a> AnyHandler<'a> {
     fn conn_readable (&mut self, eloop: &mut EventLoop<AnyHandler>, tok: Token) -> std::io::Result<()> {
         //println!("conn readable; tok={:?}", tok);
         //if let Err(e) = self.conn(tok).readable(eloop) {
-        if let Err(_) = self.conns[tok].readable(eloop, self.client) {
+        if let Err(_) = self.conns[tok].readable(eloop, self.client, self.lua) {
             self.conns.remove(tok);
         }
         Ok(())
@@ -690,11 +694,16 @@ fn main () {
     //FIXME sock.set_reuseaddr(true).ok().expect("set_reuseaddr");
 
     let mut client = Client::new(username, password);
-
     match client.authorize("game.salemthegame.com", 1871) {
         Ok(()) => { println!("success. cookie = [{}]", client.cookie.as_slice().to_hex()); },
         Err(e) => { println!("authorize error: {:?}", e); return; }
     };
+
+    let mut lua = lua::State::new();
+    //TODO pass Client instance to lua interpreter
+    lua.open_libs();
+    let status = lua.do_string("print('HELLO FROM LUA !!!')");
+    println!("Lua status: {:?}", status);
 
     let mut eloop = EventLoop::new().ok().expect("eloop.new");
     eloop.register_opt(&sock, UDP, Interest::readable() | Interest::writable(), PollOpt::level()).ok().expect("eloop.register(udp)");
@@ -704,11 +713,8 @@ fn main () {
     eloop.register_opt(&tcp_listener, TCP, Interest::readable(), PollOpt::edge()).unwrap();
 
     let ip = client.serv_ip;
-    let mut handler = AnyHandler::new(sock, tcp_listener, &mut client, std::net::SocketAddr::new(ip, 1870));
+    let mut handler = AnyHandler::new(sock, tcp_listener, std::net::SocketAddr::new(ip, 1870), &mut lua, &mut client);
     handler.client.connect().ok().expect("client.connect()");
-
-    handler.lua.open_libs();
-    handler.lua.do_string("print('HELLO FROM LUA !!!')");
 
     println!("run event loop");
     eloop.run(&mut handler).ok().expect("Failed to run the event loop");
