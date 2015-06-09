@@ -43,6 +43,8 @@ use image::Rgb;
 use image::ImageRgb8;
 use image::PNG;
 
+extern crate lua;
+
 const UDP: Token = Token(0);
 const TCP: Token = Token(1);
 
@@ -88,7 +90,8 @@ impl ControlConn {
         let buf = match self.url {
             Some(ref url) => {
                 match url {
-                    &Url::Root => { 
+                    //FIXME prepare answer in readable callback and only write here
+                    &Url::Root => {
                         let body = "<html> \r\n\
                                         <head> \r\n\
                                             <title></title> \r\n\
@@ -110,10 +113,12 @@ impl ControlConn {
                                     </html>\r\n\r\n";
                         format!("HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\n\r\n", body.len()) + &body
                     }
+                    //FIXME prepare answer in readable callback and only write here
                     &Url::Resources => {
                         //TODO
                         "HTTP/1.1 404 Not Implemented\r\n\r\n".to_string()
                     }
+                    //FIXME prepare answer in readable callback and only write here
                     &Url::Objects => {
                         let mut body = String::new();
                         for o in client.objects.values() {
@@ -126,6 +131,7 @@ impl ControlConn {
                         body = "[ ".to_string() + &body[..body.len()-1] + " ]";
                         format!("HTTP/1.1 200 OK\r\nContent-Type: text/json\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\n\r\n", body.len()) + &body
                     }
+                    //FIXME prepare answer in readable callback and only write here
                     &Url::Widgets => {
                         let mut body = String::new();
                         for (id,w) in &client.widgets {
@@ -134,6 +140,7 @@ impl ControlConn {
                         body = "[ ".to_string() + &body[..body.len()-1] + " ]";
                         format!("HTTP/1.1 200 OK\r\nContent-Type: text/json\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\n\r\n", body.len()) + &body
                     }
+                    //FIXME prepare answer in readable callback and only write here
                     &Url::Env => {
                         // {
                         //   res:[{id:id,name:name}],
@@ -497,6 +504,7 @@ struct AnyHandler<'a> {
     counter: usize,
     tcp_listener: TcpListener,
     conns: Slab<ControlConn>,
+    lua: lua::State,
 }
 
 impl<'a> AnyHandler<'a> {
@@ -508,6 +516,7 @@ impl<'a> AnyHandler<'a> {
             counter: 0,
             tcp_listener: tcp_listener,
             conns: Slab::new_starting_at(Token(2), 128),
+            lua: lua::State::new(),
         }
     }
 
@@ -697,6 +706,9 @@ fn main () {
     let ip = client.serv_ip;
     let mut handler = AnyHandler::new(sock, tcp_listener, &mut client, std::net::SocketAddr::new(ip, 1870));
     handler.client.connect().ok().expect("client.connect()");
+
+    handler.lua.open_libs();
+    handler.lua.do_string("print('HELLO FROM LUA !!!')");
 
     println!("run event loop");
     eloop.run(&mut handler).ok().expect("Failed to run the event loop");
