@@ -300,7 +300,12 @@ impl ControlConn {
                     //TODO pass buf to Lua interpreter
                     //FIXME
                     let status = lua.do_string(buf.as_str());
-                    println!("{:?}", status);
+                    if status != lua::ThreadStatus::Ok {
+                        match lua.to_type::<String>() {
+                            Some(s) => { println!("{:?}: {}", status, s); }
+                            None    => { println!("{:?}: no info", status); }
+                        }
+                    }
 
 
                     if buf.starts_with("q") { // quit
