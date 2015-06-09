@@ -294,19 +294,13 @@ impl ControlConn {
                         println!("ERROR: client.close: {:?}", e);
                     }
                 } else {
-
-
-                    //FIXME
-                    //TODO pass buf to Lua interpreter
-                    //FIXME
                     let status = lua.do_string(buf.as_str());
                     if status != lua::ThreadStatus::Ok {
                         match lua.to_type::<String>() {
-                            Some(s) => { println!("{:?}: {}", status, s); }
+                            Some(s) => { println!("{:?}: {}", status, s); lua.pop(1); }
                             None    => { println!("{:?}: no info", status); }
                         }
                     }
-
 
                     if buf.starts_with("q") { // quit
                         match client.close() {
