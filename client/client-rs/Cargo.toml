@@ -17,6 +17,7 @@ image = "*"
 #hlua = "*"
 lua = "*"
 #lua-rs = "*"
+libc = "*"
 
 #[dependencies.openssl]
 #openssl = "0.5.5"

@@ -43,7 +43,12 @@ use image::Rgb;
 use image::ImageRgb8;
 use image::PNG;
 
+extern crate libc;
+use libc::c_int;
+
 extern crate lua;
+use lua::ffi::lua_State;
+use lua::State;
 
 const UDP: Token = Token(0);
 const TCP: Token = Token(1);
@@ -661,6 +666,15 @@ impl SockOpt for BindToDevice {
 nix::sys::socket::setsockopt(sock.as_raw_fd, SockLevel::Socket, BindToDevice::new("wlan0"));
 */
 
+extern "C" fn go (l: *mut lua_State) -> c_int {
+    let mut lua = lua::State::from_ptr(l);
+    lua.push("client");
+    lua.get_table(lua::REGISTRYINDEX);
+    let addr = lua.to_integer(-1);
+    println!("LUA: go: we received '{}'", addr);
+    0
+}
+
 fn main () {
     //TODO use PollOpt::edge() | PollOpt::oneshot() for UDP connection and not PollOpt::level() (see how this is doing for TCP conns)
     //TODO handle keyboard interrupt
@@ -701,8 +715,14 @@ fn main () {
     let mut lua = lua::State::new();
     //TODO pass Client instance to lua interpreter
     lua.open_libs();
-    let status = lua.do_string("print('HELLO FROM LUA !!!')");
-    println!("Lua status: {:?}", status);
+    lua.push_string("client");
+    //lua.push_integer(42);
+    lua.push_integer(&client as *const u32 as i64);
+    //unsafe { lua.push_light_userdata(&mut client); }
+    lua.set_table(lua::REGISTRYINDEX);
+    
+    lua.push_fn(Some(go));
+    lua.set_global("go");
 
     let mut eloop = EventLoop::new().ok().expect("eloop.new");
     eloop.register_opt(&sock, UDP, Interest::readable() | Interest::writable(), PollOpt::level()).ok().expect("eloop.register(udp)");
