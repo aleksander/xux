@@ -130,7 +130,7 @@ impl ControlConn {
         Ok(())
     }
 
-    fn web_responce (&mut self, client: &mut Client, buf: &str) -> Option<String> {
+    fn web_responce (client: &mut Client, buf: &str) -> Option<String> {
         if buf.starts_with(" ") {
                         let body = "<html> \r\n\
                                         <head> \r\n\
@@ -277,15 +277,21 @@ impl ControlConn {
                 if buf.starts_with("GET /") {
                     let pattern: &[_] = &['\r','\n'];
                     let crlf = buf.find(pattern).unwrap_or(buf.len());
-                    self.responce = self.web_responce(client, &buf[5..crlf]);
+                    self.responce = ControlConn::web_responce(client, &buf[5..crlf]);
                 } else {
+                    //TODO wrap to fn lua_do (&str) -> String { ... }
                     let status = lua.do_string(buf.as_str());
-                    if status != lua::ThreadStatus::Ok {
-                        match lua.to_type::<String>() {
-                            Some(s) => { println!("{:?}: {}", status, s); lua.pop(1); }
-                            None    => { println!("{:?}: no info", status); }
+                    self.responce = match status {
+                        lua::ThreadStatus::Ok => {
+                            Some("ok\n".to_string())
                         }
-                    }
+                        _ => {
+                            match lua.to_type::<String>() {
+                                Some(s) => { lua.pop(1); Some(format!("{:?}: {}\n", status, s)) }
+                                None    => { Some(format!("{:?}: no info\n", status)) }
+                            }
+                        }
+                    };
 
                     /*
                     if buf.starts_with("q") { // quit
@@ -541,7 +547,23 @@ impl<'a> AnyHandler<'a> {
     }
     */
     
-    fn lua_update (&mut self) {
+    fn lua_update_environment (&mut self) {
+        let wtype = self.lua.get_global("widgets");
+        if wtype != lua::Type::Table {
+            println!("ERROR: widgets type({:?}) is not a Table", wtype);
+            return;
+        }
+        for w in self.client.widgets.values() {
+            self.lua.push_string(w.typ.as_str()); // stack: table(-2) value:string(-1)
+            self.lua.raw_seti(-2, w.id as i64);       // table[key] = value (table[0] = "root"), stack: table(-1)
+        }
+        self.lua.set_global("widgets");
+    }
+
+    fn lua_react (&mut self) {
+    }
+    
+    fn lua_dispatch_pendings (&mut self) {
     }
 }
 
@@ -559,7 +581,9 @@ impl<'a> Handler for AnyHandler<'a> {
                     println!("ERROR: client.rx: {:?}", e);
                     eloop.shutdown();
                 }
-                self.lua_update();
+                self.lua_update_environment();
+                self.lua_react();
+                self.lua_dispatch_pendings();
             },
             TCP => {
                 self.accept(eloop).ok().expect("TCP.accept");
@@ -649,13 +673,93 @@ impl SockOpt for BindToDevice {
 nix::sys::socket::setsockopt(sock.as_raw_fd, SockLevel::Socket, BindToDevice::new("wlan0"));
 */
 
+//TODO FIXME ??? maybe it's possible to pass the client handler here inside the lua_State struct?
+//TODO FIXME     maybe even have to modificate lua_State struct
 extern "C" fn go (l: *mut lua_State) -> c_int {
     let mut lua = lua::State::from_ptr(l);
+    let x = lua.to_integer(1);
+    let y = lua.to_integer(2);
+    println!("LUA: go: ({},{})", x, y);
     lua.push("client");
     lua.get_table(lua::REGISTRYINDEX);
     let addr = lua.to_integer(-1);
     println!("LUA: go: we received '{}'", addr);
     0
+}
+
+fn lua_init (lua: &mut lua::State) {
+    //TODO FIXME re-direct all output from stdio to user TCP connection
+
+    lua.open_libs();
+
+    lua.push_string("client");
+    lua.push_integer(42);
+    lua.set_table(lua::REGISTRYINDEX);
+    
+    lua.push_fn(Some(go));
+    lua.set_global("go");
+/*
+    lua.new_table();         // stack: table(1,-1)
+    lua.push_integer(0);     // stack: table(1,-2) key:int(2,-1)
+    lua.push_string("root"); // stack: table(1,-3) key:int(2,-2) value:string(3,-1)
+    lua.set_table(-3);       // table[key] = value, stack: table(-1)
+    lua.set_global("widgets");
+*/
+    lua.new_table();         // stack: table(-1)
+    lua.push_string("root"); // stack: table(-2) value:string(-1)
+    lua.raw_seti(-2, 0);       // table[key] = value (table[0] = "root"), stack: table(-1)
+    lua.set_global("widgets");
+    
+    //TODO wrap to fn lua_do (&str) -> String { ... }
+    //TODO load lua code from file
+    let status = lua.do_string("
+    function wait (msec)
+        print('wait ' .. msec .. ' msec')
+        -- TODO
+        coroutine.yield()
+    end
+    
+    function go_rel (x, y)
+        print('go_rel (' .. x .. ',' .. y .. ') msec')
+        -- TODO
+        coroutine.yield()
+    end
+    
+    function quit ()
+        print('quit')
+        -- TODO
+        coroutine.yield()
+    end
+    
+    main = function ()
+        local run = true
+        while run == true do
+            go_rel(-10,0) -- going up 10 pixels related to our current position
+            wait(1000)    -- do nothing for 1 second
+            go_rel(0,10)  -- going to position related to our current
+            wait(1000)    -- do nothing for 1 second
+            go_rel(10,0)  -- going to position related to our current
+            wait(1000)    -- do nothing for 1 second
+            go_rel(0,-10) -- going to position related to our current
+            wait(1000)    -- do nothing for 1 second
+        end
+    end
+    
+    co = coroutine.create(main)
+    coroutine.resume(co)
+    
+    ");
+    match status {
+        lua::ThreadStatus::Ok => {
+            println!("lua init: ok\n")
+        }
+        _ => {
+            match lua.to_type::<String>() {
+                Some(s) => { lua.pop(1); println!("lua init: {:?}: {}\n", status, s); }
+                None    => { println!("lua init: {:?}: no info\n", status); }
+            }
+        }
+    }
 }
 
 fn main () {
@@ -690,13 +794,7 @@ fn main () {
     //FIXME sock.set_reuseaddr(true).ok().expect("set_reuseaddr");
 
     let mut lua = lua::State::new();
-    lua.open_libs();
-    lua.push_string("client");
-    lua.push_integer(42);
-    lua.set_table(lua::REGISTRYINDEX);
-    
-    lua.push_fn(Some(go));
-    lua.set_global("go");
+    lua_init(&mut lua);
 
     let mut client = Client::new(username, password);
     match client.authorize("game.salemthegame.com", 1871) {
