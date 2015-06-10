@@ -68,8 +68,9 @@ struct ControlConn {
     //mut_buf: Option<MutByteBuf>,
     token: Option<Token>,
     //interest: Interest,
-    url: Option<Url>,
-    text: Option<String>,
+    //url: Option<Url>,
+    //text: Option<String>,
+    responce: Option<String>
 }
 
 impl ControlConn {
@@ -80,8 +81,9 @@ impl ControlConn {
             //mut_buf: Some(ByteBuf::mut_with_capacity(2048)),
             token: None,
             //interest: Interest::hup(),
-            url: None,
-            text: None,
+            //url: None,
+            //text: None,
+            responce: None,
         }
     }
 
@@ -92,11 +94,44 @@ impl ControlConn {
         //let mut buf = ByteBuf::mut_with_capacity(2048);
         //buf.write_slice(b"hello there!\n");
 
-        let buf = match self.url {
-            Some(ref url) => {
-                match url {
-                    //FIXME prepare answer in readable callback and only write here
-                    &Url::Root => {
+        //let buf = "TODO".to_string();
+        //match self.sock.write(&mut buf.flip()) {
+        //match self.sock.write(&mut ByteBuf::from_slice(buf.as_bytes())) {
+        match self.responce {
+            Some(ref buf) => {
+                match self.sock.try_write_buf(&mut ByteBuf::from_slice(buf.as_bytes())) {
+                    Ok(None) => {
+                        println!("client flushing buf; WOULDBLOCK");
+                        //self.buf = Some(buf);
+                        //self.interest.insert(Interest::writable());
+                        if let Err(e) = eloop.reregister(&self.sock, self.token.unwrap(), Interest::writable(), PollOpt::edge() | PollOpt::oneshot()) {
+                            println!("ERROR: failed to re-reg for write: {}", e);
+                        }
+                    }
+                    Ok(Some(/*r*/_)) => {
+                        //println!("CONN: we wrote {} bytes!", r);
+                        //self.mut_buf = Some(buf.flip());
+                        //self.interest.insert(Interest::readable());
+                        //self.interest.remove(Interest::writable());
+                        //FIXME check that we wrote same byte count as self.responce.len()
+                        //FIXME self.responce = None;
+                        if let Err(e) = eloop.reregister(&self.sock, self.token.unwrap(), Interest::readable(), PollOpt::edge() | PollOpt::oneshot()) {
+                            println!("ERROR: failed to re-reg for read: {}", e);
+                        }
+                    }
+                    Err(e) => println!("ERROR: not implemented; client err={:?}", e),
+                }
+            }
+            None => {
+                println!("ERROR: conn is writable when there is no responce");
+            }
+        }
+        //eloop.reregister(&self.sock, self.token.unwrap(), self.interest, PollOpt::edge() | PollOpt::oneshot())
+        Ok(())
+    }
+
+    fn web_responce (&mut self, client: &mut Client, buf: &str) -> Option<String> {
+        if buf.starts_with(" ") {
                         let body = "<html> \r\n\
                                         <head> \r\n\
                                             <title></title> \r\n\
@@ -116,37 +151,8 @@ impl ControlConn {
                                             <div id=\"showdata\"></div> \r\n\
                                         </body> \r\n\
                                     </html>\r\n\r\n";
-                        format!("HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\n\r\n", body.len()) + &body
-                    }
-                    //FIXME prepare answer in readable callback and only write here
-                    &Url::Resources => {
-                        //TODO
-                        "HTTP/1.1 404 Not Implemented\r\n\r\n".to_string()
-                    }
-                    //FIXME prepare answer in readable callback and only write here
-                    &Url::Objects => {
-                        let mut body = String::new();
-                        for o in client.objects.values() {
-                            let resname = match client.resources.get(&o.resid) {
-                                Some(res) => res.as_str(),
-                                None      => "null"
-                            };
-                            body = body + &format!("{{\"x\":{},\"y\":{},\"resid\":{},\"resname\":\"{}\"}},", o.x, o.y, o.resid, resname);
-                        }
-                        body = "[ ".to_string() + &body[..body.len()-1] + " ]";
-                        format!("HTTP/1.1 200 OK\r\nContent-Type: text/json\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\n\r\n", body.len()) + &body
-                    }
-                    //FIXME prepare answer in readable callback and only write here
-                    &Url::Widgets => {
-                        let mut body = String::new();
-                        for (id,w) in &client.widgets {
-                            body = body + &format!("{{\"id\":{},\"name\":\"{}\",\"parent\":\"{}\"}},", id, w.typ, w.parent);
-                        }
-                        body = "[ ".to_string() + &body[..body.len()-1] + " ]";
-                        format!("HTTP/1.1 200 OK\r\nContent-Type: text/json\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\n\r\n", body.len()) + &body
-                    }
-                    //FIXME prepare answer in readable callback and only write here
-                    &Url::Env => {
+                        Some(format!("HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\n\r\n", body.len()) + &body)
+        } else if buf.starts_with("env ") {
                         // {
                         //   res:[{id:id,name:name}],
                         //   obj:[{},{}],
@@ -194,63 +200,61 @@ impl ControlConn {
                         }
 
                         body = body + "]}";
-                        format!("HTTP/1.1 200 OK\r\nContent-Type: text/json\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\n\r\n", body.len()) + &body
-                    }
-                    &Url::Go(x,y) => {
-                        println!("GO: {} {}", x, y);
-                        if let Err(e) = client.go(x,y) {
-                            println!("ERROR: client.go: {:?}", e);
+                        Some(format!("HTTP/1.1 200 OK\r\nContent-Type: text/json\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\n\r\n", body.len()) + &body)
+        } else if buf.starts_with("objects ") {
+                        let mut body = String::new();
+                        for o in client.objects.values() {
+                            let resname = match client.resources.get(&o.resid) {
+                                Some(res) => res.as_str(),
+                                None      => "null"
+                            };
+                            body = body + &format!("{{\"x\":{},\"y\":{},\"resid\":{},\"resname\":\"{}\"}},", o.x, o.y, o.resid, resname);
                         }
-                        "HTTP/1.1 200 OK\r\n\r\n".to_string()
-                    }
-                    //else {
-                    //    "HTTP/1.1 404 Not Found\r\n\r\n".to_string()
-                    //}
-                }
+                        body = "[ ".to_string() + &body[..body.len()-1] + " ]";
+                        Some(format!("HTTP/1.1 200 OK\r\nContent-Type: text/json\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\n\r\n", body.len()) + &body)
+        } else if buf.starts_with("widgets ") {
+                        let mut body = String::new();
+                        for (id,w) in &client.widgets {
+                            body = body + &format!("{{\"id\":{},\"name\":\"{}\",\"parent\":\"{}\"}},", id, w.typ, w.parent);
+                        }
+                        body = "[ ".to_string() + &body[..body.len()-1] + " ]";
+                        Some(format!("HTTP/1.1 200 OK\r\nContent-Type: text/json\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\n\r\n", body.len()) + &body)
+        } else if buf.starts_with("resources ") {
+                        //TODO
+                        Some("HTTP/1.1 404 Not Implemented\r\n\r\n".to_string())
+        } else if buf.starts_with("go/") {
+            //FIXME should NOT be implemented for web. web is for view only
+            //println!("GO: {} {}", x, y);
+            //if let Err(e) = client.go(x,y) {
+            //    println!("ERROR: client.go: {:?}", e);
+            //}
+            let tmp1: Vec<&str> = buf.split(' ').collect();
+            println!("TMP1: {:?}", tmp1);
+            let tmp2: Vec<&str> = tmp1[1].split('/').collect();
+            println!("TMP2: {:?}", tmp2);
+            if tmp2.len() > 3 {
+                let x: i32 = match str::FromStr::from_str(tmp2[2]) { Ok(v) => v, Err(_) => 0 };
+                let y: i32 = match str::FromStr::from_str(tmp2[3]) { Ok(v) => v, Err(_) => 0 };
+                //self.url = Some(Url::Go(x,y));
+            } else {
+                //self.url = Some(Url::Go(0,0));
             }
-            None => {
-                match self.text {
-                    Some(ref t) => {
-                        t.clone()
-                    }
-                    None => {
-                        "ERROR: writable with empty URL and TEXT\n".to_string()
-                    }
-                }
+            Some("HTTP/1.1 200 OK\r\n\r\n".to_string())
+        } else if buf.starts_with("quit ") {
+            if let Err(e) = client.close() {
+                println!("ERROR: client.close: {:?}", e);
             }
-        };
-
-
-        //match self.sock.write(&mut buf.flip()) {
-        //match self.sock.write(&mut ByteBuf::from_slice(buf.as_bytes())) {
-        match self.sock.try_write_buf(&mut ByteBuf::from_slice(buf.as_bytes())) {
-            Ok(None) => {
-                println!("client flushing buf; WOULDBLOCK");
-                //self.buf = Some(buf);
-                //self.interest.insert(Interest::writable());
-                if let Err(e) = eloop.reregister(&self.sock, self.token.unwrap(), Interest::writable(), PollOpt::edge() | PollOpt::oneshot()) {
-                    println!("ERROR: failed to re-reg for write: {}", e);
-                }
-            }
-            Ok(Some(/*r*/_)) => {
-                //println!("CONN: we wrote {} bytes!", r);
-                //self.mut_buf = Some(buf.flip());
-                //self.interest.insert(Interest::readable());
-                //self.interest.remove(Interest::writable());
-                if let Err(e) = eloop.reregister(&self.sock, self.token.unwrap(), Interest::readable(), PollOpt::edge() | PollOpt::oneshot()) {
-                    println!("ERROR: failed to re-reg for read: {}", e);
-                }
-            }
-            Err(e) => println!("ERROR: not implemented; client err={:?}", e),
+            Some("HTTP/1.1 200 OK\r\n\r\n".to_string())
+        } else {
+            Some("HTTP/1.1 404 Not Found\r\n\r\n".to_string())
         }
-        //eloop.reregister(&self.sock, self.token.unwrap(), self.interest, PollOpt::edge() | PollOpt::oneshot())
-        Ok(())
     }
 
     fn readable (&mut self, eloop: &mut EventLoop<AnyHandler>, client: &mut Client, lua: &mut lua::State) -> std::io::Result<()> {
         //println!("{:?}: readable", self.token);
-        self.url = None;
-        self.text = None;
+        //self.url = None;
+        //self.text = None;
+        self.responce = None;
         //let mut buf = self.mut_buf.take().expect("mut_buf.take");
         let mut buf = ByteBuf::mut_with_capacity(2048);
         match self.sock.try_read_buf(&mut buf) {
@@ -269,35 +273,11 @@ impl ControlConn {
                 //println!("{:?}: read {} bytes", self.token, r);
                 let buf = buf.flip();
                 let mut buf = String::from_utf8_lossy(buf.bytes()).into_owned();
-                let l = buf.len()-1;
-                buf.truncate(l);
                 //println!("CONN read: {}", buf);
-                if buf.starts_with("GET / ") {
-                    self.url = Some(Url::Root);
-                } else if buf.starts_with("GET /env ") {
-                    self.url = Some(Url::Env);
-                } else if buf.starts_with("GET /objects ") {
-                    self.url = Some(Url::Objects);
-                } else if buf.starts_with("GET /widgets ") {
-                    self.url = Some(Url::Widgets);
-                } else if buf.starts_with("GET /resources ") {
-                    self.url = Some(Url::Resources);
-                } else if buf.starts_with("GET /go/") {
-                    let tmp1: Vec<&str> = buf.split(' ').collect();
-                    println!("TMP1: {:?}", tmp1);
-                    let tmp2: Vec<&str> = tmp1[1].split('/').collect();
-                    println!("TMP2: {:?}", tmp2);
-                    if tmp2.len() > 3 {
-                        let x: i32 = match str::FromStr::from_str(tmp2[2]) { Ok(v) => v, Err(_) => 0 };
-                        let y: i32 = match str::FromStr::from_str(tmp2[3]) { Ok(v) => v, Err(_) => 0 };
-                        self.url = Some(Url::Go(x,y));
-                    } else {
-                        self.url = Some(Url::Go(0,0));
-                    }
-                } else if buf.starts_with("GET /quit ") {
-                    if let Err(e) = client.close() {
-                        println!("ERROR: client.close: {:?}", e);
-                    }
+                if buf.starts_with("GET /") {
+                    let pattern: &[_] = &['\r','\n'];
+                    let crlf = buf.find(pattern).unwrap_or(buf.len());
+                    self.responce = self.web_responce(client, &buf[5..crlf]);
                 } else {
                     let status = lua.do_string(buf.as_str());
                     if status != lua::ThreadStatus::Ok {
@@ -307,6 +287,7 @@ impl ControlConn {
                         }
                     }
 
+                    /*
                     if buf.starts_with("q") { // quit
                         match client.close() {
                             Ok(_) => self.text = Some("ok\n".to_string()),
@@ -411,7 +392,8 @@ impl ControlConn {
                             let rx = o.x - hx;
                             let ry = o.y - hy;
                             let distance = ((rx*rx + ry*ry) as f32).sqrt(); //TODO dist(o.xy, client.hero.xy);
-                            s = s + &format!("({:7}, {:7}) ({:2},{:2}) ({:4}, {:4}) {:5.1} {}\n", o.x, o.y, o.x%11, o.y%11, rx, ry, distance, /*o.resid,*/ resname);
+                            //s = s + &format!("({:7}, {:7}) ({:2},{:2}) ({:4}, {:4}) {:5.1} {}\n", o.x, o.y, o.x%11, o.y%11, rx, ry, distance, o.resid, resname);
+                            s = s + &format!("({:7}, {:7}) ({:2},{:2}) ({:4}, {:4}) {:5.1} {}\n", o.x, o.y, o.x%11, o.y%11, rx, ry, distance, resname);
                         }
                         self.text = Some(s);
                     } else if buf.starts_with("w") { // print widgets
@@ -462,7 +444,7 @@ impl ControlConn {
                                                       relx % 11, rely % 11,
                                                       obj.x, obj.y, mindist, obj.id, resname);
                         self.text = Some(s);
-                    } /*else if buf.starts_with("export ol") { // export current grid ol to .txt
+                    }*/ /*else if buf.starts_with("export ol") { // export current grid ol to .txt
                         //TODO move to fn client.current_map
                         let mut f = try!(File::create("ol.txt"));
                         let hero_obj: &Obj = client.objects.get(&client.hero.obj.unwrap()).unwrap();
@@ -516,7 +498,7 @@ struct AnyHandler<'a> {
 }
 
 impl<'a> AnyHandler<'a> {
-    fn new(sock: UdpSocket, tcp_listener: TcpListener, addr: std::net::SocketAddr, lua: &'a mut lua::State, client: &'a mut Client) -> AnyHandler<'a> {
+    fn new(sock: UdpSocket, tcp_listener: TcpListener, addr: std::net::SocketAddr, client: &'a mut Client, lua: &'a mut lua::State) -> AnyHandler<'a> {
         AnyHandler {
             sock: sock,
             addr: addr,
@@ -558,6 +540,9 @@ impl<'a> AnyHandler<'a> {
         &mut self.conns[tok]
     }
     */
+    
+    fn lua_update (&mut self) {
+    }
 }
 
 impl<'a> Handler for AnyHandler<'a> {
@@ -569,14 +554,12 @@ impl<'a> Handler for AnyHandler<'a> {
             UDP => {
                 let mut rx_buf = RingBuf::new(65535);
                 self.sock.recv_from(&mut rx_buf).ok().expect("sock.recv");
-                {
-                    let mut client: &mut Client = self.client;
-                    let buf: &[u8] = Buf::bytes(&rx_buf);
-                    if let Err(e) = client.rx(buf) {
-                        println!("error: {:?}", e);
-                        eloop.shutdown();
-                    }
+                let buf: &[u8] = Buf::bytes(&rx_buf);
+                if let Err(e) = self.client.rx(buf) {
+                    println!("ERROR: client.rx: {:?}", e);
+                    eloop.shutdown();
                 }
+                self.lua_update();
             },
             TCP => {
                 self.accept(eloop).ok().expect("TCP.accept");
@@ -706,23 +689,20 @@ fn main () {
     //FIXME sock.connect(&addr);
     //FIXME sock.set_reuseaddr(true).ok().expect("set_reuseaddr");
 
+    let mut lua = lua::State::new();
+    lua.open_libs();
+    lua.push_string("client");
+    lua.push_integer(42);
+    lua.set_table(lua::REGISTRYINDEX);
+    
+    lua.push_fn(Some(go));
+    lua.set_global("go");
+
     let mut client = Client::new(username, password);
     match client.authorize("game.salemthegame.com", 1871) {
         Ok(()) => { println!("success. cookie = [{}]", client.cookie.as_slice().to_hex()); },
         Err(e) => { println!("authorize error: {:?}", e); return; }
     };
-
-    let mut lua = lua::State::new();
-    //TODO pass Client instance to lua interpreter
-    lua.open_libs();
-    lua.push_string("client");
-    //lua.push_integer(42);
-    lua.push_integer(&client as *const u32 as i64);
-    //unsafe { lua.push_light_userdata(&mut client); }
-    lua.set_table(lua::REGISTRYINDEX);
-    
-    lua.push_fn(Some(go));
-    lua.set_global("go");
 
     let mut eloop = EventLoop::new().ok().expect("eloop.new");
     eloop.register_opt(&sock, UDP, Interest::readable() | Interest::writable(), PollOpt::level()).ok().expect("eloop.register(udp)");
@@ -732,7 +712,7 @@ fn main () {
     eloop.register_opt(&tcp_listener, TCP, Interest::readable(), PollOpt::edge()).unwrap();
 
     let ip = client.serv_ip;
-    let mut handler = AnyHandler::new(sock, tcp_listener, std::net::SocketAddr::new(ip, 1870), &mut lua, &mut client);
+    let mut handler = AnyHandler::new(sock, tcp_listener, std::net::SocketAddr::new(ip, 1870), &mut client, &mut lua);
     handler.client.connect().ok().expect("client.connect()");
 
     println!("run event loop");
