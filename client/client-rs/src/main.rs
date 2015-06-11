@@ -491,8 +491,18 @@ struct AnyHandler<'a> {
     counter: usize,
     tcp_listener: TcpListener,
     conns: Slab<ControlConn>,
-    lua: &'a mut lua::State,
+    lua: &'a mut lua::State, //TODO FIXME wrap this lua::State to more highlevel wrapper with normal methods
 }
+
+fn lua_stack_dump (lua: &mut lua::State) {
+    let top = lua.get_top();
+    for i in 1..top+1 {
+        print!("{}={:?} ", i, lua.type_of(i));
+    }
+    println!("");
+}
+
+//TODO lua.check_stack_is_empty () { ... }
 
 impl<'a> AnyHandler<'a> {
     fn new(sock: UdpSocket, tcp_listener: TcpListener, addr: std::net::SocketAddr, client: &'a mut Client, lua: &'a mut lua::State) -> AnyHandler<'a> {
@@ -539,16 +549,20 @@ impl<'a> AnyHandler<'a> {
     */
     
     fn lua_update_environment (&mut self) {
+        if self.lua.status() != lua::ThreadStatus::Ok {panic!("PANIC: Lua status is NOT ok!!!");}
         let wtype = self.lua.get_global("widgets");
         if wtype != lua::Type::Table {
             println!("ERROR: widgets type({:?}) is not a Table", wtype);
             return;
         }
         for w in self.client.widgets.values() {
-            self.lua.push_string(w.typ.as_str()); // stack: table(-2) value:string(-1)
-            self.lua.raw_seti(-2, w.id as i64);       // table[key] = value (table[0] = "root"), stack: table(-1)
+            self.lua.push(w.id as i64);
+            self.lua.push(w.typ.as_str());
+            self.lua.set_table(1);
+            //self.lua.push_string(w.typ.as_str()); // stack: table(-2) value:string(-1)
+            //self.lua.raw_seti(-2, w.id as i64);       // table[key] = value (table[0] = "root"), stack: table(-1)
         }
-        self.lua.set_global("widgets");
+        self.lua.pop(1);
     }
 
     fn lua_react (&mut self) {
@@ -559,10 +573,12 @@ impl<'a> AnyHandler<'a> {
         let t = self.lua.get_global("g_action");
         if t != lua::Type::Number {
             println!("ERROR: g_action type({:?}) is not a Integer", t);
+            self.lua.pop(1);
             return;
         }
 
         let action = self.lua.to_integer(1);
+        self.lua.pop(1);
         if action == QUIT {
             match self.client.close() {
                 Ok(_) => {}
@@ -597,6 +613,8 @@ impl<'a> Handler for AnyHandler<'a> {
         self.lua_update_environment();
         self.lua_react();
         self.lua_dispatch_pendings();
+        //lua_stack_dump(self.lua);
+        //println!("====================================================================================\n\n");
     }
 
     fn writable(&mut self, eloop: &mut EventLoop<AnyHandler>, token: Token) {
@@ -692,9 +710,9 @@ extern "C" fn go (l: *mut lua_State) -> c_int {
     0
 }
 
-const WAIT: i64 = 0;
-const GO  : i64 = 1;
-const QUIT: i64 = 2;
+const WAIT: i64 = 1;
+const GO  : i64 = 2;
+const QUIT: i64 = 3;
 
 fn lua_init (lua: &mut lua::State) {
     //TODO FIXME re-direct all output from stdio to user TCP connection
@@ -716,18 +734,13 @@ fn lua_init (lua: &mut lua::State) {
     
     lua.push_integer(QUIT);
     lua.set_global("QUIT");
-/*
+
     lua.new_table();         // stack: table(1,-1)
     lua.push_integer(0);     // stack: table(1,-2) key:int(2,-1)
     lua.push_string("root"); // stack: table(1,-3) key:int(2,-2) value:string(3,-1)
     lua.set_table(-3);       // table[key] = value, stack: table(-1)
     lua.set_global("widgets");
-*/
-    lua.new_table();         // stack: table(-1)
-    lua.push_string("root"); // stack: table(-2) value:string(-1)
-    lua.raw_seti(-2, 0);       // table[key] = value (table[0] = "root"), stack: table(-1)
-    lua.set_global("widgets");
-    
+
     //TODO wrap to fn lua_do (&str) -> String { ... }
     //TODO load lua code from file
     let status = lua.do_string("
@@ -749,7 +762,7 @@ fn lua_init (lua: &mut lua::State) {
     function quit ()
         print('quit')
         g_action = QUIT
-        coroutine.yield()
+        -- coroutine.yield()
     end
     
     main = function ()

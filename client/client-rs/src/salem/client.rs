@@ -403,8 +403,8 @@ impl Client {
                 if rel.seq == self.rx_rel_seq {
                     try!(self.dispatch_rel_cache(&rel));
                 //FIXME do this trick (past/future sequence calculation) without overflow
-                } else if (rel.seq - self.rx_rel_seq) < 32767 {
-                //} else if rel.seq > self.rx_rel_seq {
+                //} else if (rel.seq - self.rx_rel_seq) < 32767 {
+                } else if rel.seq > self.rx_rel_seq {
                     // future REL
                     self.cache_rel(rel);
                 } else {
