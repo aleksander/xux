@@ -53,15 +53,6 @@ use lua::State;
 const UDP: Token = Token(0);
 const TCP: Token = Token(1);
 
-enum Url {
-    Root,
-    Objects,
-    Widgets,
-    Resources,
-    Go(i32,i32),
-    Env,
-}
-
 struct ControlConn {
     sock: TcpStream,
     //buf: Option<ByteBuf>,
@@ -233,8 +224,8 @@ impl ControlConn {
             let tmp2: Vec<&str> = tmp1[1].split('/').collect();
             println!("TMP2: {:?}", tmp2);
             if tmp2.len() > 3 {
-                let x: i32 = match str::FromStr::from_str(tmp2[2]) { Ok(v) => v, Err(_) => 0 };
-                let y: i32 = match str::FromStr::from_str(tmp2[3]) { Ok(v) => v, Err(_) => 0 };
+                let /*x*/_: i32 = match str::FromStr::from_str(tmp2[2]) { Ok(v) => v, Err(_) => 0 };
+                let /*y*/_: i32 = match str::FromStr::from_str(tmp2[3]) { Ok(v) => v, Err(_) => 0 };
                 //self.url = Some(Url::Go(x,y));
             } else {
                 //self.url = Some(Url::Go(0,0));
@@ -564,6 +555,20 @@ impl<'a> AnyHandler<'a> {
     }
     
     fn lua_dispatch_pendings (&mut self) {
+        //TODO wrap this to function
+        let t = self.lua.get_global("g_action");
+        if t != lua::Type::Number {
+            println!("ERROR: g_action type({:?}) is not a Integer", t);
+            return;
+        }
+
+        let action = self.lua.to_integer(1);
+        if action == QUIT {
+            match self.client.close() {
+                Ok(_) => {}
+                Err(e) => { println!("ERROR: client.close: {:?}", e); }
+            }
+        }
     }
 }
 
@@ -581,9 +586,6 @@ impl<'a> Handler for AnyHandler<'a> {
                     println!("ERROR: client.rx: {:?}", e);
                     eloop.shutdown();
                 }
-                self.lua_update_environment();
-                self.lua_react();
-                self.lua_dispatch_pendings();
             },
             TCP => {
                 self.accept(eloop).ok().expect("TCP.accept");
@@ -592,6 +594,9 @@ impl<'a> Handler for AnyHandler<'a> {
                 self.conn_readable(eloop, i).unwrap();
             }
         }
+        self.lua_update_environment();
+        self.lua_react();
+        self.lua_dispatch_pendings();
     }
 
     fn writable(&mut self, eloop: &mut EventLoop<AnyHandler>, token: Token) {
@@ -687,6 +692,10 @@ extern "C" fn go (l: *mut lua_State) -> c_int {
     0
 }
 
+const WAIT: i64 = 0;
+const GO  : i64 = 1;
+const QUIT: i64 = 2;
+
 fn lua_init (lua: &mut lua::State) {
     //TODO FIXME re-direct all output from stdio to user TCP connection
 
@@ -698,6 +707,15 @@ fn lua_init (lua: &mut lua::State) {
     
     lua.push_fn(Some(go));
     lua.set_global("go");
+    
+    lua.push_integer(WAIT);
+    lua.set_global("WAIT");
+    
+    lua.push_integer(GO);
+    lua.set_global("GO");
+    
+    lua.push_integer(QUIT);
+    lua.set_global("QUIT");
 /*
     lua.new_table();         // stack: table(1,-1)
     lua.push_integer(0);     // stack: table(1,-2) key:int(2,-1)
@@ -715,19 +733,22 @@ fn lua_init (lua: &mut lua::State) {
     let status = lua.do_string("
     function wait (msec)
         print('wait ' .. msec .. ' msec')
-        -- TODO
+        g_action = WAIT
+        g_duration = msec
         coroutine.yield()
     end
     
     function go_rel (x, y)
         print('go_rel (' .. x .. ',' .. y .. ') msec')
-        -- TODO
+        g_action = GO
+        g_x = x
+        g_y = y
         coroutine.yield()
     end
     
     function quit ()
         print('quit')
-        -- TODO
+        g_action = QUIT
         coroutine.yield()
     end
     
