@@ -28,8 +28,8 @@ use mio::util::Slab;
 
 use std::str;
 use std::io::{Error, ErrorKind};
-use std::io::Write;
-use std::fs::File;
+//use std::io::Write;
+//use std::fs::File;
 
 mod salem;
 use salem::client::*;
@@ -37,11 +37,11 @@ use salem::client::*;
 //use salem::message::MessageDirection;
 
 extern crate image;
-use image::GenericImage;
-use image::ImageBuffer;
-use image::Rgb;
-use image::ImageRgb8;
-use image::PNG;
+//use image::GenericImage;
+//use image::ImageBuffer;
+//use image::Rgb;
+//use image::ImageRgb8;
+//use image::PNG;
 
 extern crate libc;
 use libc::c_int;
@@ -78,7 +78,7 @@ impl ControlConn {
         }
     }
 
-    fn writable (&mut self, eloop: &mut EventLoop<AnyHandler>, client: &mut Client) -> std::io::Result<()> {
+    fn writable (&mut self, eloop: &mut EventLoop<AnyHandler>, /*client*/ _: &mut Client) -> std::io::Result<()> {
         //println!("{:?}: writable", self.token);
         //let mut buf = self.buf.take().unwrap();
 
@@ -263,7 +263,7 @@ impl ControlConn {
             Ok(Some(/*r*/ _)) => {
                 //println!("{:?}: read {} bytes", self.token, r);
                 let buf = buf.flip();
-                let mut buf = String::from_utf8_lossy(buf.bytes()).into_owned();
+                let buf = String::from_utf8_lossy(buf.bytes()).into_owned();
                 //println!("CONN read: {}", buf);
                 if buf.starts_with("GET /") {
                     let pattern: &[_] = &['\r','\n'];
@@ -494,6 +494,7 @@ struct AnyHandler<'a> {
     lua: &'a mut lua::State, //TODO FIXME wrap this lua::State to more highlevel wrapper with normal methods
 }
 
+/*
 fn lua_stack_dump (lua: &mut lua::State) {
     let top = lua.get_top();
     for i in 1..top+1 {
@@ -501,6 +502,7 @@ fn lua_stack_dump (lua: &mut lua::State) {
     }
     println!("");
 }
+*/
 
 //TODO lua.check_stack_is_empty () { ... }
 

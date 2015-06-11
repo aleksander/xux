@@ -816,7 +816,8 @@ impl Client {
         return ret;
     }
     */
-    
+
+    /*
     pub fn go (&mut self, x: i32, y: i32) -> Result<(),Error> {
         println!("GO");
         //TODO let mut rel = Rel::new(seq,id,name);
@@ -873,6 +874,10 @@ impl Client {
         try!(self.enqueue_to_send(Message::REL(rel)));
         Ok(())
     }
+    */
+
+    //TODO fn grid(Coord) {...}, fn xy(Grid) {...}
+    //     and then we can do: hero.grid().xy();
 
     pub fn hero_xy (&self) -> (i32,i32) /*FIXME return Option */ {
         let hero: &Obj = self.objects.get(&self.hero.obj.unwrap()).unwrap();
@@ -882,10 +887,12 @@ impl Client {
     pub fn hero_grid_xy (&self) -> (i32,i32) /*FIXME return Option */ {
         grid(self.hero_xy())
     }
-    
+
+    /*
     pub fn hero_grid (&self) -> &Surface /*FIXME return Option */ {
         self.map.grids.get(&self.hero_grid_xy()).unwrap()
     }
+    */
 }
 
 pub fn grid ((x,y): (i32,i32)) -> (i32,i32) {
