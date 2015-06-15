@@ -817,7 +817,6 @@ impl Client {
     }
     */
 
-    /*
     pub fn go (&mut self, x: i32, y: i32) -> Result<(),Error> {
         println!("GO");
         //TODO let mut rel = Rel::new(seq,id,name);
@@ -835,6 +834,7 @@ impl Client {
         Ok(())
     }
 
+    /*
     pub fn pick (&mut self, obj_id: u32) -> Result<(),Error> {
         println!("PICK");
         //TODO let mut rel = Rel::new(seq,id,name);

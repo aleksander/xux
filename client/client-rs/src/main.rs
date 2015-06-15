@@ -3,6 +3,8 @@
 #![feature(collections)]
 #![feature(lookup_host)]
 
+#![feature(associated_consts)]
+
 extern crate openssl;
 
 extern crate rustc_serialize;
@@ -110,11 +112,11 @@ impl ControlConn {
                             println!("ERROR: failed to re-reg for read: {}", e);
                         }
                     }
-                    Err(e) => println!("ERROR: not implemented; client err={:?}", e),
+                    Err(e) => panic!("ERROR: not implemented; client err={:?}", e),
                 }
             }
             None => {
-                println!("ERROR: conn is writable when there is no responce");
+                panic!("ERROR: conn is writable when there is no responce");
             }
         }
         //eloop.reregister(&self.sock, self.token.unwrap(), self.interest, PollOpt::edge() | PollOpt::oneshot())
@@ -123,96 +125,96 @@ impl ControlConn {
 
     fn web_responce (client: &mut Client, buf: &str) -> Option<String> {
         if buf.starts_with(" ") {
-                        let body = "<html> \r\n\
-                                        <head> \r\n\
-                                            <title></title> \r\n\
-                                            <script src=\"http://code.jquery.com/jquery-1.11.3.min.js\" stype=\"text/javascript\"></script> \r\n\
-                                            <script type=\"text/javascript\"> \r\n\
-                                                $(document).ready(function(){ \r\n\
-                                                    $('#getdata-button').on('click', function(){ \r\n\
-                                                        $.get('http://localhost:33000/data', function(data) { \r\n\
-                                                            $('#showdata').html(\"<p>\"+data+\"</p>\"); \r\n\
-                                                        }); \r\n\
-                                                    }); \r\n\
-                                                }); \r\n\
-                                            </script> \r\n\
-                                        </head> \r\n\
-                                        <body> \r\n\
-                                            <a href=\"#\" id=\"getdata-button\">C</a> \r\n\
-                                            <div id=\"showdata\"></div> \r\n\
-                                        </body> \r\n\
-                                    </html>\r\n\r\n";
-                        Some(format!("HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\n\r\n", body.len()) + &body)
+            let body = "<html> \r\n\
+                            <head> \r\n\
+                                <title></title> \r\n\
+                                <script src=\"http://code.jquery.com/jquery-1.11.3.min.js\" stype=\"text/javascript\"></script> \r\n\
+                                <script type=\"text/javascript\"> \r\n\
+                                    $(document).ready(function(){ \r\n\
+                                        $('#getdata-button').on('click', function(){ \r\n\
+                                            $.get('http://localhost:33000/data', function(data) { \r\n\
+                                                $('#showdata').html(\"<p>\"+data+\"</p>\"); \r\n\
+                                            }); \r\n\
+                                        }); \r\n\
+                                    }); \r\n\
+                                </script> \r\n\
+                            </head> \r\n\
+                            <body> \r\n\
+                                <a href=\"#\" id=\"getdata-button\">C</a> \r\n\
+                                <div id=\"showdata\"></div> \r\n\
+                            </body> \r\n\
+                        </html>\r\n\r\n";
+            Some(format!("HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\n\r\n", body.len()) + &body)
         } else if buf.starts_with("env ") {
-                        // {
-                        //   res:[{id:id,name:name}],
-                        //   obj:[{},{}],
-                        //   wid:[{},{}],
-                        //   map:[z,z,...,z]
-                        // }
+            // {
+            //   res:[{id:id,name:name}],
+            //   obj:[{},{}],
+            //   wid:[{},{}],
+            //   map:[z,z,...,z]
+            // }
 
-                        let mut body = "{\"res\":[".to_string();
+            let mut body = "{\"res\":[".to_string();
 
-                        let mut period = "";
-                        for (id,name) in &client.resources {
-                            body = body + &format!("\r\n{}{{\"id\":{},\"name\":\"{}\"}}", period, id, name);
-                            period = ",";
-                        }
-                        
-                        body = body + "],\"obj\":[";
+            let mut period = "";
+            for (id,name) in &client.resources {
+                body = body + &format!("\r\n{}{{\"id\":{},\"name\":\"{}\"}}", period, id, name);
+                period = ",";
+            }
+            
+            body = body + "],\"obj\":[";
 
-                        period = "";
-                        for o in client.objects.values() {
-                            let resname = match client.resources.get(&o.resid) {
-                                Some(res) => res.as_str(),
-                                None      => "null"
-                            };
-                            body = body + &format!("\r\n{}{{\"x\":{},\"y\":{},\"resid\":{},\"resname\":\"{}\"}}", period, o.x, o.y, o.resid, resname);
-                            period = ",";
-                        }
+            period = "";
+            for o in client.objects.values() {
+                let resname = match client.resources.get(&o.resid) {
+                    Some(res) => res.as_str(),
+                    None      => "null"
+                };
+                body = body + &format!("\r\n{}{{\"x\":{},\"y\":{},\"resid\":{},\"resname\":\"{}\"}}", period, o.x, o.y, o.resid, resname);
+                period = ",";
+            }
 
-                        body = body + "],\"wid\":[";
+            body = body + "],\"wid\":[";
 
-                        period = "";
-                        for (id,w) in &client.widgets {
-                            body = body + &format!("\r\n{}{{\"id\":{},\"name\":\"{}\",\"parent\":\"{}\"}}", period, id, w.typ, w.parent);
-                            period = ",";
-                        }
+            period = "";
+            for (id,w) in &client.widgets {
+                body = body + &format!("\r\n{}{{\"id\":{},\"name\":\"{}\",\"parent\":\"{}\"}}", period, id, w.typ, w.parent);
+                period = ",";
+            }
 
-                        body = body + "],\"map\":[";
+            body = body + "],\"map\":[";
 
-                        period = "";
-                        let map = client.map.grids.get(&grid(client.hero_xy())).unwrap();
-                        for y in 0..100 {
-                            for x in 0..100 {
-                                body = body + &format!("{}{}", period, map.z[x+y*100]);
-                                period = ",";
-                            }
-                        }
+            period = "";
+            let map = client.map.grids.get(&grid(client.hero_xy())).unwrap();
+            for y in 0..100 {
+                for x in 0..100 {
+                    body = body + &format!("{}{}", period, map.z[x+y*100]);
+                    period = ",";
+                }
+            }
 
-                        body = body + "]}";
-                        Some(format!("HTTP/1.1 200 OK\r\nContent-Type: text/json\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\n\r\n", body.len()) + &body)
+            body = body + "]}";
+            Some(format!("HTTP/1.1 200 OK\r\nContent-Type: text/json\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\n\r\n", body.len()) + &body)
         } else if buf.starts_with("objects ") {
-                        let mut body = String::new();
-                        for o in client.objects.values() {
-                            let resname = match client.resources.get(&o.resid) {
-                                Some(res) => res.as_str(),
-                                None      => "null"
-                            };
-                            body = body + &format!("{{\"x\":{},\"y\":{},\"resid\":{},\"resname\":\"{}\"}},", o.x, o.y, o.resid, resname);
-                        }
-                        body = "[ ".to_string() + &body[..body.len()-1] + " ]";
-                        Some(format!("HTTP/1.1 200 OK\r\nContent-Type: text/json\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\n\r\n", body.len()) + &body)
-        } else if buf.starts_with("widgets ") {
-                        let mut body = String::new();
-                        for (id,w) in &client.widgets {
-                            body = body + &format!("{{\"id\":{},\"name\":\"{}\",\"parent\":\"{}\"}},", id, w.typ, w.parent);
-                        }
-                        body = "[ ".to_string() + &body[..body.len()-1] + " ]";
-                        Some(format!("HTTP/1.1 200 OK\r\nContent-Type: text/json\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\n\r\n", body.len()) + &body)
+            let mut body = String::new();
+            for o in client.objects.values() {
+                let resname = match client.resources.get(&o.resid) {
+                    Some(res) => res.as_str(),
+                    None      => "null"
+                };
+                body = body + &format!("{{\"x\":{},\"y\":{},\"resid\":{},\"resname\":\"{}\"}},", o.x, o.y, o.resid, resname);
+            }
+            body = "[ ".to_string() + &body[..body.len()-1] + " ]";
+            Some(format!("HTTP/1.1 200 OK\r\nContent-Type: text/json\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\n\r\n", body.len()) + &body)
+} else if buf.starts_with("widgets ") {
+            let mut body = String::new();
+            for (id,w) in &client.widgets {
+                body = body + &format!("{{\"id\":{},\"name\":\"{}\",\"parent\":\"{}\"}},", id, w.typ, w.parent);
+            }
+            body = "[ ".to_string() + &body[..body.len()-1] + " ]";
+            Some(format!("HTTP/1.1 200 OK\r\nContent-Type: text/json\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\n\r\n", body.len()) + &body)
         } else if buf.starts_with("resources ") {
-                        //TODO
-                        Some("HTTP/1.1 404 Not Implemented\r\n\r\n".to_string())
+            //TODO
+            Some("HTTP/1.1 404 Not Implemented\r\n\r\n".to_string())
         } else if buf.starts_with("go/") {
             //FIXME should NOT be implemented for web. web is for view only
             //println!("GO: {} {}", x, y);
@@ -241,7 +243,7 @@ impl ControlConn {
         }
     }
 
-    fn readable (&mut self, eloop: &mut EventLoop<AnyHandler>, client: &mut Client, lua: &mut lua::State) -> std::io::Result<()> {
+    fn readable (&mut self, eloop: &mut EventLoop<AnyHandler>, client: &mut Client, lua: &mut Lua) -> std::io::Result<()> {
         //println!("{:?}: readable", self.token);
         //self.url = None;
         //self.text = None;
@@ -270,19 +272,10 @@ impl ControlConn {
                     let crlf = buf.find(pattern).unwrap_or(buf.len());
                     self.responce = ControlConn::web_responce(client, &buf[5..crlf]);
                 } else {
-                    //TODO wrap to fn lua_do (&str) -> String { ... }
-                    let status = lua.do_string(buf.as_str());
-                    self.responce = match status {
-                        lua::ThreadStatus::Ok => {
-                            Some("ok\n".to_string())
-                        }
-                        _ => {
-                            match lua.to_type::<String>() {
-                                Some(s) => { lua.pop(1); Some(format!("{:?}: {}\n", status, s)) }
-                                None    => { Some(format!("{:?}: no info\n", status)) }
-                            }
-                        }
-                    };
+
+                    println!("EXEC: {}", buf.as_str());
+                    lua.exec(buf.as_str());
+                    self.responce = Some("ok\n".to_string());
 
                     /*
                     if buf.starts_with("q") { // quit
@@ -484,6 +477,188 @@ impl ControlConn {
     }
 }
 
+const WAIT: i64 = 1;
+const GO  : i64 = 2;
+const QUIT: i64 = 3;
+
+struct Lua {
+    lua: /*&'b mut*/ lua::State
+}
+
+impl Lua {
+    fn new () -> Lua {
+        Lua {lua : lua::State::new()}
+    }
+
+    fn stack_dump (&mut self) {
+        let top = self.lua.get_top();
+        for i in 1..top+1 {
+            print!("{}={:?} ", i, self.lua.type_of(i));
+        }
+        println!("");
+    }
+
+    fn stack_len (&mut self) -> i32 {
+        self.lua.get_top()
+    }
+
+    fn stack_is_empty (&mut self) -> bool {
+        self.stack_len() == 0
+    }
+
+    fn check_stack (&mut self, note: &str) {
+        if !self.stack_is_empty() { panic!("{}: stack is NOT empty", note); }
+    }
+
+    fn check_status (&mut self, note: &str) {
+        if self.lua.status() != lua::ThreadStatus::Ok { panic!("{}: Lua status is NOT ok", note); }
+    }
+
+    fn check (&mut self, note: &str) {
+        self.check_status(note);
+        self.check_stack(note);
+    }
+
+    //TODO use Cow to possibility pass String or &str
+    fn exec (&mut self, string: &str) {
+        let status = self.lua.do_string(string);
+        match status {
+            lua::ThreadStatus::Ok => {
+                //println!("do_string: ok\n")
+            }
+            _ => {
+                match self.lua.to_type::<String>() {
+                    Some(s) => { self.lua.pop(1); println!("lua: {:?}: {}\n", status, s); }
+                    None    => { println!("lua: {:?}: no info\n", status); }
+                }
+            }
+        }
+    }
+
+    /*
+    let t = lua.get_global("g_action");
+    let action = lua.to_integer(1);
+    lua.pop(1);
+    println!("readable: g_action={}", action);
+    */
+    /*
+    let t = lua.get_global("g_action");
+    let action = lua.to_integer(1);
+    lua.pop(1);
+    println!("readable: g_action={}", action);
+    */
+
+    //XXX ??? return Option<i64> ?
+    fn get_number (&mut self, string: &str) -> i64 {
+        let t = self.lua.get_global(string);
+        if t != lua::Type::Number {
+            self.lua.pop(-1);
+            panic!("{}: is NOT a number", string);
+        }
+        let ret = self.lua.to_integer(-1);
+        self.lua.pop(-1);
+        ret
+    }
+
+    fn set_number (&mut self, string: &str, number: i64) {
+        self.lua.push_integer(number);
+        self.lua.set_global(string);
+        self.check("set_number");
+    }
+
+    fn init (&mut self) {
+        //TODO FIXME re-direct all output from stdio to user TCP connection
+
+        self.lua.open_libs();
+
+        self.lua.push_string("client");
+        self.lua.push_integer(42);
+        self.lua.set_table(lua::REGISTRYINDEX);
+        
+        self.lua.push_fn(Some(test_c_callback));
+        self.lua.set_global("test_c_callback");
+        
+        self.lua.push_fn(Some(out));
+        self.lua.set_global("out");
+        
+        self.lua.push_integer(WAIT);
+        self.lua.set_global("WAIT");
+        
+        self.lua.push_integer(GO);
+        self.lua.set_global("GO");
+        
+        self.lua.push_integer(QUIT);
+        self.lua.set_global("QUIT");
+
+        self.lua.new_table();         // stack: table(1,-1)
+        self.lua.push_integer(0);     // stack: table(1,-2) key:int(2,-1)
+        self.lua.push_string("root"); // stack: table(1,-3) key:int(2,-2) value:string(3,-1)
+        self.lua.set_table(1);        // table[key] = value, stack: table(-1)
+        self.lua.set_global("widgets");
+
+        //TODO wrap to fn lua_do (&str) -> String { ... }
+        //TODO load lua code from file
+        //FIXME we have to wait all game widgets are added (mapview) before start co-routine
+        self.exec("
+            g_action = 0
+
+            function wait_100msec ()
+                --TODO
+            end
+
+            function wait (msec)
+                print('lua: wait ' .. msec .. ' msec')
+                --TODO while counter<msec do counter=counter+1 wait_100msec()...
+                g_action = WAIT
+                g_duration = msec
+                coroutine.yield()
+            end
+            
+            function go_rel (x, y)
+                print('lua: go_rel (' .. x .. ',' .. y .. ')')
+                g_action = GO
+                g_x = x
+                g_y = y
+                repeat
+                    print('hero is STILL walking')
+                    coroutine.yield()
+                until not hero_is_walking
+            end
+            
+            function quit ()
+                print('lua: quit')
+                g_action = QUIT
+            end
+            
+            tmp = false
+            function wait_while_char_enters_game ()
+                print('lua: wait_while_char_enters_game')
+                while tmp == false do --TODO while widgets['mapview'] = nil
+                    coroutine.yield()
+                end
+            end
+            
+            main = function ()
+                wait_while_char_enters_game()
+                local run = true
+                while run == true do
+                    go_rel(-10,0)
+                    wait(1000)
+                    go_rel(0,10)
+                    wait(1000)
+                    go_rel(10,0)
+                    wait(1000)
+                    go_rel(0,-10)
+                    wait(1000)
+                end
+            end
+            
+            co = coroutine.create(main)
+            --coroutine.resume(co)
+        ");
+    }
+}
+
 struct AnyHandler<'a> {
     sock: UdpSocket,
     addr: std::net::SocketAddr,
@@ -491,23 +666,11 @@ struct AnyHandler<'a> {
     counter: usize,
     tcp_listener: TcpListener,
     conns: Slab<ControlConn>,
-    lua: &'a mut lua::State, //TODO FIXME wrap this lua::State to more highlevel wrapper with normal methods
+    lua: &'a mut Lua,
 }
-
-/*
-fn lua_stack_dump (lua: &mut lua::State) {
-    let top = lua.get_top();
-    for i in 1..top+1 {
-        print!("{}={:?} ", i, lua.type_of(i));
-    }
-    println!("");
-}
-*/
-
-//TODO lua.check_stack_is_empty () { ... }
 
 impl<'a> AnyHandler<'a> {
-    fn new(sock: UdpSocket, tcp_listener: TcpListener, addr: std::net::SocketAddr, client: &'a mut Client, lua: &'a mut lua::State) -> AnyHandler<'a> {
+    fn new(sock: UdpSocket, tcp_listener: TcpListener, addr: std::net::SocketAddr, client: &'a mut Client, lua: &'a mut Lua) -> AnyHandler<'a> {
         AnyHandler {
             sock: sock,
             addr: addr,
@@ -551,42 +714,66 @@ impl<'a> AnyHandler<'a> {
     */
     
     fn lua_update_environment (&mut self) {
-        if self.lua.status() != lua::ThreadStatus::Ok {panic!("PANIC: Lua status is NOT ok!!!");}
-        let wtype = self.lua.get_global("widgets");
-        if wtype != lua::Type::Table {
-            println!("ERROR: widgets type({:?}) is not a Table", wtype);
-            return;
-        }
+        self.lua.check("UPDATE");
+
+        //let wtype = self.lua.get_global("widgets");
+        //if wtype != lua::Type::Table {
+        //    println!("ERROR: widgets type({:?}) is not a Table", wtype);
+        //    return;
+        //}
+        self.lua.lua.new_table();
         for w in self.client.widgets.values() {
-            self.lua.push(w.id as i64);
-            self.lua.push(w.typ.as_str());
-            self.lua.set_table(1);
+            self.lua.lua.push(w.id as i64);
+            self.lua.lua.push(w.typ.as_str());
+            self.lua.lua.set_table(1);
             //self.lua.push_string(w.typ.as_str()); // stack: table(-2) value:string(-1)
             //self.lua.raw_seti(-2, w.id as i64);       // table[key] = value (table[0] = "root"), stack: table(-1)
         }
-        self.lua.pop(1);
+        self.lua.lua.set_global("widgets");
+        //self.lua.pop(1);
+
+        self.lua.check("UPDATE");
     }
 
     fn lua_react (&mut self) {
+        self.lua.check("REACT");
+        self.lua.exec("coroutine.resume(co)");
+        self.lua.check("REACT");
     }
     
     fn lua_dispatch_pendings (&mut self) {
-        //TODO wrap this to function
-        let t = self.lua.get_global("g_action");
-        if t != lua::Type::Number {
-            println!("ERROR: g_action type({:?}) is not a Integer", t);
-            self.lua.pop(1);
-            return;
-        }
+        self.lua.check("DISPATCH");
+        
+        let action = self.lua.get_number("g_action");
 
-        let action = self.lua.to_integer(1);
-        self.lua.pop(1);
-        if action == QUIT {
-            match self.client.close() {
-                Ok(_) => {}
-                Err(e) => { println!("ERROR: client.close: {:?}", e); }
+        match action {
+            QUIT => {
+                println!("QUIT");
+                match self.client.close() {
+                    Ok(_) => {}
+                    Err(e) => { println!("ERROR: client.close: {:?}", e); }
+                }
+            }
+            GO => {
+                println!("GO");
+                self.lua.lua.push_bool(true);
+                self.lua.lua.set_global("hero_is_walking");
+
+                let x = self.lua.get_number("g_x");
+                let y = self.lua.get_number("g_y");
+                
+                let (hx,hy) = self.client.hero_xy();
+                if let Err(e) = self.client.go(hx + x as i32, hy + y as i32) {
+                    println!("ERROR: client.go: {:?}", e);
+                }
+            }
+            _ => {
+                //println!("???: {}", action);
             }
         }
+        self.lua.set_number("g_action", 0);
+
+        self.lua.check("DISPATCH");
     }
 }
 
@@ -700,7 +887,7 @@ nix::sys::socket::setsockopt(sock.as_raw_fd, SockLevel::Socket, BindToDevice::ne
 
 //TODO FIXME ??? maybe it's possible to pass the client handler here inside the lua_State struct?
 //TODO FIXME     maybe even have to modificate lua_State struct
-extern "C" fn go (l: *mut lua_State) -> c_int {
+extern "C" fn test_c_callback (l: *mut lua_State) -> c_int {
     let mut lua = lua::State::from_ptr(l);
     let x = lua.to_integer(1);
     let y = lua.to_integer(2);
@@ -712,90 +899,15 @@ extern "C" fn go (l: *mut lua_State) -> c_int {
     0
 }
 
-const WAIT: i64 = 1;
-const GO  : i64 = 2;
-const QUIT: i64 = 3;
-
-fn lua_init (lua: &mut lua::State) {
-    //TODO FIXME re-direct all output from stdio to user TCP connection
-
-    lua.open_libs();
-
-    lua.push_string("client");
-    lua.push_integer(42);
-    lua.set_table(lua::REGISTRYINDEX);
-    
-    lua.push_fn(Some(go));
-    lua.set_global("go");
-    
-    lua.push_integer(WAIT);
-    lua.set_global("WAIT");
-    
-    lua.push_integer(GO);
-    lua.set_global("GO");
-    
-    lua.push_integer(QUIT);
-    lua.set_global("QUIT");
-
-    lua.new_table();         // stack: table(1,-1)
-    lua.push_integer(0);     // stack: table(1,-2) key:int(2,-1)
-    lua.push_string("root"); // stack: table(1,-3) key:int(2,-2) value:string(3,-1)
-    lua.set_table(-3);       // table[key] = value, stack: table(-1)
-    lua.set_global("widgets");
-
-    //TODO wrap to fn lua_do (&str) -> String { ... }
-    //TODO load lua code from file
-    let status = lua.do_string("
-    function wait (msec)
-        print('wait ' .. msec .. ' msec')
-        g_action = WAIT
-        g_duration = msec
-        coroutine.yield()
-    end
-    
-    function go_rel (x, y)
-        print('go_rel (' .. x .. ',' .. y .. ') msec')
-        g_action = GO
-        g_x = x
-        g_y = y
-        coroutine.yield()
-    end
-    
-    function quit ()
-        print('quit')
-        g_action = QUIT
-        -- coroutine.yield()
-    end
-    
-    main = function ()
-        local run = true
-        while run == true do
-            go_rel(-10,0) -- going up 10 pixels related to our current position
-            wait(1000)    -- do nothing for 1 second
-            go_rel(0,10)  -- going to position related to our current
-            wait(1000)    -- do nothing for 1 second
-            go_rel(10,0)  -- going to position related to our current
-            wait(1000)    -- do nothing for 1 second
-            go_rel(0,-10) -- going to position related to our current
-            wait(1000)    -- do nothing for 1 second
-        end
-    end
-    
-    co = coroutine.create(main)
-    coroutine.resume(co)
-    
-    ");
-    match status {
-        lua::ThreadStatus::Ok => {
-            println!("lua init: ok\n")
-        }
-        _ => {
-            match lua.to_type::<String>() {
-                Some(s) => { lua.pop(1); println!("lua init: {:?}: {}\n", status, s); }
-                None    => { println!("lua init: {:?}: no info\n", status); }
-            }
-        }
+extern "C" fn out (l: *mut lua_State) -> c_int {
+    let mut lua = lua::State::from_ptr(l);
+    //TODO check arguments count on stack
+    //TODO match type_of(1) { Table => print rows }
+    match lua.to_str(1) {
+        Some(s) => { println!("LUA: out: {}", s); }
+        None    => { println!("LUA: out: {:?}", lua.type_of(1)); }
     }
+    0
 }
 
 fn main () {
@@ -829,8 +941,8 @@ fn main () {
     //FIXME sock.connect(&addr);
     //FIXME sock.set_reuseaddr(true).ok().expect("set_reuseaddr");
 
-    let mut lua = lua::State::new();
-    lua_init(&mut lua);
+    let mut lua = Lua::new();
+    lua.init();
 
     let mut client = Client::new(username, password);
     match client.authorize("game.salemthegame.com", 1871) {
