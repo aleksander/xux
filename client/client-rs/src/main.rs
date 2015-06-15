@@ -205,7 +205,7 @@ impl ControlConn {
             }
             body = "[ ".to_string() + &body[..body.len()-1] + " ]";
             Some(format!("HTTP/1.1 200 OK\r\nContent-Type: text/json\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\n\r\n", body.len()) + &body)
-} else if buf.starts_with("widgets ") {
+        } else if buf.starts_with("widgets ") {
             let mut body = String::new();
             for (id,w) in &client.widgets {
                 body = body + &format!("{{\"id\":{},\"name\":\"{}\",\"parent\":\"{}\"}},", id, w.typ, w.parent);
@@ -535,19 +535,6 @@ impl Lua {
         }
     }
 
-    /*
-    let t = lua.get_global("g_action");
-    let action = lua.to_integer(1);
-    lua.pop(1);
-    println!("readable: g_action={}", action);
-    */
-    /*
-    let t = lua.get_global("g_action");
-    let action = lua.to_integer(1);
-    lua.pop(1);
-    println!("readable: g_action={}", action);
-    */
-
     //XXX ??? return Option<i64> ?
     fn get_number (&mut self, string: &str) -> i64 {
         let t = self.lua.get_global(string);
@@ -603,37 +590,44 @@ impl Lua {
             g_action = 0
 
             function wait_100msec ()
-                --TODO
-            end
-
-            function wait (msec)
-                print('lua: wait ' .. msec .. ' msec')
-                --TODO while counter<msec do counter=counter+1 wait_100msec()...
+                out('wait')
                 g_action = WAIT
-                g_duration = msec
                 coroutine.yield()
             end
+
+            wait = function (decisec)
+                out('wait ' .. decisec .. ' decisec')
+                while decisec > 0 do
+                    decisec = decisec - 1
+                    wait_100msec()
+                end
+            end
             
-            function go_rel (x, y)
-                print('lua: go_rel (' .. x .. ',' .. y .. ')')
+            go = function (x, y)
+                out('go (' .. x .. ',' .. y .. ')')
                 g_action = GO
                 g_x = x
                 g_y = y
                 repeat
-                    print('hero is STILL walking')
+                    out('hero is STILL walking')
                     coroutine.yield()
                 until not hero_is_walking
             end
+
+            go_rel = function (x, y)
+                out('go_rel (' .. x .. ',' .. y .. ')')
+                go(hero_x + x, hero_y + y)
+            end
             
-            function quit ()
-                print('lua: quit')
+            quit = function ()
+                out('quit')
                 g_action = QUIT
             end
             
-            tmp = false
-            function wait_while_char_enters_game ()
-                print('lua: wait_while_char_enters_game')
-                while tmp == false do --TODO while widgets['mapview'] = nil
+            wait_while_char_enters_game = function ()
+                out('wait_while_char_enters_game')
+                while widgets['mapview'] == nil do
+                    out('widgets[mapview] == nil')
                     coroutine.yield()
                 end
             end
@@ -654,7 +648,6 @@ impl Lua {
             end
             
             co = coroutine.create(main)
-            --coroutine.resume(co)
         ");
     }
 }
