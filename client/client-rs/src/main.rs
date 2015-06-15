@@ -802,6 +802,8 @@ impl<'a> Handler for AnyHandler<'a> {
         self.lua_update_environment();
         self.lua_react();
         self.lua_dispatch_pendings();
+        
+        //TODO lua.check_stack_is_empty();
         //lua_stack_dump(self.lua);
         //println!("====================================================================================\n\n");
     }
