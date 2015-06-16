@@ -494,6 +494,7 @@ const WAIT: i64 = 1;
 const GO  : i64 = 2;
 const QUIT: i64 = 3;
 
+//TODO move to 'lua' module
 struct Lua {
     lua: /*&'b mut*/ lua::State
 }
@@ -984,6 +985,7 @@ fn main () {
     //TODO various formatters for Message and other structs output (full, short, type only)
     //TODO print timestamps for all the printlns
     //TODO FIXME use NOM (https://github.com/Geal/nom)
+    //TODO FIXME use rusty-tags (https://github.com/dan-t/rusty-tags)
 
     let args: Vec<String> = std::env::args().collect();
     if args.len() < 3 {
