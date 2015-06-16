@@ -570,16 +570,18 @@ impl Client {
                     
                     //TODO move to fn client.update_grids_around(...) { ... }
                     //     if client.hero.current_grid_is_changed() { client.update_grids_around(); }
-                    let (x,y) = self.hero_grid_xy();
-                    self.mapreq(x,y).unwrap();
-                    self.mapreq(x-1,y-1).unwrap();
-                    self.mapreq(x,y-1).unwrap();
-                    self.mapreq(x+1,y-1).unwrap();
-                    self.mapreq(x-1,y).unwrap();
-                    self.mapreq(x+1,y).unwrap();
-                    self.mapreq(x-1,y+1).unwrap();
-                    self.mapreq(x,y+1).unwrap();
-                    self.mapreq(x+1,y+1).unwrap();
+                    if let Some(xy) = self.hero_grid_xy() {
+                        let (x,y) = xy;
+                        self.mapreq(x,y).unwrap();
+                        self.mapreq(x-1,y-1).unwrap();
+                        self.mapreq(x,y-1).unwrap();
+                        self.mapreq(x+1,y-1).unwrap();
+                        self.mapreq(x-1,y).unwrap();
+                        self.mapreq(x+1,y).unwrap();
+                        self.mapreq(x-1,y+1).unwrap();
+                        self.mapreq(x,y+1).unwrap();
+                        self.mapreq(x+1,y+1).unwrap();
+                    }
                 }
             }
             "item" => {
@@ -879,20 +881,27 @@ impl Client {
     //TODO fn grid(Coord) {...}, fn xy(Grid) {...}
     //     and then we can do: hero.grid().xy();
 
-    pub fn hero_xy (&self) -> (i32,i32) /*FIXME return Option */ {
-        let hero: &Obj = self.objects.get(&self.hero.obj.unwrap()).unwrap();
-        (hero.x,hero.y)
+    pub fn hero_xy (&self) -> Option<(i32,i32)> {
+        if let None = self.hero.obj { return None; }
+        let hero = self.objects.get(&self.hero.obj.unwrap());
+        if let None = hero { return None; }
+        let hero = hero.unwrap();
+        Some((hero.x,hero.y))
     }
     
-    pub fn hero_grid_xy (&self) -> (i32,i32) /*FIXME return Option */ {
-        grid(self.hero_xy())
+    pub fn hero_grid_xy (&self) -> Option<(i32,i32)> {
+        match self.hero_xy() {
+            Some(xy) => Some(grid(xy)),
+            None => None
+        }
     }
 
-    /*
-    pub fn hero_grid (&self) -> &Surface /*FIXME return Option */ {
-        self.map.grids.get(&self.hero_grid_xy()).unwrap()
+    pub fn hero_grid (&self) -> Option<&Surface> {
+        match self.hero_grid_xy() {
+            Some(xy) => self.map.grids.get(&xy),
+            None => None
+        }
     }
-    */
 }
 
 pub fn grid ((x,y): (i32,i32)) -> (i32,i32) {

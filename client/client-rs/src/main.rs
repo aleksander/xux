@@ -184,11 +184,23 @@ impl ControlConn {
             body = body + "],\"map\":[";
 
             period = "";
-            let map = client.map.grids.get(&grid(client.hero_xy())).unwrap();
-            for y in 0..100 {
-                for x in 0..100 {
-                    body = body + &format!("{}{}", period, map.z[x+y*100]);
-                    period = ",";
+            match client.hero_grid() {
+                Some(grid) => {
+                    for y in 0..100 {
+                        for x in 0..100 {
+                            body = body + &format!("{}{}", period, grid.z[x+y*100]);
+                            period = ",";
+                        }
+                    }
+                }
+                //TODO send one Null instead of 10000 zeroes
+                None => {
+                    for _ in 0..100 {
+                        for _ in 0..100 {
+                            body = body + &format!("{}{}", period, 0);
+                            period = ",";
+                        }
+                    }
                 }
             }
 
@@ -490,6 +502,7 @@ impl Lua {
         Lua {lua : lua::State::new()}
     }
 
+    /*
     fn stack_dump (&mut self) {
         let top = self.lua.get_top();
         for i in 1..top+1 {
@@ -497,6 +510,7 @@ impl Lua {
         }
         println!("");
     }
+    */
 
     fn stack_len (&mut self) -> i32 {
         self.lua.get_top()
@@ -623,10 +637,23 @@ impl Lua {
                 out('quit')
                 g_action = QUIT
             end
-            
+
+            widget_id = function (name)
+                for wid,wname in pairs(widgets) do
+                    if wname == name then
+                        return wid
+                    end
+                end
+                return nil
+            end
+
+            widget_exists = function (name)
+                return (not (widget_id(name) == nil))
+            end
+
             wait_while_char_enters_game = function ()
                 out('wait_while_char_enters_game')
-                while widgets['mapview'] == nil do
+                while not widget_exists('mapview') do
                     out('widgets[mapview] == nil')
                     coroutine.yield()
                 end
@@ -725,6 +752,21 @@ impl<'a> AnyHandler<'a> {
         self.lua.lua.set_global("widgets");
         //self.lua.pop(1);
 
+        match self.client.hero_xy() {
+            Some((x,y)) => {
+                self.lua.lua.push(x as i64);
+                self.lua.lua.set_global("hero_x");
+                self.lua.lua.push(y as i64);
+                self.lua.lua.set_global("hero_y");
+            }
+            None => {
+                self.lua.lua.push_nil();
+                self.lua.lua.set_global("hero_x");
+                self.lua.lua.push_nil();
+                self.lua.lua.set_global("hero_y");
+            }
+        }
+
         self.lua.check("UPDATE");
     }
 
@@ -755,8 +797,7 @@ impl<'a> AnyHandler<'a> {
                 let x = self.lua.get_number("g_x");
                 let y = self.lua.get_number("g_y");
                 
-                let (hx,hy) = self.client.hero_xy();
-                if let Err(e) = self.client.go(hx + x as i32, hy + y as i32) {
+                if let Err(e) = self.client.go(x as i32, y as i32) {
                     println!("ERROR: client.go: {:?}", e);
                 }
             }
