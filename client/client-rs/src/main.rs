@@ -982,6 +982,8 @@ fn main () {
     //        }
     //TODO highlight ERRORs with RED console color
     //TODO various formatters for Message and other structs output (full, short, type only)
+    //TODO print timestamps for all the printlns
+    //TODO FIXME use NOM (https://github.com/Geal/nom)
 
     let args: Vec<String> = std::env::args().collect();
     if args.len() < 3 {

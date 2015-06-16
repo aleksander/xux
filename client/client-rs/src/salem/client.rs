@@ -427,7 +427,7 @@ impl Client {
             Message::BEAT       => { println!("     !!! client must not receive BEAT !!!"); },
             Message::MAPREQ(_)  => { println!("     !!! client must not receive MAPREQ !!!"); },
             Message::MAPDATA(mapdata) => {
-                println!("RX: MAPDATA {:?}", mapdata);
+                //println!("RX: MAPDATA {:?}", mapdata);
                 let pktid = mapdata.pktid;
                 self.map.append(mapdata);
                 //TODO if self.mapdata.complete() { ... }
@@ -442,7 +442,7 @@ impl Client {
                 }
             },
             Message::OBJDATA(objdata) => {
-                //println!("RX: OBJDATA {:?}", objdata);
+                println!("RX: OBJDATA {:?}", objdata);
                 try!(self.enqueue_to_send(Message::OBJACK(ObjAck::new(&objdata)))); // send OBJACKs
                 for o in objdata.obj.iter() {
                     //FIXME ??? do NOT add hero object

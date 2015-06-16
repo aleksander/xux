@@ -543,9 +543,9 @@ pub enum ObjProp {
     odAUTH,
     odHEALTH(u8),
     odBUDDY(odBUDDY),
-    odCMPPOSE,
-    odCMPMOD,
-    odCMPEQU,
+    odCMPPOSE(u8, Option<Vec<u16>>, Option<(Option<Vec<u16>>, u8)>),
+    odCMPMOD(Option<Vec<Vec<u16>>>),
+    odCMPEQU(Option<Vec<(u8, String, u16, Option<(u16, u16, u16)>)>>),
     odICON(odICON),
 }
 #[allow(non_camel_case_types)]
@@ -721,13 +721,15 @@ impl ObjProp {
             },
             16  /*OD_CMPPOSE*/ => {
                 let pfl = try!(r.read_u8());
-                let /*seq*/ _ = try!(r.read_u8());
+                let seq = try!(r.read_u8());
+                let ids1 =
                 if (pfl & 2) != 0 {
+                    let mut ids = Vec::new();
                     loop {
-                        let resid = try!(r.read_u16::<le>());
+                        let mut resid = try!(r.read_u16::<le>());
                         if resid == 65535 { break; }
                         if (resid & 0x8000) != 0 {
-                            //resid &= !0x8000;
+                            resid &= !0x8000;
                             let sdt_len = try!(r.read_u8()) as usize;
                             let /*sdt*/ _ = {
                                 let mut tmp = vec![0; sdt_len as usize];
@@ -736,14 +738,24 @@ impl ObjProp {
                                 tmp
                             };
                         }
+                        ids.push(resid);
                     }
-                }
+                    if ids.len() > 0 {
+                        Some(ids)
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
+                let ids2 =
                 if (pfl & 4) != 0 {
+                    let mut ids = Vec::new();
                     loop {
-                        let resid = try!(r.read_u16::<le>());
+                        let mut resid = try!(r.read_u16::<le>());
                         if resid == 65535 { break; }
                         if (resid & 0x8000) != 0 {
-                            //resid &= !0x8000;
+                            resid &= !0x8000;
                             let sdt_len = try!(r.read_u8()) as usize;
                             let /*sdt*/ _ = {
                                 let mut tmp = vec![0; sdt_len as usize];
@@ -752,40 +764,69 @@ impl ObjProp {
                                 tmp
                             };
                         }
+                        ids.push(resid);
                     }
-                    let /*ttime*/ _ = try!(r.read_u8());
-                }
-                Ok(Some(ObjProp::odCMPPOSE))
+                    let ttime = try!(r.read_u8());
+                    if ids.len() > 0 {
+                        Some((Some(ids),ttime))
+                    } else {
+                        Some((None,ttime))
+                    }
+                } else {
+                    None
+                };
+                Ok(Some(ObjProp::odCMPPOSE(seq,ids1,ids2)))
             },
             17  /*OD_CMPMOD*/ => {
+                let mut m = Vec::new();
                 loop {
                     let modif = try!(r.read_u16::<le>());
                     if modif == 65535 { break; }
+                    let mut ids = Vec::new();
                     loop {
                         let resid = try!(r.read_u16::<le>());
                         if resid == 65535 { break; }
+                        ids.push(resid);
+                    }
+                    if ids.len() > 0 {
+                        m.push(ids);
                     }
                 }
-                Ok(Some(ObjProp::odCMPMOD))
+                let mods = if m.len() > 0 {
+                    Some(m)
+                } else {
+                    None
+                };
+                Ok(Some(ObjProp::odCMPMOD(mods)))
             },
             18  /*OD_CMPEQU*/ => {
+                let mut e = Vec::new();
                 loop {
                     let h = try!(r.read_u8());
                     if h == 255 { break; }
-                    let /*at*/ _ = {
+                    let at = {
                         let mut tmp = Vec::new();
                         r.read_until(0, &mut tmp).unwrap();
                         tmp.pop();
                         String::from_utf8(tmp).unwrap()
                     };
-                    let /*resid*/ _ = try!(r.read_u16::<le>());
-                    if (h & 0x80) != 0 {
-                        let /*x*/ _ = try!(r.read_u16::<le>());
-                        let /*y*/ _ = try!(r.read_u16::<le>());
-                        let /*z*/ _ = try!(r.read_u16::<le>());
-                    }
+                    let resid = try!(r.read_u16::<le>());
+                    let off = if (h & 0x80) != 0 {
+                        let x = try!(r.read_u16::<le>());
+                        let y = try!(r.read_u16::<le>());
+                        let z = try!(r.read_u16::<le>());
+                        Some((x,y,z))
+                    } else {
+                        None
+                    };
+                    e.push((h&0x7f,at,resid,off));
                 }
-                Ok(Some(ObjProp::odCMPEQU))
+                let equ = if e.len() > 0 {
+                    Some(e)
+                } else {
+                    None
+                };
+                Ok(Some(ObjProp::odCMPEQU(equ)))
             },
             19  /*OD_ICON*/ => {
                 let resid = try!(r.read_u16::<le>());
