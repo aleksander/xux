@@ -285,6 +285,7 @@ impl ControlConn {
                     self.responce = ControlConn::web_responce(client, &buf[5..crlf]);
                 } else {
 
+                    //TODO wrap buf into coroutine and execute it
                     println!("EXEC: {}", buf.as_str());
                     lua.exec(buf.as_str());
                     self.responce = Some("ok\n".to_string());
@@ -569,6 +570,8 @@ impl Lua {
 
     fn init (&mut self) {
         //TODO FIXME re-direct all output from stdio to user TCP connection
+        //TODO FIXME XXX somehow pass client context to lua context
+        //               to call client context methods within callbacks
 
         self.lua.open_libs();
 
@@ -657,10 +660,19 @@ impl Lua {
                     out('widgets[mapview] == nil')
                     coroutine.yield()
                 end
+                while hero_x == nil or hero_y == nil do
+                    out('hero_x or hero_y == nil')
+                    coroutine.yield()
+                end
+                while hero_grid == nil do
+                    out('hero_grid == nil')
+                    coroutine.yield()
+                end
             end
             
             main = function ()
                 wait_while_char_enters_game()
+                -- TODO while user_script == nil do yield end user_script()
                 local run = true
                 while run == true do
                     go_rel(-10,0)
@@ -764,6 +776,18 @@ impl<'a> AnyHandler<'a> {
                 self.lua.lua.set_global("hero_x");
                 self.lua.lua.push_nil();
                 self.lua.lua.set_global("hero_y");
+            }
+        }
+
+        //TODO pass whole grid Z coords to Lua environment
+        match self.client.hero_grid() {
+            Some(_) => {
+                self.lua.lua.push(1);
+                self.lua.lua.set_global("hero_grid");
+            }
+            None => {
+                self.lua.lua.push_nil();
+                self.lua.lua.set_global("hero_grid");
             }
         }
 
