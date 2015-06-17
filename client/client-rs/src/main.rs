@@ -626,10 +626,14 @@ impl Lua {
                 g_action = GO
                 g_x = x
                 g_y = y
-                repeat
+                while not hero_is_walking do
+                    out('hero is NOT start walking')
+                    coroutine.yield()
+                end
+                while hero_is_walking do
                     out('hero is STILL walking')
                     coroutine.yield()
-                until not hero_is_walking
+                end
             end
 
             go_rel = function (x, y)
@@ -792,6 +796,19 @@ impl<'a> AnyHandler<'a> {
             }
         }
 
+        match self.client.hero_obj() {
+            Some(hero) => {
+                match hero.movement {
+                    Some(_) => { self.lua.lua.push_bool(true); }
+                    None    => { self.lua.lua.push_bool(false); }
+                }
+            }
+            None => {
+                self.lua.lua.push_bool(false);
+            }
+        }
+        self.lua.lua.set_global("hero_is_walking");
+
         self.lua.check("UPDATE");
     }
 
@@ -816,8 +833,6 @@ impl<'a> AnyHandler<'a> {
             }
             GO => {
                 println!("GO");
-                self.lua.lua.push_bool(true);
-                self.lua.lua.set_global("hero_is_walking");
 
                 let x = self.lua.get_number("g_x");
                 let y = self.lua.get_number("g_y");

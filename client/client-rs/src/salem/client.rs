@@ -38,8 +38,16 @@ pub struct Obj {
     pub id : u32,
     pub resid : u16,
     pub frame : i32,
-    pub x : i32,
-    pub y : i32,
+    pub x : i32, //TODO unify coords
+    pub y : i32, //TODO unify coords
+    pub movement : Option<Movement>,
+}
+
+pub struct Movement {
+    pub from: (i32,i32), //TODO unify coords
+    pub to: (i32,i32), //TODO unify coords
+    pub steps: i32,
+    pub step: i32,
 }
 
 #[derive(Clone)]
@@ -66,8 +74,8 @@ pub struct Hero {
     pub obj: Option<u32>,
     pub weight: Option<u16>,
     pub tmexp: Option<i32>,
-    pub hearthfire: Option<(i32,i32)>,
-    pub inventory: HashMap<(i32,i32),u16>,
+    pub hearthfire: Option<(i32,i32)>, //TODO unify coords
+    pub inventory: HashMap<(i32,i32),u16>, //TODO unify coords
 }
 
 pub struct MapPieces {
@@ -89,7 +97,7 @@ pub type PacketId = i32;
 
 pub struct Map {
     pub partial: HashMap<PacketId,MapPieces>, //TODO somehow clean up from old pieces (periodically or whatever)
-    pub grids: HashMap<(i32,i32),Surface>,
+    pub grids: HashMap<(i32,i32),Surface>, //TODO unify coords
 }
 
 impl Map {
@@ -467,17 +475,48 @@ impl Client {
                             continue;
                         }
                     }
-                    let obj = self.objects.entry(o.id).or_insert(Obj{id:o.id, frame:0, resid:0, x:0, y:0});
+                    let obj = self.objects.entry(o.id).or_insert(Obj{id:o.id, frame:0, resid:0, x:0, y:0, movement:None});
                     //FIXME consider o.frame overflow !!!
                     if o.frame <= obj.frame {
                         continue;
                     }
                     for prop in o.prop.iter() {
                         match *prop {
-                            ObjProp::odMOVE(xy,_) => { let (x,y) = xy; obj.x = x; obj.y = y; },
-                            ObjProp::odRES(resid) => { obj.resid = resid; },
-                            ObjProp::odCOMPOSE(resid) => { obj.resid = resid; },
-                            _ => {},
+                            ObjProp::odMOVE(xy,_) => { let (x,y) = xy; obj.x = x; obj.y = y; }
+                            ObjProp::odRES(resid) => { obj.resid = resid; }
+                            ObjProp::odCOMPOSE(resid) => { obj.resid = resid; }
+                            ObjProp::odLINBEG((x1,y1),(x2,y2),steps) => {
+                                obj.movement = Some(Movement{
+                                    from: (x1,y1),
+                                    to: (x2,y2),
+                                    steps: steps,
+                                    step: 0
+                                })
+                            }
+                            ObjProp::odLINSTEP(step) => {
+                                let movement = match obj.movement {
+                                    Some(ref m) => {
+                                        if step >= m.steps {
+                                            if step <= m.step {
+                                                println!("WARNING: odLINSTEP step <= m.step");
+                                            }
+                                            Some(Movement{
+                                                from: m.from,
+                                                to: m.to, 
+                                                steps: m.steps,
+                                                step: step })
+                                        } else {
+                                            None
+                                        }
+                                    }
+                                    None => {
+                                        println!("WARNING: odLINSTEP while movement == None");
+                                        None
+                                    }
+                                };
+                                obj.movement = movement;
+                            }
+                            _ => {}
                         }
                     }
                 }
@@ -881,12 +920,18 @@ impl Client {
     //TODO fn grid(Coord) {...}, fn xy(Grid) {...}
     //     and then we can do: hero.grid().xy();
 
+    pub fn hero_obj (&self) -> Option<&Obj>{
+        match self.hero.obj {
+            Some(id) => self.objects.get(&id),
+            None => None
+        }
+    }
+
     pub fn hero_xy (&self) -> Option<(i32,i32)> {
-        if let None = self.hero.obj { return None; }
-        let hero = self.objects.get(&self.hero.obj.unwrap());
-        if let None = hero { return None; }
-        let hero = hero.unwrap();
-        Some((hero.x,hero.y))
+        match self.hero_obj() {
+            Some(hero) => Some((hero.x,hero.y)),
+            None => None
+        }
     }
     
     pub fn hero_grid_xy (&self) -> Option<(i32,i32)> {
