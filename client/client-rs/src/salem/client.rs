@@ -450,7 +450,7 @@ impl Client {
                 }
             },
             Message::OBJDATA(objdata) => {
-                println!("RX: OBJDATA {:?}", objdata);
+                //println!("RX: OBJDATA {:?}", objdata);
                 try!(self.enqueue_to_send(Message::OBJACK(ObjAck::new(&objdata)))); // send OBJACKs
                 for o in objdata.obj.iter() {
                     //FIXME ??? do NOT add hero object
@@ -496,7 +496,7 @@ impl Client {
                             ObjProp::odLINSTEP(step) => {
                                 let movement = match obj.movement {
                                     Some(ref m) => {
-                                        if step >= m.steps {
+                                        if (step > 0) && (step < m.steps) {
                                             if step <= m.step {
                                                 println!("WARNING: odLINSTEP step <= m.step");
                                             }

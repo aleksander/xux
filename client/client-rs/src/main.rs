@@ -627,11 +627,11 @@ impl Lua {
                 g_x = x
                 g_y = y
                 while not hero_is_walking do
-                    out('hero is NOT start walking')
+                    -- out('hero is NOT start walking')
                     coroutine.yield()
                 end
                 while hero_is_walking do
-                    out('hero is STILL walking')
+                    -- out('hero is STILL walking')
                     coroutine.yield()
                 end
             end
@@ -680,14 +680,14 @@ impl Lua {
                 -- TODO while user_script == nil do yield end user_script()
                 local run = true
                 while run == true do
-                    go_rel(-10,0)
-                    wait(1000)
-                    go_rel(0,10)
-                    wait(1000)
-                    go_rel(10,0)
-                    wait(1000)
-                    go_rel(0,-10)
-                    wait(1000)
+                    go_rel(-100,0)
+                    wait(10)
+                    go_rel(0,100)
+                    wait(10)
+                    go_rel(100,0)
+                    wait(10)
+                    go_rel(0,-100)
+                    wait(10)
                 end
             end
             
