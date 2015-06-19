@@ -692,6 +692,112 @@ impl Lua {
             co = coroutine.create(main)
         ");
     }
+    
+    fn update_environment (&mut self, client: &Client) {
+        self.check("UPDATE");
+
+        //let wtype = self.lua.get_global("widgets");
+        //if wtype != lua::Type::Table {
+        //    println!("ERROR: widgets type({:?}) is not a Table", wtype);
+        //    return;
+        //}
+        self.lua.new_table();
+        for w in client.widgets.values() {
+            self.lua.push(w.id as i64);
+            self.lua.push(w.typ.as_str());
+            self.lua.set_table(1);
+            //self.lua.push_string(w.typ.as_str()); // stack: table(-2) value:string(-1)
+            //self.lua.raw_seti(-2, w.id as i64);       // table[key] = value (table[0] = "root"), stack: table(-1)
+        }
+        self.lua.set_global("widgets");
+        //self.lua.pop(1);
+
+        match client.hero_xy() {
+            Some((x,y)) => {
+                self.lua.push(x as i64);
+                self.lua.set_global("hero_x");
+                self.lua.push(y as i64);
+                self.lua.set_global("hero_y");
+            }
+            None => {
+                self.lua.push_nil();
+                self.lua.set_global("hero_x");
+                self.lua.push_nil();
+                self.lua.set_global("hero_y");
+            }
+        }
+
+        //TODO pass whole grid Z coords to Lua environment
+        match client.hero_grid() {
+            Some(_) => {
+                self.lua.push(1);
+                self.lua.set_global("hero_grid");
+            }
+            None => {
+                self.lua.push_nil();
+                self.lua.set_global("hero_grid");
+            }
+        }
+
+        match client.hero_obj() {
+            Some(hero) => {
+                match hero.movement {
+                    Some(_) => { self.lua.push_bool(true); }
+                    None    => { self.lua.push_bool(false); }
+                }
+            }
+            None => {
+                self.lua.push_bool(false);
+            }
+        }
+        self.lua.set_global("hero_is_walking");
+
+        self.check("UPDATE");
+    }
+
+    fn react (&mut self) {
+        self.check("REACT");
+        self.exec("coroutine.resume(co)");
+        self.check("REACT");
+    }
+    
+    fn dispatch_pendings (&mut self, client: &mut Client) {
+        self.check("DISPATCH");
+        
+        let action = self.get_number("g_action");
+
+        match action {
+            QUIT => {
+                println!("QUIT");
+                match client.close() {
+                    Ok(_) => {}
+                    Err(e) => { println!("ERROR: client.close: {:?}", e); }
+                }
+            }
+            GO => {
+                println!("GO");
+
+                let x = self.get_number("g_x");
+                let y = self.get_number("g_y");
+                
+                if let Err(e) = client.go(x as i32, y as i32) {
+                    println!("ERROR: client.go: {:?}", e);
+                }
+            }
+            _ => {
+                //println!("???: {}", action);
+            }
+        }
+        self.set_number("g_action", 0);
+
+        self.check("DISPATCH");
+    }
+
+    fn update (&mut self, client: &mut Client) {
+        self.update_environment(client);
+        self.react();
+        self.dispatch_pendings(client);
+    }
 }
 
 struct AnyHandler<'a> {
@@ -747,106 +853,6 @@ impl<'a> AnyHandler<'a> {
         &mut self.conns[tok]
     }
     */
-    
-    fn lua_update_environment (&mut self) {
-        self.lua.check("UPDATE");
-
-        //let wtype = self.lua.get_global("widgets");
-        //if wtype != lua::Type::Table {
-        //    println!("ERROR: widgets type({:?}) is not a Table", wtype);
-        //    return;
-        //}
-        self.lua.lua.new_table();
-        for w in self.client.widgets.values() {
-            self.lua.lua.push(w.id as i64);
-            self.lua.lua.push(w.typ.as_str());
-            self.lua.lua.set_table(1);
-            //self.lua.push_string(w.typ.as_str()); // stack: table(-2) value:string(-1)
-            //self.lua.raw_seti(-2, w.id as i64);       // table[key] = value (table[0] = "root"), stack: table(-1)
-        }
-        self.lua.lua.set_global("widgets");
-        //self.lua.pop(1);
-
-        match self.client.hero_xy() {
-            Some((x,y)) => {
-                self.lua.lua.push(x as i64);
-                self.lua.lua.set_global("hero_x");
-                self.lua.lua.push(y as i64);
-                self.lua.lua.set_global("hero_y");
-            }
-            None => {
-                self.lua.lua.push_nil();
-                self.lua.lua.set_global("hero_x");
-                self.lua.lua.push_nil();
-                self.lua.lua.set_global("hero_y");
-            }
-        }
-
-        //TODO pass whole grid Z coords to Lua environment
-        match self.client.hero_grid() {
-            Some(_) => {
-                self.lua.lua.push(1);
-                self.lua.lua.set_global("hero_grid");
-            }
-            None => {
-                self.lua.lua.push_nil();
-                self.lua.lua.set_global("hero_grid");
-            }
-        }
-
-        match self.client.hero_obj() {
-            Some(hero) => {
-                match hero.movement {
-                    Some(_) => { self.lua.lua.push_bool(true); }
-                    None    => { self.lua.lua.push_bool(false); }
-                }
-            }
-            None => {
-                self.lua.lua.push_bool(false);
-            }
-        }
-        self.lua.lua.set_global("hero_is_walking");
-
-        self.lua.check("UPDATE");
-    }
-
-    fn lua_react (&mut self) {
-        self.lua.check("REACT");
-        self.lua.exec("coroutine.resume(co)");
-        self.lua.check("REACT");
-    }
-    
-    fn lua_dispatch_pendings (&mut self) {
-        self.lua.check("DISPATCH");
-        
-        let action = self.lua.get_number("g_action");
-
-        match action {
-            QUIT => {
-                println!("QUIT");
-                match self.client.close() {
-                    Ok(_) => {}
-                    Err(e) => { println!("ERROR: client.close: {:?}", e); }
-                }
-            }
-            GO => {
-                println!("GO");
-
-                let x = self.lua.get_number("g_x");
-                let y = self.lua.get_number("g_y");
-                
-                if let Err(e) = self.client.go(x as i32, y as i32) {
-                    println!("ERROR: client.go: {:?}", e);
-                }
-            }
-            _ => {
-                //println!("???: {}", action);
-            }
-        }
-        self.lua.set_number("g_action", 0);
-
-        self.lua.check("DISPATCH");
-    }
 }
 
 impl<'a> Handler for AnyHandler<'a> {
@@ -871,9 +877,8 @@ impl<'a> Handler for AnyHandler<'a> {
                 self.conn_readable(eloop, i).unwrap();
             }
         }
-        self.lua_update_environment();
-        self.lua_react();
-        self.lua_dispatch_pendings();
+
+        self.lua.update(self.client);
         
         //TODO lua.check_stack_is_empty();
         //lua_stack_dump(self.lua);
