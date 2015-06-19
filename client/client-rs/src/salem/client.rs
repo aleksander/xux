@@ -837,7 +837,14 @@ impl Client {
     }
 
     pub fn tx (&mut self) -> Option<EnqueuedBuffer> {
-        self.tx_buf.pop_back()
+        let buf = self.tx_buf.pop_back();
+        if let Some(ref buf) = buf {
+            match Message::from_buf(buf.buf.as_slice(), MessageDirection::FromClient) {
+                Ok((msg,_)) => println!("TX: {:?}", msg),
+                Err(e) => panic!("ERROR: malformed TX message: {:?}", e),
+            }
+        }
+        buf
     }
 
     pub fn close (&mut self) -> Result<(),Error> {

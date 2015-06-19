@@ -35,8 +35,6 @@ use std::io::{Error, ErrorKind};
 
 mod salem;
 use salem::client::*;
-//use salem::message::Message;
-//use salem::message::MessageDirection;
 
 extern crate image;
 //use image::GenericImage;
@@ -887,11 +885,6 @@ impl<'a> Handler for AnyHandler<'a> {
             UDP => {
                 match self.client.tx() {
                     Some(ebuf) => {
-                        /*
-                        if let Ok((msg,_)) = Message::from_buf(ebuf.buf.as_slice(), MessageDirection::FromClient) {
-                            println!("TX: {:?}", msg);
-                        } //TODO else println(ERROR:malformed message); eloop_shutdown();
-                        */
                         self.counter += 1;
                         //if self.counter % 3 == 0 {
                             let mut buf = SliceBuf::wrap(ebuf.buf.as_slice());
