@@ -133,7 +133,7 @@ impl Map {
         loop {
             match map.pieces.get(&len) {
                 Some(b) => {
-                    buf.push_all(b);
+                    buf.extend(b);
                     len += b.len() as u16;
                     if len == map.total_len {
                         break;
@@ -284,13 +284,13 @@ impl Client {
         let buf_len = (3 + user.len() + 1 + 32) as u16;
         let mut buf: Vec<u8> = Vec::with_capacity((2 + buf_len) as usize);
         buf.write_u16::<be>(buf_len).unwrap();
-        buf.push_all("pw".as_bytes());
+        buf.extend("pw".as_bytes());
         buf.push(0);
-        buf.push_all(user);
+        buf.extend(user);
         buf.push(0);
         let pass_hash = hash(Type::SHA256, self.pass.as_bytes());
         assert!(pass_hash.len() == 32);
-        buf.push_all(pass_hash.as_slice());
+        buf.extend(pass_hash.as_slice());
         stream.write(buf.as_slice()).unwrap();
         stream.flush().unwrap();
 
@@ -301,8 +301,7 @@ impl Client {
         let mut rdr = Cursor::new(buf);
         let len = rdr.read_u16::<be>().unwrap();
 
-        let mut msg: Vec<u8> = Vec::with_capacity(len as usize);
-        msg.resize(len as usize, 0);
+        let mut msg = vec![0; len as usize];
         let len2 = stream.read(msg.as_mut_slice()).ok().expect("read error");
         if len2 != len as usize { return Err(Error{source:"len2 != len",detail:None}); }
         println!("msg='{}'", str::from_utf8(msg.as_slice()).unwrap());
@@ -317,7 +316,7 @@ impl Client {
             let buf_len = ("cookie".as_bytes().len() + 1) as u16;
             let mut buf: Vec<u8> = Vec::with_capacity((2 + buf_len) as usize);
             buf.write_u16::<be>(buf_len).unwrap();
-            buf.push_all("cookie".as_bytes());
+            buf.extend("cookie".as_bytes());
             buf.push(0);
             stream.write(buf.as_slice()).unwrap();
             stream.flush().unwrap();
@@ -329,8 +328,7 @@ impl Client {
             let mut rdr = Cursor::new(buf);
             let len = rdr.read_u16::<be>().unwrap();
 
-            let mut msg: Vec<u8> = Vec::with_capacity(len as usize);
-            msg.resize(len as usize, 0);
+            let mut msg = vec![0; len as usize];
             let len2 = stream.read(msg.as_mut_slice()).ok().expect("read error");
             if len2 != len as usize { return Err(Error{source:"len2 != len",detail:None}); }
             //println!("msg='{}'", str::from_utf8(msg.as_slice()).unwrap());

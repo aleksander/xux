@@ -1,6 +1,5 @@
 #![feature(convert)]
 #![feature(ip_addr)]
-#![feature(collections)]
 #![feature(lookup_host)]
 
 #![feature(associated_consts)]
@@ -961,7 +960,7 @@ nix::sys::socket::setsockopt(sock.as_raw_fd, SockLevel::Socket, BindToDevice::ne
 
 //TODO FIXME ??? maybe it's possible to pass the client handler here inside the lua_State struct?
 //TODO FIXME     maybe even have to modificate lua_State struct
-extern "C" fn test_c_callback (l: *mut lua_State) -> c_int {
+unsafe extern "C" fn test_c_callback (l: *mut lua_State) -> c_int {
     let mut lua = lua::State::from_ptr(l);
     let x = lua.to_integer(1);
     let y = lua.to_integer(2);
@@ -973,7 +972,7 @@ extern "C" fn test_c_callback (l: *mut lua_State) -> c_int {
     0
 }
 
-extern "C" fn out (l: *mut lua_State) -> c_int {
+unsafe extern "C" fn out (l: *mut lua_State) -> c_int {
     let mut lua = lua::State::from_ptr(l);
     //TODO check arguments count on stack
     //TODO match type_of(1) { Table => print rows }
