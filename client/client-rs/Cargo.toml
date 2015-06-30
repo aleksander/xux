@@ -18,6 +18,7 @@ image = "*"
 lua = "*"
 #lua-rs = "*"
 libc = "*"
+nom = "*"
 
 #[dependencies.openssl]
 #openssl = "0.5.5"
@@ -31,3 +32,10 @@ git = "https://github.com/carllerche/mio"
 
 #git = "https://github.com/aleksander/mio.git"
 #branch = "fixups"
+
+[dependencies.pcapng]
+#git = "https://github.com/richo/pcapng-rs.git"
+git = "https://github.com/kornholi/pcapng.git"
+
+[dependencies.pnet]
+git = "https://github.com/libpnet/libpnet.git"
