@@ -82,7 +82,19 @@ fn main () {
                  ip.get_source(), udp.get_source(),
                  ip.get_destination(), udp.get_destination());
         */
+
         println!("");
-        println!("{:?}", Message::from_buf(udp.payload(), dir).unwrap());
+        match Message::from_buf(udp.payload(), dir) {
+            Ok((msg,remains)) => {
+                println!("{:?}", msg);
+                if let Some(buf) = remains {
+                    println!("REMAINS {} bytes", buf.len());
+                }
+            }
+            Err(e) => {
+                println!("FAILED TO PARSE! ERROR: {:?}", e);
+                println!("BUF: {:?}", udp.payload());
+            }
+        }
     }
 }
