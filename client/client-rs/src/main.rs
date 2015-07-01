@@ -252,7 +252,7 @@ impl ControlConn {
         }
     }
 
-    fn readable (&mut self, eloop: &mut EventLoop<AnyHandler>, client: &mut Client, lua: &mut Lua) -> std::io::Result<()> {
+    fn readable (&mut self, eloop: &mut EventLoop<AnyHandler>, client: &mut Client, ai: &mut Ai) -> std::io::Result<()> {
         //println!("{:?}: readable", self.token);
         //self.url = None;
         //self.text = None;
@@ -284,7 +284,7 @@ impl ControlConn {
 
                     //TODO wrap buf into coroutine and execute it
                     println!("EXEC: {}", buf.as_str());
-                    lua.exec(buf.as_str());
+                    ai.exec(buf.as_str());
                     self.responce = Some("ok\n".to_string());
 
                     /*
@@ -791,12 +791,23 @@ impl Lua {
 
         self.check("DISPATCH");
     }
+}
 
+impl Ai for Lua {
     fn update (&mut self, client: &mut Client) {
         self.update_environment(client);
         self.react();
         self.dispatch_pendings(client);
     }
+    
+    fn exec (&mut self, s: &str) {
+        self.exec(s);
+    }
+}
+
+trait Ai {
+    fn update (&mut self, client: &mut Client);
+    fn exec (&mut self, s: &str);
 }
 
 struct AnyHandler<'a> {
@@ -806,11 +817,11 @@ struct AnyHandler<'a> {
     counter: usize,
     tcp_listener: TcpListener,
     conns: Slab<ControlConn>,
-    lua: &'a mut Lua,
+    ai: &'a mut Ai,
 }
 
 impl<'a> AnyHandler<'a> {
-    fn new(sock: UdpSocket, tcp_listener: TcpListener, addr: std::net::SocketAddr, client: &'a mut Client, lua: &'a mut Lua) -> AnyHandler<'a> {
+    fn new(sock: UdpSocket, tcp_listener: TcpListener, addr: std::net::SocketAddr, client: &'a mut Client, ai: &'a mut Ai) -> AnyHandler<'a> {
         AnyHandler {
             sock: sock,
             addr: addr,
@@ -818,7 +829,7 @@ impl<'a> AnyHandler<'a> {
             counter: 0,
             tcp_listener: tcp_listener,
             conns: Slab::new_starting_at(Token(2), 128),
-            lua: lua,
+            ai: ai,
         }
     }
 
@@ -835,7 +846,7 @@ impl<'a> AnyHandler<'a> {
     fn conn_readable (&mut self, eloop: &mut EventLoop<AnyHandler>, tok: Token) -> std::io::Result<()> {
         //println!("conn readable; tok={:?}", tok);
         //if let Err(e) = self.conn(tok).readable(eloop) {
-        if let Err(_) = self.conns[tok].readable(eloop, self.client, self.lua) {
+        if let Err(_) = self.conns[tok].readable(eloop, self.client, self.ai) {
             self.conns.remove(tok);
         }
         Ok(())
@@ -877,7 +888,7 @@ impl<'a> Handler for AnyHandler<'a> {
             }
         }
 
-        self.lua.update(self.client);
+        self.ai.update(self.client);
         
         //TODO lua.check_stack_is_empty();
         //lua_stack_dump(self.lua);
