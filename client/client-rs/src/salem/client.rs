@@ -17,6 +17,7 @@ use std::io::Read;
 use std::io::BufRead;
 use std::io::Write;
 use std::str;
+use std::u16;
 
 extern crate byteorder;
 use self::byteorder::{LittleEndian, BigEndian, ReadBytesExt, WriteBytesExt};
@@ -408,17 +409,21 @@ impl Client {
                 println!("RX: REL {}", rel.seq);
                 if rel.seq == self.rx_rel_seq {
                     try!(self.dispatch_rel_cache(&rel));
-                //FIXME do this trick (past/future sequence calculation) without overflow
-                //} else if (rel.seq - self.rx_rel_seq) < 32767 {
-                } else if rel.seq > self.rx_rel_seq {
-                    // future REL
-                    self.cache_rel(rel);
                 } else {
-                    // past REL
-                    println!("past");
-                    //TODO self.ack(seq);
-                    let last_acked_seq = self.rx_rel_seq - 1;
-                    try!(self.enqueue_to_send(Message::ACK(Ack{seq : last_acked_seq})));
+                    let cur = self.rx_rel_seq;
+                    let new = rel.seq;
+                    let future = ((new > cur) && ((new - cur) < (u16::MAX / 2))) ||
+                                 ((new < cur) && ((cur - new) > (u16::MAX / 2)));
+                    if future {
+                        // future REL
+                        self.cache_rel(rel);
+                    } else {
+                        // past REL
+                        println!("past");
+                        //TODO self.ack(seq);
+                        let last_acked_seq = self.rx_rel_seq - 1;
+                        try!(self.enqueue_to_send(Message::ACK(Ack{seq : last_acked_seq})));
+                    }
                 }
             },
             Message::ACK(ack)   => {
