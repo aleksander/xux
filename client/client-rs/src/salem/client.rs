@@ -235,7 +235,7 @@ impl Client {
         widgets.insert(0, Widget{ id:0, typ:"root".to_string(), parent:0, name:None });
 
         Client {
-            serv_ip: IpAddr::V4(Ipv4Addr::new(0,0,0,0)),
+            serv_ip: IpAddr::V4(Ipv4Addr::new(0,0,0,0)), //TODO use Option(IpAddr)
             user: user,
             pass: pass,
             cookie: Vec::new(),
