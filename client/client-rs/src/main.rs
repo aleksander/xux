@@ -1,10 +1,16 @@
 #![feature(convert)]
 #![feature(ip_addr)]
 #![feature(lookup_host)]
-
 #![feature(associated_consts)]
 
+use std::net::IpAddr;
+use std::net::Ipv4Addr;
+use std::net::SocketAddr;
+
 extern crate openssl;
+use self::openssl::crypto::hash::Type;
+use self::openssl::crypto::hash::hash;
+use self::openssl::ssl::{SslMethod, SslContext, SslStream};
 
 extern crate rustc_serialize;
 use rustc_serialize::hex::ToHex;
@@ -33,13 +39,13 @@ use std::io::{Error, ErrorKind};
 //use std::fs::File;
 
 mod salem;
-use salem::client::*;
+use salem::state::*;
 
 mod ai;
 use ai::Ai;
 
 mod ai_lua;
-use ai_lua::Lua;
+use ai_lua::LuaAi;
 
 extern crate image;
 //use image::GenericImage;
@@ -47,6 +53,20 @@ extern crate image;
 //use image::Rgb;
 //use image::ImageRgb8;
 //use image::PNG;
+
+extern crate byteorder;
+use self::byteorder::{LittleEndian, BigEndian, ReadBytesExt, WriteBytesExt};
+#[allow(non_camel_case_types)]
+type le = LittleEndian;
+#[allow(non_camel_case_types)]
+type be = BigEndian;
+
+use std::vec::Vec;
+use std::io::Cursor;
+use std::io::Read;
+use std::io::BufRead;
+use std::io::Write;
+use std::u16;
 
 const UDP: Token = Token(0);
 const TCP: Token = Token(1);
@@ -119,7 +139,7 @@ impl ControlConn {
         Ok(())
     }
 
-    fn web_responce (client: &mut Client, buf: &str) -> Option<String> {
+    fn web_responce (state: &mut State, buf: &str) -> Option<String> {
         if buf.starts_with(" ") {
             let body = "<html> \r\n\
                             <head> \r\n\
@@ -565,10 +585,6 @@ impl<'a> Handler for AnyHandler<'a> {
         }
 
         self.ai.update(self.client);
-        
-        //TODO lua.check_stack_is_empty();
-        //lua_stack_dump(self.lua);
-        //println!("====================================================================================\n\n");
     }
 
     fn writable(&mut self, eloop: &mut EventLoop<AnyHandler>, token: Token) {
@@ -645,6 +661,133 @@ impl SockOpt for BindToDevice {
 nix::sys::socket::setsockopt(sock.as_raw_fd, SockLevel::Socket, BindToDevice::new("wlan0"));
 */
 
+struct DeclAi {
+    useless: u64,
+}
+
+impl DeclAi {
+    fn new () -> DeclAi {
+        DeclAi {useless:0}
+    }
+}
+
+impl Ai for DeclAi {
+    fn update (&mut self, /*state*/_: &mut State) {
+        println!("PRINT THIS AND DO NOTHING");
+    }
+
+    fn exec (&mut self, s: &str) {
+        println!("EXEC: {}", s);
+    }
+    
+    fn init (&mut self) {
+        println!("INIT");
+        self.useless = 42;
+    }
+}
+
+struct Client {
+    pub serv_ip     : IpAddr,
+    pub user        : String,
+    pub pass        : String,
+    pub cookie      : Vec<u8>,
+    
+    state: State,
+    ai: Ai,
+    //TODO driver: Driver,
+}
+
+impl Client {
+    pub fn new (user: String, pass: String) -> Client {
+        Client {
+            serv_ip: IpAddr::V4(Ipv4Addr::new(0,0,0,0)), //TODO use Option(IpAddr)
+            user: user,
+            pass: pass,
+            cookie: Vec::new(),
+        }
+    }
+    
+    pub fn authorize (&mut self, hostname: &str, port: u16) -> Result<(), Error> {
+        let host = {
+            let mut ips = ::std::net::lookup_host(hostname).ok().expect("lookup_host");
+            ips.next().expect("ip.next").ok().expect("ip.next.ok")
+        };
+        
+        println!("connect to {}", host.ip());
+
+        self.serv_ip = host.ip();
+        //self.pass = pass;
+        //let auth_addr: SocketAddr = SocketAddr {ip: ip, port: port};
+        let auth_addr = SocketAddr::new(self.serv_ip, port);
+        println!("authorize {} @ {}", self.user, auth_addr);
+        //TODO add method connect(SocketAddr) to TcpStream
+        //let stream = tryio!("tcp.connect" TcpStream::connect(self.auth_addr));
+        let stream = TcpStream::connect(auth_addr).unwrap();
+        let context = SslContext::new(SslMethod::Sslv23).unwrap();
+        let mut stream = SslStream::new(&context, stream).unwrap();
+
+        // send 'pw' command
+        let user = self.user.as_bytes();
+        let buf_len = (3 + user.len() + 1 + 32) as u16;
+        let mut buf: Vec<u8> = Vec::with_capacity((2 + buf_len) as usize);
+        buf.write_u16::<be>(buf_len).unwrap();
+        buf.extend("pw".as_bytes());
+        buf.push(0);
+        buf.extend(user);
+        buf.push(0);
+        let pass_hash = hash(Type::SHA256, self.pass.as_bytes());
+        assert!(pass_hash.len() == 32);
+        buf.extend(pass_hash.as_slice());
+        stream.write(buf.as_slice()).unwrap();
+        stream.flush().unwrap();
+
+        let mut buf = vec![0,0];
+        let len = stream.read(buf.as_mut_slice()).ok().expect("read error");
+        if len != 2 { return Err(Error{source:"bytes read != 2",detail:None}); }
+        //TODO replace byteorder crate with endian crate ???
+        let mut rdr = Cursor::new(buf);
+        let len = rdr.read_u16::<be>().unwrap();
+
+        let mut msg = vec![0; len as usize];
+        let len2 = stream.read(msg.as_mut_slice()).ok().expect("read error");
+        if len2 != len as usize { return Err(Error{source:"len2 != len",detail:None}); }
+        println!("msg='{}'", str::from_utf8(msg.as_slice()).unwrap());
+        //println!("msg='{}'", msg.as_slice().to_hex());
+        if msg.len() < "ok\0\0".len() {
+            return Err(Error{source:"'pw' command unexpected answer", detail:Some(String::from_utf8(msg).unwrap())});
+        }
+
+        // send 'cookie' command
+        if (msg[0] == ('o' as u8)) && (msg[1] == ('k' as u8)) {
+            // TODO tryio!(stream.write(Msg::cookie(params...)));
+            let buf_len = ("cookie".as_bytes().len() + 1) as u16;
+            let mut buf: Vec<u8> = Vec::with_capacity((2 + buf_len) as usize);
+            buf.write_u16::<be>(buf_len).unwrap();
+            buf.extend("cookie".as_bytes());
+            buf.push(0);
+            stream.write(buf.as_slice()).unwrap();
+            stream.flush().unwrap();
+
+            let mut buf = vec![0,0];
+            let len = stream.read(buf.as_mut_slice()).ok().expect("read error");
+            if len != 2 { return Err(Error{source:"bytes read != 2",detail:None}); }
+            //TODO replace byteorder crate with endian crate ???
+            let mut rdr = Cursor::new(buf);
+            let len = rdr.read_u16::<be>().unwrap();
+
+            let mut msg = vec![0; len as usize];
+            let len2 = stream.read(msg.as_mut_slice()).ok().expect("read error");
+            if len2 != len as usize { return Err(Error{source:"len2 != len",detail:None}); }
+            //println!("msg='{}'", str::from_utf8(msg.as_slice()).unwrap());
+            println!("msg='{}'", msg.as_slice().to_hex());
+            //TODO check cookie length
+            self.cookie = msg[3..].to_vec();
+            return Ok(());
+        }
+        return Err(Error{source:"'cookie' command unexpected answer", detail:Some(String::from_utf8(msg).unwrap())});
+    }
+}
+
 fn main () {
     //TODO use PollOpt::edge() | PollOpt::oneshot() for UDP connection and not PollOpt::level() (see how this is doing for TCP conns)
     //TODO handle keyboard interrupt
@@ -679,8 +822,9 @@ fn main () {
     //FIXME sock.connect(&addr);
     //FIXME sock.set_reuseaddr(true).ok().expect("set_reuseaddr");
 
-    let mut lua = Lua::new();
-    lua.init();
+    let mut ai = LuaAi::new();
+    //let mut ai = DeclAi::new()
+    ai.init();
 
     let mut client = Client::new(username, password);
     match client.authorize("game.salemthegame.com", 1871) {
@@ -696,7 +840,7 @@ fn main () {
     eloop.register_opt(&tcp_listener, TCP, Interest::readable(), PollOpt::edge()).unwrap();
 
     let ip = client.serv_ip;
-    let mut handler = AnyHandler::new(sock, tcp_listener, std::net::SocketAddr::new(ip, 1870), &mut client, &mut lua);
+    let mut handler = AnyHandler::new(sock, tcp_listener, std::net::SocketAddr::new(ip, 1870), &mut client, &mut ai);
     handler.client.connect().ok().expect("client.connect()");
 
     println!("run event loop");

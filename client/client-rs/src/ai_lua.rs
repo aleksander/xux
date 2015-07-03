@@ -1,11 +1,11 @@
 extern crate lua;
 use self::lua::ffi::lua_State;
-use self::lua::State;
+//use self::lua;
 
 extern crate libc;
 use self::libc::c_int;
 
-use salem::client::Client;
+use salem::state::State;
 
 use ai::Ai;
 
@@ -13,14 +13,14 @@ const WAIT: i64 = 1;
 const GO  : i64 = 2;
 const QUIT: i64 = 3;
 
-//TODO FIXME ??? maybe it's possible to pass the client handler here inside the lua_State struct?
+//TODO FIXME ??? maybe it's possible to pass the salem::State handler here inside the lua_State struct?
 //TODO FIXME     maybe even have to modificate lua_State struct
 unsafe extern "C" fn test_c_callback (l: *mut lua_State) -> c_int {
     let mut lua = lua::State::from_ptr(l);
     let x = lua.to_integer(1);
     let y = lua.to_integer(2);
     println!("LUA: go: ({},{})", x, y);
-    lua.push("client");
+    lua.push("state");
     lua.get_table(lua::REGISTRYINDEX);
     let addr = lua.to_integer(-1);
     println!("LUA: go: we received '{}'", addr);
@@ -38,13 +38,13 @@ unsafe extern "C" fn out (l: *mut lua_State) -> c_int {
     0
 }
 
-pub struct Lua {
+pub struct LuaAi {
     lua: /*&'b mut*/ lua::State
 }
 
-impl Lua {
-    pub fn new () -> Lua {
-        Lua {lua : lua::State::new()}
+impl LuaAi {
+    pub fn new () -> LuaAi {
+        LuaAi {lua : lua::State::new()}
     }
 
     /*
@@ -238,7 +238,7 @@ impl Lua {
         ");
     }
     
-    fn update_environment (&mut self, client: &Client) {
+    fn update_environment (&mut self, state: &State) {
         self.check("UPDATE");
 
         //let wtype = self.lua.get_global("widgets");
@@ -247,7 +247,7 @@ impl Lua {
         //    return;
         //}
         self.lua.new_table();
-        for w in client.widgets.values() {
+        for w in state.widgets.values() {
             self.lua.push(w.id as i64);
             self.lua.push(w.typ.as_str());
             self.lua.set_table(1);
@@ -257,7 +257,7 @@ impl Lua {
         self.lua.set_global("widgets");
         //self.lua.pop(1);
 
-        match client.hero_xy() {
+        match state.hero_xy() {
             Some((x,y)) => {
                 self.lua.push(x as i64);
                 self.lua.set_global("hero_x");
@@ -273,7 +273,7 @@ impl Lua {
         }
 
         //TODO pass whole grid Z coords to Lua environment
-        match client.hero_grid() {
+        match state.hero_grid() {
             Some(_) => {
                 self.lua.push(1);
                 self.lua.set_global("hero_grid");
@@ -284,7 +284,7 @@ impl Lua {
             }
         }
 
-        match client.hero_obj() {
+        match state.hero_obj() {
             Some(hero) => {
                 match hero.movement {
                     Some(_) => { self.lua.push_bool(true); }
@@ -306,7 +306,7 @@ impl Lua {
         self.check("REACT");
     }
     
-    fn dispatch_pendings (&mut self, client: &mut Client) {
+    fn dispatch_pendings (&mut self, state: &mut State) {
         self.check("DISPATCH");
         
         let action = self.get_number("g_action");
@@ -314,9 +314,9 @@ impl Lua {
         match action {
             QUIT => {
                 println!("QUIT");
-                match client.close() {
+                match state.close() {
                     Ok(_) => {}
-                    Err(e) => { println!("ERROR: client.close: {:?}", e); }
+                    Err(e) => { println!("ERROR: state.close: {:?}", e); }
                 }
             }
             GO => {
@@ -325,8 +325,8 @@ impl Lua {
                 let x = self.get_number("g_x");
                 let y = self.get_number("g_y");
                 
-                if let Err(e) = client.go(x as i32, y as i32) {
-                    println!("ERROR: client.go: {:?}", e);
+                if let Err(e) = state.go(x as i32, y as i32) {
+                    println!("ERROR: state.go: {:?}", e);
                 }
             }
             _ => {
@@ -339,15 +339,18 @@ impl Lua {
     }
 }
 
-impl Ai for Lua {
-    fn update (&mut self, client: &mut Client) {
-        self.update_environment(client);
+impl Ai for LuaAi {
+    fn update (&mut self, state: &mut State) {
+        self.update_environment(state);
         self.react();
-        self.dispatch_pendings(client);
+        self.dispatch_pendings(state);
     }
     
     fn exec (&mut self, s: &str) {
         self.exec(s);
+    }
+    
+    fn init (&mut self) {
     }
 }
 

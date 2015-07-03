@@ -6,10 +6,10 @@ use std::collections::LinkedList;
 use std::net::TcpStream;
 use std::net::SocketAddr;
 
-extern crate openssl;
-use self::openssl::crypto::hash::Type;
-use self::openssl::crypto::hash::hash;
-use self::openssl::ssl::{SslMethod, SslContext, SslStream};
+//extern crate openssl;
+//use self::openssl::crypto::hash::Type;
+//use self::openssl::crypto::hash::hash;
+//use self::openssl::ssl::{SslMethod, SslContext, SslStream};
 
 use std::vec::Vec;
 use std::io::Cursor;
@@ -209,12 +209,8 @@ impl Map {
 
 }
 
-pub struct Client {
+pub struct State {
     //TODO do all fileds PRIVATE and use callback interface
-    pub serv_ip     : IpAddr,
-    pub user        : String,
-    pub pass        : String,
-    pub cookie      : Vec<u8>,
     pub widgets     : HashMap<u16,Widget>,
     pub objects     : HashMap<u32,Obj>,
     pub charlist    : Vec<String>,
@@ -229,16 +225,12 @@ pub struct Client {
     pub map         : Map,
 }
 
-impl Client {
-    pub fn new (user: String, pass: String) -> Client {
+impl State {
+    pub fn new () -> State {
         let mut widgets = HashMap::new();
         widgets.insert(0, Widget{ id:0, typ:"root".to_string(), parent:0, name:None });
 
-        Client {
-            serv_ip: IpAddr::V4(Ipv4Addr::new(0,0,0,0)), //TODO use Option(IpAddr)
-            user: user,
-            pass: pass,
-            cookie: Vec::new(),
+        State {
             widgets: widgets, 
             objects: HashMap::new(),
             charlist: Vec::new(),
@@ -259,86 +251,6 @@ impl Client {
             },
             map: Map{ partial: HashMap::new(), grids: HashMap::new() },
         }
-    }
-
-    pub fn authorize (&mut self, hostname: &str, port: u16) -> Result<(), Error> {
-        let host = {
-            let mut ips = ::std::net::lookup_host(hostname).ok().expect("lookup_host");
-            ips.next().expect("ip.next").ok().expect("ip.next.ok")
-        };
-        
-        println!("connect to {}", host.ip());
-
-        self.serv_ip = host.ip();
-        //self.pass = pass;
-        //let auth_addr: SocketAddr = SocketAddr {ip: ip, port: port};
-        let auth_addr = SocketAddr::new(self.serv_ip, port);
-        println!("authorize {} @ {}", self.user, auth_addr);
-        //TODO add method connect(SocketAddr) to TcpStream
-        //let stream = tryio!("tcp.connect" TcpStream::connect(self.auth_addr));
-        let stream = TcpStream::connect(auth_addr).unwrap();
-        let context = SslContext::new(SslMethod::Sslv23).unwrap();
-        let mut stream = SslStream::new(&context, stream).unwrap();
-
-        // send 'pw' command
-        let user = self.user.as_bytes();
-        let buf_len = (3 + user.len() + 1 + 32) as u16;
-        let mut buf: Vec<u8> = Vec::with_capacity((2 + buf_len) as usize);
-        buf.write_u16::<be>(buf_len).unwrap();
-        buf.extend("pw".as_bytes());
-        buf.push(0);
-        buf.extend(user);
-        buf.push(0);
-        let pass_hash = hash(Type::SHA256, self.pass.as_bytes());
-        assert!(pass_hash.len() == 32);
-        buf.extend(pass_hash.as_slice());
-        stream.write(buf.as_slice()).unwrap();
-        stream.flush().unwrap();
-
-        let mut buf = vec![0,0];
-        let len = stream.read(buf.as_mut_slice()).ok().expect("read error");
-        if len != 2 { return Err(Error{source:"bytes read != 2",detail:None}); }
-        //TODO replace byteorder crate with endian crate ???
-        let mut rdr = Cursor::new(buf);
-        let len = rdr.read_u16::<be>().unwrap();
-
-        let mut msg = vec![0; len as usize];
-        let len2 = stream.read(msg.as_mut_slice()).ok().expect("read error");
-        if len2 != len as usize { return Err(Error{source:"len2 != len",detail:None}); }
-        println!("msg='{}'", str::from_utf8(msg.as_slice()).unwrap());
-        //println!("msg='{}'", msg.as_slice().to_hex());
-        if msg.len() < "ok\0\0".len() {
-            return Err(Error{source:"'pw' command unexpected answer", detail:Some(String::from_utf8(msg).unwrap())});
-        }
-
-        // send 'cookie' command
-        if (msg[0] == ('o' as u8)) && (msg[1] == ('k' as u8)) {
-            // TODO tryio!(stream.write(Msg::cookie(params...)));
-            let buf_len = ("cookie".as_bytes().len() + 1) as u16;
-            let mut buf: Vec<u8> = Vec::with_capacity((2 + buf_len) as usize);
-            buf.write_u16::<be>(buf_len).unwrap();
-            buf.extend("cookie".as_bytes());
-            buf.push(0);
-            stream.write(buf.as_slice()).unwrap();
-            stream.flush().unwrap();
-
-            let mut buf = vec![0,0];
-            let len = stream.read(buf.as_mut_slice()).ok().expect("read error");
-            if len != 2 { return Err(Error{source:"bytes read != 2",detail:None}); }
-            //TODO replace byteorder crate with endian crate ???
-            let mut rdr = Cursor::new(buf);
-            let len = rdr.read_u16::<be>().unwrap();
-
-            let mut msg = vec![0; len as usize];
-            let len2 = stream.read(msg.as_mut_slice()).ok().expect("read error");
-            if len2 != len as usize { return Err(Error{source:"len2 != len",detail:None}); }
-            //println!("msg='{}'", str::from_utf8(msg.as_slice()).unwrap());
-            println!("msg='{}'", msg.as_slice().to_hex());
-            //TODO check cookie length
-            self.cookie = msg[3..].to_vec();
-            return Ok(());
-        }
-        return Err(Error{source:"'cookie' command unexpected answer", detail:Some(String::from_utf8(msg).unwrap())});
     }
 
     pub fn start_send_beats () {
@@ -402,7 +314,7 @@ impl Client {
                     }
                 }
                 self.remove_sess_from_que();
-                Client::start_send_beats();
+                Self::start_send_beats();
             },
             Message::C_SESS(_) => { println!("     !!! client must not receive C_SESS !!!"); },
             Message::REL( rel ) => {
@@ -790,12 +702,12 @@ impl Client {
         Ok(())
     }
 
-    pub fn connect (&mut self) -> Result<(),Error> {
+    pub fn connect (&mut self, login: &str, cookie: &Vec<u8>) -> Result<(),Error> {
         //TODO send SESS until reply
         //TODO get username from server responce, not from auth username
-        let cookie = self.cookie.clone();
-        let user = self.user.clone();
-        try!(self.enqueue_to_send(Message::C_SESS(cSess{login:user, cookie:cookie})));
+        //let cookie = self.cookie.clone();
+        //let user = self.user.clone();
+        try!(self.enqueue_to_send(Message::C_SESS(cSess{login:login.to_string(), cookie:cookie.clone()})));
         Ok(())
     }
 
