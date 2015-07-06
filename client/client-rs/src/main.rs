@@ -172,7 +172,7 @@ impl ControlConn {
             let mut body = "{\"res\":[".to_string();
 
             let mut period = "";
-            for (id,name) in &client.resources {
+            for (id,name) in &state.resources {
                 body = body + &format!("\r\n{}{{\"id\":{},\"name\":\"{}\"}}", period, id, name);
                 period = ",";
             }
@@ -180,8 +180,8 @@ impl ControlConn {
             body = body + "],\"obj\":[";
 
             period = "";
-            for o in client.objects.values() {
-                let resname = match client.resources.get(&o.resid) {
+            for o in state.objects.values() {
+                let resname = match state.resources.get(&o.resid) {
                     Some(res) => res.as_str(),
                     None      => "null"
                 };
@@ -192,7 +192,7 @@ impl ControlConn {
             body = body + "],\"wid\":[";
 
             period = "";
-            for (id,w) in &client.widgets {
+            for (id,w) in &state.widgets {
                 body = body + &format!("\r\n{}{{\"id\":{},\"name\":\"{}\",\"parent\":\"{}\"}}", period, id, w.typ, w.parent);
                 period = ",";
             }
@@ -200,7 +200,7 @@ impl ControlConn {
             body = body + "],\"map\":[";
 
             period = "";
-            match client.hero_grid() {
+            match state.hero_grid() {
                 Some(grid) => {
                     for y in 0..100 {
                         for x in 0..100 {
@@ -224,8 +224,8 @@ impl ControlConn {
             Some(format!("HTTP/1.1 200 OK\r\nContent-Type: text/json\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\n\r\n", body.len()) + &body)
         } else if buf.starts_with("objects ") {
             let mut body = String::new();
-            for o in client.objects.values() {
-                let resname = match client.resources.get(&o.resid) {
+            for o in state.objects.values() {
+                let resname = match state.resources.get(&o.resid) {
                     Some(res) => res.as_str(),
                     None      => "null"
                 };
@@ -235,7 +235,7 @@ impl ControlConn {
             Some(format!("HTTP/1.1 200 OK\r\nContent-Type: text/json\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\n\r\n", body.len()) + &body)
         } else if buf.starts_with("widgets ") {
             let mut body = String::new();
-            for (id,w) in &client.widgets {
+            for (id,w) in &state.widgets {
                 body = body + &format!("{{\"id\":{},\"name\":\"{}\",\"parent\":\"{}\"}},", id, w.typ, w.parent);
             }
             body = "[ ".to_string() + &body[..body.len()-1] + " ]";
@@ -262,7 +262,7 @@ impl ControlConn {
             }
             Some("HTTP/1.1 200 OK\r\n\r\n".to_string())
         } else if buf.starts_with("quit ") {
-            if let Err(e) = client.close() {
+            if let Err(e) = state.close() {
                 println!("ERROR: client.close: {:?}", e);
             }
             Some("HTTP/1.1 200 OK\r\n\r\n".to_string())
@@ -271,7 +271,7 @@ impl ControlConn {
         }
     }
 
-    fn readable (&mut self, eloop: &mut EventLoop<AnyHandler>, client: &mut Client, ai: &mut Ai) -> std::io::Result<()> {
+    fn readable (&mut self, eloop: &mut EventLoop<AnyHandler>, state: &mut State, ai: &mut Ai) -> std::io::Result<()> {
         //println!("{:?}: readable", self.token);
         //self.url = None;
         //self.text = None;
@@ -298,7 +298,7 @@ impl ControlConn {
                 if buf.starts_with("GET /") {
                     let pattern: &[_] = &['\r','\n'];
                     let crlf = buf.find(pattern).unwrap_or(buf.len());
-                    self.responce = ControlConn::web_responce(client, &buf[5..crlf]);
+                    self.responce = ControlConn::web_responce(state, &buf[5..crlf]);
                 } else {
 
                     //TODO wrap buf into coroutine and execute it
@@ -506,10 +506,10 @@ impl ControlConn {
     }
 }
 
-struct AnyHandler<'a> {
+struct AnyHandler<'a, T> {
     sock: UdpSocket,
     addr: std::net::SocketAddr,
-    client: &'a mut Client,
+    client: &'a mut Client<'a, T>,
     counter: usize,
     tcp_listener: TcpListener,
     conns: Slab<ControlConn>,
@@ -542,7 +542,7 @@ impl<'a> AnyHandler<'a> {
     fn conn_readable (&mut self, eloop: &mut EventLoop<AnyHandler>, tok: Token) -> std::io::Result<()> {
         //println!("conn readable; tok={:?}", tok);
         //if let Err(e) = self.conn(tok).readable(eloop) {
-        if let Err(_) = self.conns[tok].readable(eloop, self.client, self.ai) {
+        if let Err(_) = self.conns[tok].readable(eloop, self.client.state, self.ai) {
             self.conns.remove(tok);
         }
         Ok(())
@@ -571,7 +571,7 @@ impl<'a> Handler for AnyHandler<'a> {
                 let mut rx_buf = RingBuf::new(65535);
                 self.sock.recv_from(&mut rx_buf).ok().expect("sock.recv");
                 let buf: &[u8] = Buf::bytes(&rx_buf);
-                if let Err(e) = self.client.rx(buf) {
+                if let Err(e) = self.client.state.rx(buf) {
                     println!("ERROR: client.rx: {:?}", e);
                     eloop.shutdown();
                 }
@@ -584,13 +584,13 @@ impl<'a> Handler for AnyHandler<'a> {
             }
         }
 
-        self.ai.update(self.client);
+        self.client.ai.update(&mut self.client.state);
     }
 
     fn writable(&mut self, eloop: &mut EventLoop<AnyHandler>, token: Token) {
         match token {
             UDP => {
-                match self.client.tx() {
+                match self.client.state.tx() {
                     Some(ebuf) => {
                         self.counter += 1;
                         //if self.counter % 3 == 0 {
@@ -628,7 +628,7 @@ impl<'a> Handler for AnyHandler<'a> {
     }
 
     fn timeout (&mut self, /*eloop*/ _: &mut EventLoop<AnyHandler>, timeout: usize) {
-        self.client.timeout(timeout);
+        self.client.state.timeout(timeout);
     }
 }
 
@@ -686,14 +686,14 @@ impl Ai for DeclAi {
     }
 }
 
-struct Client {
+struct Client<T: Ai> {
     pub serv_ip     : IpAddr,
     pub user        : String,
     pub pass        : String,
     pub cookie      : Vec<u8>,
     
     state: State,
-    ai: Ai,
+    ai: T,
     //TODO driver: Driver,
 }
 
@@ -704,6 +704,7 @@ impl Client {
             user: user,
             pass: pass,
             cookie: Vec::new(),
+            state: State::new(),
         }
     }
     
