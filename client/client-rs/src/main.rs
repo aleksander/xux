@@ -697,7 +697,7 @@ impl Ai for DeclAi {
 }
 
 struct Client<A:Ai> {
-    pub serv_ip     : IpAddr,
+    //pub serv_ip     : IpAddr,
     //pub user        : String,
     //pub pass        : String,
     //pub cookie      : Vec<u8>,
@@ -713,7 +713,7 @@ impl<A:Ai> Client<A> {
         ai.init();
 
         Client {
-            serv_ip: IpAddr::V4(Ipv4Addr::new(0,0,0,0)), //TODO use Option(IpAddr)
+            //serv_ip: IpAddr::V4(Ipv4Addr::new(0,0,0,0)), //TODO use Option(IpAddr)
             //user: user,
             //pass: pass,
             //cookie: Vec::new(),
@@ -723,12 +723,10 @@ impl<A:Ai> Client<A> {
         }
     }
     
-    pub fn authorize (&mut self, ip: IpAddr, port: u16, user: String, pass: String) -> Result<(String,Vec<u8>),Error> {
+    pub fn authorize (&mut self, ip: IpAddr, port: u16, user: String, pass: String) -> Result<(Vec<u8>,Vec<u8>),Error> {
         let auth_addr = SocketAddr::new(ip, port);
         println!("authorize {} @ {}", user, auth_addr);
-        //TODO add method connect(SocketAddr) to TcpStream
-        //let stream = tryio!("tcp.connect" TcpStream::connect(self.auth_addr));
-        let stream = TcpStream::connect(&auth_addr).unwrap();
+        let stream = std::net::TcpStream::connect(&auth_addr).unwrap();
         let context = SslContext::new(SslMethod::Sslv23).unwrap();
         let mut stream = SslStream::new(&context, stream).unwrap();
 
@@ -763,7 +761,7 @@ impl<A:Ai> Client<A> {
         if msg.len() < "ok\0\0".len() {
             return Err(Error{source:"'pw' command unexpected answer", detail:Some(String::from_utf8(msg).unwrap())});
         }
-        let login = "TODO parse login".to_string();
+        let login = msg[3..msg.len()-1].to_vec();
 
         // send 'cookie' command
         if (msg[0] == ('o' as u8)) && (msg[1] == ('k' as u8)) {
@@ -790,13 +788,15 @@ impl<A:Ai> Client<A> {
             println!("msg='{}'", msg.as_slice().to_hex());
             //TODO check cookie length
             let cookie = msg[3..].to_vec();
-            return Ok((login,cookie));
+            return Ok((login, cookie));
         }
         return Err(Error{source:"'cookie' command unexpected answer", detail:Some(String::from_utf8(msg).unwrap())});
     }
 
-    fn connect (&mut self, ip: IpAddr, port: u16, login: String, cookie: Vec<u8>) -> Option<Error> {
+    fn connect (&mut self, ip: IpAddr, port: u16, login: Vec<u8>, cookie: Vec<u8>) -> Option<Error> {
+        println!("connect {} / {}", login.as_slice().to_hex(), cookie.as_slice().to_hex());
         println!("TODO initiate connection here");
+        self.state.connect(login, cookie);
         None
     }
 
@@ -823,14 +823,18 @@ impl<A:Ai> Client<A> {
 
 struct Driver {
     useless: u32,
-    #[cfg(driver = "mio")]
-    handler: AnyHandler,
 }
 
 impl Driver {
     fn new () -> Driver {
         Driver{useless: 0}
     }
+}
+
+#[cfg(driver = "mio")]
+struct Driver {
+    useless: u32,
+    handler: AnyHandler,
 }
 
 #[cfg(driver = "mio")]
