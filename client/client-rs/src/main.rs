@@ -34,12 +34,13 @@ use mio::udp::UdpSocket;
 use mio::util::Slab;
 
 use std::str;
-use std::io::{Error, ErrorKind};
+//use std::io::{Error, ErrorKind};
 //use std::io::Write;
 //use std::fs::File;
 
 mod salem;
 use salem::state::*;
+use salem::message::Error;
 
 mod ai;
 use ai::Ai;
@@ -71,6 +72,7 @@ use std::u16;
 const UDP: Token = Token(0);
 const TCP: Token = Token(1);
 
+#[cfg(driver = "mio")]
 struct ControlConn {
     sock: TcpStream,
     //buf: Option<ByteBuf>,
@@ -82,6 +84,7 @@ struct ControlConn {
     responce: Option<String>
 }
 
+#[cfg(driver = "mio")]
 impl ControlConn {
     fn new(sock: TcpStream) -> ControlConn {
         ControlConn {
@@ -96,7 +99,7 @@ impl ControlConn {
         }
     }
 
-    fn writable (&mut self, eloop: &mut EventLoop<AnyHandler>, /*client*/ _: &mut Client) -> std::io::Result<()> {
+    fn writable (&mut self, eloop: &mut EventLoop<AnyHandler>/*, client : &mut Client*/) -> std::io::Result<()> {
         //println!("{:?}: writable", self.token);
         //let mut buf = self.buf.take().unwrap();
 
@@ -293,7 +296,7 @@ impl ControlConn {
             Ok(Some(/*r*/ _)) => {
                 //println!("{:?}: read {} bytes", self.token, r);
                 let buf = buf.flip();
-                let buf = String::from_utf8_lossy(buf.bytes()).into_owned();
+                let buf = String::from_utf8_lossy(&buf.bytes()).into_owned();
                 //println!("CONN read: {}", buf);
                 if buf.starts_with("GET /") {
                     let pattern: &[_] = &['\r','\n'];
@@ -506,26 +509,28 @@ impl ControlConn {
     }
 }
 
-struct AnyHandler<'a, T> {
+#[cfg(driver = "mio")]
+struct AnyHandler/*<'a>*/ {
     sock: UdpSocket,
     addr: std::net::SocketAddr,
-    client: &'a mut Client<'a, T>,
+    //client: &'a mut Client<'a, T>,
     counter: usize,
     tcp_listener: TcpListener,
     conns: Slab<ControlConn>,
-    ai: &'a mut Ai,
+    //ai: &'a mut Ai,
 }
 
-impl<'a> AnyHandler<'a> {
-    fn new(sock: UdpSocket, tcp_listener: TcpListener, addr: std::net::SocketAddr, client: &'a mut Client, ai: &'a mut Ai) -> AnyHandler<'a> {
+#[cfg(driver = "mio")]
+impl/*<'a>*/ AnyHandler/*<'a>*/ {
+    fn new(sock: UdpSocket, tcp_listener: TcpListener, addr: std::net::SocketAddr/*, client: &'a mut Client, ai: &'a mut Ai*/) -> AnyHandler/*<'a>*/ {
         AnyHandler {
             sock: sock,
             addr: addr,
-            client: client,
+            //client: client,
             counter: 0,
             tcp_listener: tcp_listener,
             conns: Slab::new_starting_at(Token(2), 128),
-            ai: ai,
+            //ai: ai,
         }
     }
 
@@ -561,7 +566,8 @@ impl<'a> AnyHandler<'a> {
     */
 }
 
-impl<'a> Handler for AnyHandler<'a> {
+#[cfg(driver = "mio")]
+impl/*<'a>*/ Handler for AnyHandler/*<'a>*/ {
     type Timeout = usize;
     type Message = ();
 
@@ -684,51 +690,50 @@ impl Ai for DeclAi {
         println!("INIT");
         self.useless = 42;
     }
-}
-
-struct Client<T: Ai> {
-    pub serv_ip     : IpAddr,
-    pub user        : String,
-    pub pass        : String,
-    pub cookie      : Vec<u8>,
     
-    state: State,
-    ai: T,
-    //TODO driver: Driver,
+    fn new () -> DeclAi {
+        Self::new()
+    }
 }
 
-impl Client {
-    pub fn new (user: String, pass: String) -> Client {
+struct Client<A:Ai> {
+    pub serv_ip     : IpAddr,
+    //pub user        : String,
+    //pub pass        : String,
+    //pub cookie      : Vec<u8>,
+    state: State,
+    ai: A,
+    driver: Driver,
+}
+
+impl<A:Ai> Client<A> {
+    pub fn new (/*user: String, pass: String*/) -> Client<A> {
+        let mut ai = LuaAi::new();
+        //let mut ai = DeclAi::new()
+        ai.init();
+
         Client {
             serv_ip: IpAddr::V4(Ipv4Addr::new(0,0,0,0)), //TODO use Option(IpAddr)
-            user: user,
-            pass: pass,
-            cookie: Vec::new(),
+            //user: user,
+            //pass: pass,
+            //cookie: Vec::new(),
             state: State::new(),
+            ai: A::new(),
+            driver: Driver::new(),
         }
     }
     
-    pub fn authorize (&mut self, hostname: &str, port: u16) -> Result<(), Error> {
-        let host = {
-            let mut ips = ::std::net::lookup_host(hostname).ok().expect("lookup_host");
-            ips.next().expect("ip.next").ok().expect("ip.next.ok")
-        };
-        
-        println!("connect to {}", host.ip());
-
-        self.serv_ip = host.ip();
-        //self.pass = pass;
-        //let auth_addr: SocketAddr = SocketAddr {ip: ip, port: port};
-        let auth_addr = SocketAddr::new(self.serv_ip, port);
-        println!("authorize {} @ {}", self.user, auth_addr);
+    pub fn authorize (&mut self, ip: IpAddr, port: u16, user: String, pass: String) -> Result<(String,Vec<u8>),Error> {
+        let auth_addr = SocketAddr::new(ip, port);
+        println!("authorize {} @ {}", user, auth_addr);
         //TODO add method connect(SocketAddr) to TcpStream
         //let stream = tryio!("tcp.connect" TcpStream::connect(self.auth_addr));
-        let stream = TcpStream::connect(auth_addr).unwrap();
+        let stream = TcpStream::connect(&auth_addr).unwrap();
         let context = SslContext::new(SslMethod::Sslv23).unwrap();
         let mut stream = SslStream::new(&context, stream).unwrap();
 
         // send 'pw' command
-        let user = self.user.as_bytes();
+        let user = user.as_bytes();
         let buf_len = (3 + user.len() + 1 + 32) as u16;
         let mut buf: Vec<u8> = Vec::with_capacity((2 + buf_len) as usize);
         buf.write_u16::<be>(buf_len).unwrap();
@@ -736,7 +741,7 @@ impl Client {
         buf.push(0);
         buf.extend(user);
         buf.push(0);
-        let pass_hash = hash(Type::SHA256, self.pass.as_bytes());
+        let pass_hash = hash(Type::SHA256, pass.as_bytes());
         assert!(pass_hash.len() == 32);
         buf.extend(pass_hash.as_slice());
         stream.write(buf.as_slice()).unwrap();
@@ -753,10 +758,12 @@ impl Client {
         let len2 = stream.read(msg.as_mut_slice()).ok().expect("read error");
         if len2 != len as usize { return Err(Error{source:"len2 != len",detail:None}); }
         println!("msg='{}'", str::from_utf8(msg.as_slice()).unwrap());
-        //println!("msg='{}'", msg.as_slice().to_hex());
+        println!("msg='{}'", msg.as_slice().to_hex());
+        println!("msg='{:?}'", msg.as_slice());
         if msg.len() < "ok\0\0".len() {
             return Err(Error{source:"'pw' command unexpected answer", detail:Some(String::from_utf8(msg).unwrap())});
         }
+        let login = "TODO parse login".to_string();
 
         // send 'cookie' command
         if (msg[0] == ('o' as u8)) && (msg[1] == ('k' as u8)) {
@@ -782,10 +789,76 @@ impl Client {
             //println!("msg='{}'", str::from_utf8(msg.as_slice()).unwrap());
             println!("msg='{}'", msg.as_slice().to_hex());
             //TODO check cookie length
-            self.cookie = msg[3..].to_vec();
-            return Ok(());
+            let cookie = msg[3..].to_vec();
+            return Ok((login,cookie));
         }
         return Err(Error{source:"'cookie' command unexpected answer", detail:Some(String::from_utf8(msg).unwrap())});
+    }
+
+    fn connect (&mut self, ip: IpAddr, port: u16, login: String, cookie: Vec<u8>) -> Option<Error> {
+        println!("TODO initiate connection here");
+        None
+    }
+
+    fn run (&mut self, host: &str, auth_port: u16, port: u16, username: String, password: String) -> Option<Error> {
+        let host = {
+            let mut ips = ::std::net::lookup_host(host).ok().expect("lookup_host");
+            ips.next().expect("ip.next").ok().expect("ip.next.ok")
+        };
+        let ip = host.ip();
+        println!("connect to {}", ip);
+        let (login, cookie) = match self.authorize(ip, auth_port, username, password) {
+            Ok((login,cookie)) => {
+                println!("success. cookie = [{}]", cookie.as_slice().to_hex());
+                (login, cookie)
+            },
+            Err(e) => {
+                println!("authorize error: {:?}", e);
+                return Some(e);
+            }
+        };
+        return self.connect(ip, port, login, cookie);
+    }
+}
+
+struct Driver {
+    useless: u32,
+    #[cfg(driver = "mio")]
+    handler: AnyHandler,
+}
+
+impl Driver {
+    fn new () -> Driver {
+        Driver{useless: 0}
+    }
+}
+
+#[cfg(driver = "mio")]
+impl Driver {
+    fn new () {
+    }
+    
+    fn init (serv_ip: IpAddr) -> Driver {
+        let any = str::FromStr::from_str("0.0.0.0:0").ok().expect("any.from_str");
+        let sock = UdpSocket::bound(&any).ok().expect("udp::bound");
+
+        //FIXME sock.connect(&addr);
+        //FIXME sock.set_reuseaddr(true).ok().expect("set_reuseaddr");
+
+        let mut eloop = EventLoop::new().ok().expect("eloop.new");
+        eloop.register_opt(&sock, UDP, Interest::readable() | Interest::writable(), PollOpt::level()).ok().expect("eloop.register(udp)");
+
+        let addr: std::net::SocketAddr = str::FromStr::from_str("127.0.0.1:33000").ok().expect("any.from_str");
+        let tcp_listener = TcpListener::bind(&addr).unwrap();
+        eloop.register_opt(&tcp_listener, TCP, Interest::readable(), PollOpt::edge()).unwrap();
+
+        let ip = /*client.*/serv_ip;
+        
+        let mut handler = AnyHandler::new(sock, tcp_listener, std::net::SocketAddr::new(ip, 1870)/*, &mut client, &mut ai*/);
+        handler.client.connect().ok().expect("client.connect()");
+
+        println!("run event loop");
+        eloop.run(&mut handler).ok().expect("Failed to run the event loop");
     }
 }
 
@@ -806,44 +879,15 @@ fn main () {
     //TODO FIXME use rusty-tags (https://github.com/dan-t/rusty-tags)
 
     let args: Vec<String> = std::env::args().collect();
-    if args.len() < 3 {
-        println!("Too few arguments");
-        return;
-    } else if args.len() > 3 {
-        println!("Too many arguments");
+    if args.len() < 3 || args.len() > 3 {
+        println!("wrong argument count");
+        println!("usage: {} username password", args[0]);
         return;
     }
     
     let username = args[1].clone();
     let password = args[2].clone();
 
-    let any = str::FromStr::from_str("0.0.0.0:0").ok().expect("any.from_str");
-    let sock = UdpSocket::bound(&any).ok().expect("udp::bound");
-
-    //FIXME sock.connect(&addr);
-    //FIXME sock.set_reuseaddr(true).ok().expect("set_reuseaddr");
-
-    let mut ai = LuaAi::new();
-    //let mut ai = DeclAi::new()
-    ai.init();
-
-    let mut client = Client::new(username, password);
-    match client.authorize("game.salemthegame.com", 1871) {
-        Ok(()) => { println!("success. cookie = [{}]", client.cookie.as_slice().to_hex()); },
-        Err(e) => { println!("authorize error: {:?}", e); return; }
-    };
-
-    let mut eloop = EventLoop::new().ok().expect("eloop.new");
-    eloop.register_opt(&sock, UDP, Interest::readable() | Interest::writable(), PollOpt::level()).ok().expect("eloop.register(udp)");
-
-    let addr: std::net::SocketAddr = str::FromStr::from_str("127.0.0.1:33000").ok().expect("any.from_str");
-    let tcp_listener = TcpListener::bind(&addr).unwrap();
-    eloop.register_opt(&tcp_listener, TCP, Interest::readable(), PollOpt::edge()).unwrap();
-
-    let ip = client.serv_ip;
-    let mut handler = AnyHandler::new(sock, tcp_listener, std::net::SocketAddr::new(ip, 1870), &mut client, &mut ai);
-    handler.client.connect().ok().expect("client.connect()");
-
-    println!("run event loop");
-    eloop.run(&mut handler).ok().expect("Failed to run the event loop");
+    Client::<DeclAi>::new().run("game.salemthegame.com", 1871, 1870, username, password);
 }
+

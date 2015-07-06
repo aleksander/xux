@@ -352,5 +352,9 @@ impl Ai for LuaAi {
     
     fn init (&mut self) {
     }
+    
+    fn new () -> LuaAi {
+        Self::new()
+    }
 }
 
