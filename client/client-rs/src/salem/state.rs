@@ -1,10 +1,10 @@
-use std::net::IpAddr;
-use std::net::Ipv4Addr;
+//use std::net::IpAddr;
+//use std::net::Ipv4Addr;
 use std::collections::hash_map::HashMap;
 //use std::collections::hash_set::HashSet;
 use std::collections::LinkedList;
-use std::net::TcpStream;
-use std::net::SocketAddr;
+//use std::net::TcpStream;
+//use std::net::SocketAddr;
 
 //extern crate openssl;
 //use self::openssl::crypto::hash::Type;
@@ -15,12 +15,15 @@ use std::vec::Vec;
 use std::io::Cursor;
 use std::io::Read;
 use std::io::BufRead;
-use std::io::Write;
-use std::str;
+//use std::io::Write;
+//use std::str;
 use std::u16;
 
 extern crate byteorder;
-use self::byteorder::{LittleEndian, BigEndian, ReadBytesExt, WriteBytesExt};
+use self::byteorder::LittleEndian;
+use self::byteorder::BigEndian;
+use self::byteorder::ReadBytesExt;
+//use self::byteorder::WriteBytesExt;
 #[allow(non_camel_case_types)]
 type le = LittleEndian;
 #[allow(non_camel_case_types)]
@@ -28,8 +31,8 @@ type be = BigEndian;
 
 use salem::message::*;
 
-extern crate rustc_serialize;
-use self::rustc_serialize::hex::ToHex;
+//extern crate rustc_serialize;
+//use self::rustc_serialize::hex::ToHex;
 
 extern crate flate2;
 //use std::io::prelude::*;
@@ -702,12 +705,12 @@ impl State {
         Ok(())
     }
 
-    pub fn connect (&mut self, login: &str, cookie: &Vec<u8>) -> Result<(),Error> {
+    pub fn connect (&mut self, login: &str, cookie: &[u8]) -> Result<(),Error> {
         //TODO send SESS until reply
         //TODO get username from server responce, not from auth username
         //let cookie = self.cookie.clone();
         //let user = self.user.clone();
-        try!(self.enqueue_to_send(Message::C_SESS(cSess{login:login.to_string(), cookie:cookie.clone()})));
+        try!(self.enqueue_to_send(Message::C_SESS(cSess{ login: login.to_string(), cookie: cookie.to_vec() })));
         Ok(())
     }
 

@@ -351,6 +351,8 @@ impl Ai for LuaAi {
     }
     
     fn init (&mut self) {
+        self.init();
+        println!("Lua AI initialised");
     }
     
     fn new () -> LuaAi {
