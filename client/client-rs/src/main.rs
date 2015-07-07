@@ -27,10 +27,21 @@ use salem::message::Error;
 mod ai;
 use ai::Ai;
 
+//#[cfg(ai = "lua")]
 mod ai_lua;
+//#[cfg(ai = "lua")]
 use ai_lua::LuaAi;
+//#[cfg(ai = "lua")]
+type AiImpl = LuaAi;
 
-extern crate image;
+#[cfg(ai = "decl")]
+mod ai_decl;
+#[cfg(ai = "decl")]
+use ai_decl::DeclAi;
+#[cfg(ai = "decl")]
+type AiImpl = DeclAi;
+
+//extern crate image;
 //use image::GenericImage;
 //use image::ImageBuffer;
 //use image::Rgb;
@@ -87,35 +98,6 @@ impl SockOpt for BindToDevice {
 //setsockopt(sd, SOL_SOCKET, SO_BINDTODEVICE, opt, 4);
 nix::sys::socket::setsockopt(sock.as_raw_fd, SockLevel::Socket, BindToDevice::new("wlan0"));
 */
-
-struct DeclAi {
-    useless: u64,
-}
-
-impl DeclAi {
-    fn new () -> DeclAi {
-        DeclAi {useless:0}
-    }
-}
-
-impl Ai for DeclAi {
-    fn update (&mut self, /*state*/_: &mut State) {
-        println!("PRINT THIS AND DO NOTHING");
-    }
-
-    fn exec (&mut self, s: &str) {
-        println!("EXEC: {}", s);
-    }
-    
-    fn init (&mut self) {
-        println!("INIT");
-        self.useless = 42;
-    }
-    
-    fn new () -> DeclAi {
-        Self::new()
-    }
-}
 
 struct Client<A:Ai> {
     //pub serv_ip     : IpAddr,
@@ -282,10 +264,8 @@ fn main () {
     let ip = host.ip();
     println!("connect to {}", ip);
 
-    match Client::<LuaAi>::authorize(ip, 1871, username, password) {
-    //match Client::<DeclAi>::authorize(ip, 1871, username, password) {
-        Ok((login, cookie)) => { Client::<LuaAi>::new(ip, 1870).run(&login, &cookie); }
-        //Ok((login, cookie)) => { Client::<DeclAi>::new(ip, 1870).run(&login, &cookie); }
+    match Client::<AiImpl>::authorize(ip, 1871, username, password) {
+        Ok((login, cookie)) => { Client::<AiImpl>::new(ip, 1870).run(&login, &cookie); }
         Err(e) => { println!("ERROR: {:?}", e); }
     }
 }
