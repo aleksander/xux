@@ -61,6 +61,7 @@ pub struct Obj {
     pub movement : Option<Movement>,
 }
 
+#[derive(Clone,Copy)]
 pub struct Movement {
     pub from: (i32,i32), //TODO unify coords
     pub to: (i32,i32), //TODO unify coords
@@ -696,27 +697,11 @@ impl State {
         None
     }
 
-    pub fn react (&mut self) -> Result<(),Error> {
-        //TODO implement state machine here or some kind of AI:
-        //     match state {
-        //         CHOOSING_CHARACTER => { ... }
-        //         GAMING => { ... }
-        //     }
-        if self.charlist.len() > 0 {
-            println!("send play '{}'", self.charlist[0]);
-            //TODO let mut rel = Rel::new(seq,id,name);
-            let char_name = self.charlist[0].clone();
-            let mut rel = Rel{seq:self.seq, rel:Vec::new()};
-            let id = self.widget_id("charlist", None).expect("charlist widget is not found");
-            let name : String = "play".to_string();
-            let mut args : Vec<MsgList> = Vec::new();
-            args.push(MsgList::tSTR(char_name));
-            let elem = RelElem::WDGMSG(WdgMsg{ id : id, name : name, args : args });
-            rel.rel.push(elem);
-            try!(self.enqueue_to_send(Message::REL(rel)));
-            self.charlist.clear();
+    pub fn widget_exists (&self, typ: &str, name: Option<String>) -> bool {
+        match self.widget_id(typ, name) {
+            Some(_) => true,
+            None => false
         }
-        Ok(())
     }
 
     pub fn connect (&mut self, login: &str, cookie: &[u8]) -> Result<(),Error> {
@@ -726,6 +711,21 @@ impl State {
         //let user = self.user.clone();
         try!(self.enqueue_to_send(Message::C_SESS(cSess{ login: login.to_string(), cookie: cookie.to_vec() })));
         Ok(())
+    }
+
+    pub fn send_play (&mut self, i: usize) -> Result<(),Error> {
+        //TODO let mut rel = Rel::new(seq,id,name);
+        let mut rel = Rel{seq:self.seq, rel:Vec::new()};
+        let id = self.widget_id("charlist", None).expect("charlist widget is not found");
+        let name = "play".to_string();
+        let charname = self.charlist[i].clone();
+        println!("send play '{}'", charname);
+        let mut args : Vec<MsgList> = Vec::new();
+        args.push(MsgList::tSTR(charname));
+        //TODO rel.append(RelElem::new())
+        let elem = RelElem::WDGMSG(WdgMsg{ id : id, name : name, args : args });
+        rel.rel.push(elem);
+        self.enqueue_to_send(Message::REL(rel))
     }
 
     pub fn mapreq (&mut self, x:i32, y:i32) -> Result<(),Error> {
@@ -739,10 +739,7 @@ impl State {
     }
 
     pub fn rx (&mut self, buf:&[u8]) -> Result<(),Error> {
-        try!(self.dispatch_message(buf));
-        //TODO reactor.react(&client)
-        try!(self.react());
-        Ok(())
+        self.dispatch_message(buf)
     }
     
     pub fn timeout (&mut self, seq: usize) {
@@ -797,7 +794,7 @@ impl State {
     }
     */
 
-    pub fn go (&mut self, x: i32, y: i32) -> Result<(),Error> {
+    pub fn go (&mut self, x: i32, y: i32) -> Result<(),Error> /*TODO Option<Error>*/ {
         println!("GO");
         //TODO let mut rel = Rel::new(seq,id,name);
         let mut rel = Rel{seq:self.seq, rel:Vec::new()};
@@ -884,6 +881,34 @@ impl State {
         match self.hero_grid_xy() {
             Some(xy) => self.map.grids.get(&xy),
             None => None
+        }
+    }
+
+    pub fn hero_exists (&self) -> bool {
+        match self.hero_obj() {
+            Some(_) => true,
+            None => false
+        }
+    }
+
+    pub fn hero_grid_exists (&self) -> bool {
+        match self.hero_grid() {
+            Some(_) => true,
+            None => false
+        }
+    }
+
+    pub fn hero_movement (&self) -> Option<Movement> {
+        match self.hero_obj() {
+            Some(hero) => hero.movement,
+            None => None
+        }
+    }
+
+    pub fn hero_is_moving (&self) -> bool {
+        match self.hero_movement() {
+            Some(_) => true,
+            None => false
         }
     }
 }

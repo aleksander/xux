@@ -29,18 +29,18 @@ use message::Error;
 mod ai;
 use ai::Ai;
 
-//#[cfg(ai = "lua")]
+#[cfg(ai = "lua")]
 mod ai_lua;
-//#[cfg(ai = "lua")]
+#[cfg(ai = "lua")]
 use ai_lua::LuaAi;
-//#[cfg(ai = "lua")]
+#[cfg(ai = "lua")]
 type AiImpl = LuaAi;
 
-#[cfg(ai = "decl")]
+//#[cfg(ai = "decl")]
 mod ai_decl;
-#[cfg(ai = "decl")]
+//#[cfg(ai = "decl")]
 use ai_decl::DeclAi;
-#[cfg(ai = "decl")]
+//#[cfg(ai = "decl")]
 type AiImpl = DeclAi;
 
 //extern crate image;
