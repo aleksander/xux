@@ -19,13 +19,15 @@ enum Step {
 pub struct DeclAi {
     state: AiState,
     step: Step,
+    cycle: usize,
 }
 
 impl DeclAi {
     fn new () -> DeclAi {
         DeclAi {
             state: AiState::WaitForCharList,
-            step: Step::A
+            step: Step::A,
+            cycle: 0,
         }
     }
 }
@@ -57,13 +59,16 @@ impl Ai for DeclAi {
                             Step::C => (-100,0),
                             Step::D => (0,-100),
                         };
+                        if let Step::D = self.step {
+                            self.cycle += 1;
+                        }
                         self.step = match self.step {
                             Step::A => Step::B,
                             Step::B => Step::C,
                             Step::C => Step::D,
                             Step::D => Step::A,
                         };
-                        state.go(x + dx, y + dy);
+                        state.go(x + dx, y + dy).unwrap();
                         self.state = AiState::Walking1;
                     }
                     None => {}
@@ -76,7 +81,12 @@ impl Ai for DeclAi {
             }
             AiState::Walking2 => {
                 if !state.hero_is_moving() {
-                    self.state = AiState::Walking;
+                    if self.cycle < 2 {
+                        self.state = AiState::Walking;
+                    } else {
+                        state.close().unwrap();
+                        self.state = AiState::WaitForEnd;
+                    }
                 }
             }
             AiState::WaitForEnd => {
