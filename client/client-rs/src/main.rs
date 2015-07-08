@@ -20,9 +20,11 @@ use std::str;
 //use std::io::Write;
 //use std::fs::File;
 
-mod salem;
-use salem::state::*;
-use salem::message::Error;
+mod state;
+use state::*;
+
+mod message;
+use message::Error;
 
 mod ai;
 use ai::Ai;

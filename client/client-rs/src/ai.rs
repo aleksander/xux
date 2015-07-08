@@ -1,4 +1,4 @@
-pub use salem::state::State;
+pub use state::State;
 
 pub trait Ai {
     fn update (&mut self, state: &mut State);

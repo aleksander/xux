@@ -5,7 +5,7 @@ use self::lua::ffi::lua_State;
 extern crate libc;
 use self::libc::c_int;
 
-use salem::state::State;
+use state::State;
 
 use ai::Ai;
 

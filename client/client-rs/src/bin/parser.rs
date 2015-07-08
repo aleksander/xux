@@ -9,7 +9,7 @@ extern crate pcapng;
 //use pcapng::block::parse_blocks;
 
 extern crate client_rs;
-use client_rs::salem::message::*;
+use client_rs::message::*;
 
 extern crate pnet;
 use pnet::packet::ethernet::EthernetPacket;

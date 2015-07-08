@@ -29,7 +29,21 @@ type le = LittleEndian;
 #[allow(non_camel_case_types)]
 type be = BigEndian;
 
-use salem::message::*;
+use message::MapData;
+use message::Rel;
+use message::Message;
+use message::MessageDirection;
+use message::Error;
+use message::SessError;
+use message::ObjProp;
+use message::MsgList;
+use message::Ack;
+use message::ObjAck;
+use message::RelElem;
+use message::NewWdg;
+use message::WdgMsg;
+use message::cSess;
+use message::MapReq;
 
 //extern crate rustc_serialize;
 //use self::rustc_serialize::hex::ToHex;
