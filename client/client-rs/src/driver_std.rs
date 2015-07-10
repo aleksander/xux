@@ -4,6 +4,8 @@ use std::sync::mpsc::channel;
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::Sender;
 //use std::sync::mpsc;
+use std::io::Read;
+use std::io::Write;
 
 pub struct Driver {
     sock: std::net::UdpSocket,
@@ -36,6 +38,30 @@ impl Driver {
             }
         });
 
+        let _tx = tx.clone();
+        thread::spawn(move || {
+            let listener = std::net::TcpListener::bind("127.0.0.1:8080").unwrap();
+            for stream in listener.incoming() {
+                match stream {
+                    Ok(mut stream) => {
+                        let _tx = _tx.clone();
+                        thread::spawn(move || {
+                            let mut buf = vec![0; 1024];
+                            let (reply_tx, reply_rx) = channel();
+                            loop {
+                                let len = stream.read(&mut buf).unwrap();
+                                _tx.send(Event::Tcp( (reply_tx.clone(), buf[..len].to_vec()) )).unwrap();
+                                let reply = reply_rx.recv().unwrap();
+                                //println!("RENDERRED REPLY: {:?}", reply);
+                                let len = stream.write(reply.as_bytes()).unwrap();
+                            }
+                        });
+                    }
+                    Err(e) => { println!("connection error: {:?}", e); break; }
+                }
+            }
+        });
+
         Ok(Driver{
             sock: sock,
             //buf: vec![0; 65535],
@@ -64,11 +90,15 @@ impl Driver {
     pub fn event (&mut self) -> std::result::Result<Event, std::sync::mpsc::RecvError> {
         self.rx.recv()
     }
+    
+    pub fn reply (&self, _: String) {
+    }
 }
 
 //TODO move to driver trait module
 pub enum Event {
     Rx(Vec<u8>),
-    Timeout(usize)
+    Timeout(usize),
+    Tcp( (Sender<String>,Vec<u8>) ),
 }
 

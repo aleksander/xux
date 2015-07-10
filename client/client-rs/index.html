@@ -5,6 +5,8 @@
 <script src="http://code.jquery.com/jquery-2.1.4.min.js"></script>
 <script type="text/javascript">
 
+    var url = 'http://localhost:8080';
+
     if (typeof String.prototype.startsWith != 'function') {
       String.prototype.startsWith = function (str){
         return this.slice(0, str.length) == str;
@@ -16,7 +18,7 @@
         var ctx = canv.getContext('2d');
 
         $('#get-objects').on('click', function(){
-            $.getJSON('http://localhost:33000/objects', function(data) {
+            $.getJSON(url+'/objects', function(data) {
                 var h = "";
                 var minx = data[0].x;
                 var miny = data[0].y;
@@ -39,7 +41,7 @@
         });
 
         $('#get-widgets').on('click', function(){
-            $.getJSON('http://localhost:33000/widgets', function(data) {
+            $.getJSON(url+'/widgets', function(data) {
                 var h = "";
                 for (var i=1; i<data.length; ++i) {
                     e = data[i];
@@ -50,17 +52,17 @@
         });
 
         $('#get-env').on('click', function(){
-            $.getJSON('http://localhost:33000/env', function(data) {
+            $.getJSON(url+'/env', function(data) {
                 $('#show').html("<p>"+data+"</p>");
             });
         });
 
         $('#quit').on('click', function(){
-            $.get('http://localhost:33000/quit');
+            $.get(url+'/quit');
         });
 
         var redraw = function(){
-            $.getJSON('http://localhost:33000/env', function(data){
+            $.getJSON(url+'/env', function(data){
                 ctx.fillStyle = 'rgb(200,200,200)';
                 ctx.fillRect(0, 0, canv.width, canv.height);
 
