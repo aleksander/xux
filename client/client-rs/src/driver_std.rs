@@ -70,14 +70,14 @@ impl Driver {
             rx: rx
         })
     }
-    
+
     pub fn tx (&self, buf: &[u8]) -> std::io::Result<()> {
         //println!("driver.tx: {} bytes", buf.len());
         let len = try!(self.sock.send_to(buf, &self.dst));
         if len != buf.len() { return Err(std::io::Error::new(std::io::ErrorKind::Other, "sent len != buf len")) }
         Ok(())
     }
-    
+
     pub fn timeout (&self, seq: usize, ms: u64) {
         //println!("driver.timeout: {} {}ms", seq, ms);
         let tx = self.tx.clone();
@@ -86,13 +86,13 @@ impl Driver {
             tx.send(Event::Timeout(seq)).unwrap();
         });
     }
-    
+
     pub fn event (&mut self) -> std::result::Result<Event, std::sync::mpsc::RecvError> {
         self.rx.recv()
     }
-    
-    pub fn reply (&self, _: String) {
-    }
+
+    //pub fn reply (&self, _: String) {
+    //}
 }
 
 //TODO move to driver trait module
@@ -101,4 +101,3 @@ pub enum Event {
     Timeout(usize),
     Tcp( (Sender<String>,Vec<u8>) ),
 }
-

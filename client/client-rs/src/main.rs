@@ -57,6 +57,9 @@ type le = LittleEndian;
 #[allow(non_camel_case_types)]
 type be = BigEndian;
 
+#[macro_use]
+extern crate glium;
+
 use std::vec::Vec;
 use std::io::Cursor;
 use std::io::Read;
@@ -101,162 +104,112 @@ impl SockOpt for BindToDevice {
 nix::sys::socket::setsockopt(sock.as_raw_fd, SockLevel::Socket, BindToDevice::new("wlan0"));
 */
 
-mod web {
+mod web;
 
+mod render {
+    use std::sync::mpsc::channel;
+    //use std::sync::mpsc::Receiver;
+    use std::sync::mpsc::Sender;
+    use std::thread;
     use state::State;
-    use std::str;
 
-    pub fn render (buf: &[u8], state: &State) -> String {
-        let buf = str::from_utf8(buf).unwrap();
-        println!("render: {:?}", buf);
-        if buf.starts_with("GET /") {
-            let pattern: &[_] = &['\r','\n'];
-            let crlf = buf.find(pattern).unwrap_or(buf.len());
-            responce(state, &buf[5..crlf]).unwrap_or("HTTP/1.1 404 Not Found\r\n\r\n".to_string())
-        } else {
-            "HTTP/1.1 404 Not Found\r\n\r\n".to_string()
-        }
+    pub struct Render {
+        tx: Sender<usize>,
     }
 
-    fn responce (state: &State, buf: &str) -> Option<String> {
-        if buf.starts_with(" ") {
-            let body = "<html> \r\n\
-                            <head> \r\n\
-                                <title></title> \r\n\
-                                <script src=\"http://code.jquery.com/jquery-1.11.3.min.js\" stype=\"text/javascript\"></script> \r\n\
-                                <script type=\"text/javascript\"> \r\n\
-                                    $(document).ready(function(){ \r\n\
-                                        $('#getdata-button').on('click', function(){ \r\n\
-                                            $.get('http://localhost:33000/data', function(data) { \r\n\
-                                                $('#showdata').html(\"<p>\"+data+\"</p>\"); \r\n\
-                                            }); \r\n\
-                                        }); \r\n\
-                                    }); \r\n\
-                                </script> \r\n\
-                            </head> \r\n\
-                            <body> \r\n\
-                                <a href=\"#\" id=\"getdata-button\">C</a> \r\n\
-                                <div id=\"showdata\"></div> \r\n\
-                            </body> \r\n\
-                        </html>\r\n\r\n";
-            Some(format!("HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\n\r\n", body.len()) + &body)
-        } else if buf.starts_with("env ") {
-            // {
-            //   res:[{id:id,name:name}],
-            //   obj:[{},{}],
-            //   wid:[{},{}],
-            //   map:[z,z,...,z]
-            // }
+    impl Render {
+        pub fn new () -> Render {
+            let (tx,rx) = channel();
+            thread::spawn(move || {
+                    use ::glium::DisplayBuild;
+                    use ::glium::Surface;
+                    use ::glium::glutin::WindowBuilder;
+                    use ::glium::index::NoIndices;
+                    use ::glium::VertexBuffer;
+                    use ::glium::index::PrimitiveType;
+                    use ::glium::glutin;
+                    use ::glium::Program;
+                    use ::glium::uniforms::EmptyUniforms;
+                    use std::sync::mpsc::TryRecvError;
 
-            let mut body = "{\"res\":[".to_string();
+                    let display = WindowBuilder::new()
+                            .with_dimensions(256, 256)
+                            .with_title(format!("render"))
+                            .build_glium()
+                            .unwrap();
 
-            let mut period = "";
-            for (id,name) in &state.resources {
-                body = body + &format!("\r\n{}{{\"id\":{},\"name\":\"{}\"}}", period, id, name);
-                period = ",";
-            }
-            
-            body = body + "],\"obj\":[";
+                    #[derive(Copy, Clone)]
+                    struct Vertex {
+                        position: [f32; 2],
+                    }
 
-            period = "";
-            for o in state.objects.values() {
-                let resname = match state.resources.get(&o.resid) {
-                    Some(res) => res.as_str(),
-                    None      => "null"
-                };
-                body = body + &format!("\r\n{}{{\"x\":{},\"y\":{},\"resid\":{},\"resname\":\"{}\"}}", period, o.x, o.y, o.resid, resname);
-                period = ",";
-            }
+                    implement_vertex!(Vertex, position);
 
-            body = body + "],\"wid\":[";
+                    let vertex1 = Vertex { position: [-0.5, -0.5] };
+                    let vertex2 = Vertex { position: [ 0.0,  0.5] };
+                    let vertex3 = Vertex { position: [ 0.5, -0.25] };
+                    let shape = vec![vertex1, vertex2, vertex3];
 
-            period = "";
-            for (id,w) in &state.widgets {
-                body = body + &format!("\r\n{}{{\"id\":{},\"name\":\"{}\",\"parent\":\"{}\"}}", period, id, w.typ, w.parent);
-                period = ",";
-            }
+                    let vertex_buffer = VertexBuffer::new(&display, shape);
+                    let indices = NoIndices(PrimitiveType::TrianglesList);
 
-            body = body + "],\"map\":[";
+                    let vertex_shader_src = r#"
+                        #version 140
+                        in vec2 position;
+                        void main() {
+                            gl_Position = vec4(position, 0.0, 1.0);
+                        }
+                    "#;
 
-            period = "";
-            match state.hero_grid() {
-                Some(grid) => {
-                    for y in 0..100 {
-                        for x in 0..100 {
-                            body = body + &format!("{}{}", period, grid.z[x+y*100]);
-                            period = ",";
+                    let fragment_shader_src = r#"
+                        #version 140
+                        out vec4 color;
+                        void main() {
+                            color = vec4(0.3, 0.3, 0.3, 1.0);
+                        }
+                    "#;
+
+                    let program = Program::from_source(&display, vertex_shader_src, fragment_shader_src, None).unwrap();
+
+                    'main: loop {
+                        let mut target = display.draw();
+                        target.clear_color(0.1, 0.1, 0.1, 1.0);
+                        target.draw(&vertex_buffer, &indices, &program, &EmptyUniforms, &Default::default()).unwrap();
+                        target.finish().unwrap();
+
+                        for ev in display.poll_events() {
+                            match ev {
+                                glutin::Event::KeyboardInput(_, _, Some(glutin::VirtualKeyCode::Escape)) => break 'main,
+                                glutin::Event::Closed => break 'main,
+                                _ => ()
+                            }
+                        }
+
+                        match rx.try_recv() {
+                            Ok(value) => {
+                                println!("render: received {}", value);
+                            }
+                            Err(e) => {
+                                if let TryRecvError::Disconnected = e {
+                                    println!("render: disconnected");
+                                    break 'main;
+                                }
+                            }
                         }
                     }
-                }
-                //TODO send one Null instead of 10000 zeroes
-                None => {
-                    for _ in 0..100 {
-                        for _ in 0..100 {
-                            body = body + &format!("{}{}", period, 0);
-                            period = ",";
-                        }
-                    }
-                }
-            }
+            });
+            Render{tx:tx}
+        }
 
-            body = body + "]}";
-            Some(format!("HTTP/1.1 200 OK\r\nContent-Type: text/json\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\n\r\n", body.len()) + &body)
-        } else if buf.starts_with("objects ") {
-            let mut body = String::new();
-            for o in state.objects.values() {
-                let resname = match state.resources.get(&o.resid) {
-                    Some(res) => res.as_str(),
-                    None      => "null"
-                };
-                body = body + &format!("{{\"x\":{},\"y\":{},\"resid\":{},\"resname\":\"{}\"}},", o.x, o.y, o.resid, resname);
-            }
-            body = "[ ".to_string() + &body[..body.len()-1] + " ]";
-            Some(format!("HTTP/1.1 200 OK\r\nContent-Type: text/json\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\n\r\n", body.len()) + &body)
-        } else if buf.starts_with("widgets ") {
-            let mut body = String::new();
-            for (id,w) in &state.widgets {
-                body = body + &format!("{{\"id\":{},\"name\":\"{}\",\"parent\":\"{}\"}},", id, w.typ, w.parent);
-            }
-            body = "[ ".to_string() + &body[..body.len()-1] + " ]";
-            Some(format!("HTTP/1.1 200 OK\r\nContent-Type: text/json\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\n\r\n", body.len()) + &body)
-        } else if buf.starts_with("resources ") {
+        pub fn update (&mut self, state: &State) {
             //TODO
-            Some("HTTP/1.1 404 Not Implemented\r\n\r\n".to_string())
-        } else if buf.starts_with("go/") {
-            //FIXME should NOT be implemented for web. web is for view only
-            //println!("GO: {} {}", x, y);
-            //if let Err(e) = client.go(x,y) {
-            //    println!("ERROR: client.go: {:?}", e);
-            //}
-            let tmp1: Vec<&str> = buf.split(' ').collect();
-            println!("TMP1: {:?}", tmp1);
-            let tmp2: Vec<&str> = tmp1[1].split('/').collect();
-            println!("TMP2: {:?}", tmp2);
-            if tmp2.len() > 3 {
-                let /*x*/_: i32 = match str::FromStr::from_str(tmp2[2]) { Ok(v) => v, Err(_) => 0 };
-                let /*y*/_: i32 = match str::FromStr::from_str(tmp2[3]) { Ok(v) => v, Err(_) => 0 };
-                //self.url = Some(Url::Go(x,y));
-            } else {
-                //self.url = Some(Url::Go(0,0));
-            }
-            Some("HTTP/1.1 200 OK\r\n\r\n".to_string())
-        } else if buf.starts_with("quit ") {
-            /*FIXME if let Err(e) = state.close() {
-                println!("ERROR: client.close: {:?}", e);
-            }*/
-            Some("HTTP/1.1 200 OK\r\n\r\n".to_string())
-        } else {
-            Some("HTTP/1.1 404 Not Found\r\n\r\n".to_string())
+            self.tx.send(42).unwrap();
         }
     }
-
 }
 
 struct Client<A:Ai> {
-    //pub serv_ip     : IpAddr,
-    //pub user        : String,
-    //pub pass        : String,
-    //pub cookie      : Vec<u8>,
+    render: render::Render,
     state: State,
     ai: A,
     driver: Driver,
@@ -264,22 +217,17 @@ struct Client<A:Ai> {
 
 impl<A:Ai> Client<A> {
     pub fn new (ip: IpAddr, port: u16) -> Client<A> {
-        //let mut ai = LuaAi::new();
-        //let mut ai = DeclAi::new();
         let mut ai = A::new();
         ai.init();
 
         Client {
-            //serv_ip: IpAddr::V4(Ipv4Addr::new(0,0,0,0)), //TODO use Option(IpAddr)
-            //user: user,
-            //pass: pass,
-            //cookie: Vec::new(),
+            render: render::Render::new(),
             state: State::new(),
             ai: ai,
             driver: Driver::new(ip, port).unwrap(),
         }
     }
-    
+
     pub fn authorize (ip: IpAddr, port: u16, user: String, pass: String) -> Result<(String,Vec<u8>),Error> {
         let auth_addr = SocketAddr::new(ip, port);
         println!("authorize {} @ {}", user, auth_addr);
@@ -368,7 +316,7 @@ impl<A:Ai> Client<A> {
                     }
                 }
             }
-            
+
             match self.driver.event().unwrap() {
                 Event::Rx(buf) => {
                     //println!("event::rx: {} bytes", buf.len());
@@ -379,13 +327,15 @@ impl<A:Ai> Client<A> {
                     self.state.timeout(seq);
                 }
                 Event::Tcp((tx,buf)) => {
-                    let reply = web::render(&buf, &self.state);
-                    tx.send(reply);
+                    let reply = web::responce(&buf, &self.state);
+                    tx.send(reply).unwrap();
                     //self.driver.reply(reply);
                 }
             }
-            
+
             self.ai.update(&mut self.state);
+
+            self.render.update(&self.state);
         }
     }
 }
@@ -411,15 +361,15 @@ fn main () {
         println!("usage: {} username password", args[0]);
         return;
     }
-    
+
     let username = args[1].clone();
     let password = args[2].clone();
 
-    let host = {
+    let ip = {
         let mut ips = ::std::net::lookup_host("game.salemthegame.com").ok().expect("lookup_host");
-        ips.next().expect("ip.next").ok().expect("ip.next.ok")
+        let host = ips.next().expect("ip.next").ok().expect("ip.next.ok");
+        host.ip()
     };
-    let ip = host.ip();
     println!("connect to {}", ip);
 
     match Client::<AiImpl>::authorize(ip, 1871, username, password) {
@@ -427,27 +377,3 @@ fn main () {
         Err(e) => { println!("ERROR: {:?}", e); }
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
