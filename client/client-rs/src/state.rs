@@ -87,7 +87,7 @@ pub struct Widget {
     pub parent : u16,
     pub name : Option<String>,
 }
-    
+
 pub struct Hero {
     pub name: Option<String>,
     pub obj: Option<u32>,
@@ -95,6 +95,7 @@ pub struct Hero {
     pub tmexp: Option<i32>,
     pub hearthfire: Option<(i32,i32)>, //TODO unify coords
     pub inventory: HashMap<(i32,i32),u16>, //TODO unify coords
+    pub start_xy: Option<(i32,i32)>,
 }
 
 pub struct MapPieces {
@@ -249,7 +250,7 @@ impl State {
         widgets.insert(0, Widget{ id:0, typ:"root".to_string(), parent:0, name:None });
 
         State {
-            widgets: widgets, 
+            widgets: widgets,
             objects: HashMap::new(),
             charlist: Vec::new(),
             resources: HashMap::new(),
@@ -266,6 +267,7 @@ impl State {
                 tmexp: None,
                 hearthfire: None,
                 inventory: HashMap::new(),
+                start_xy: None,
             },
             map: Map{ partial: HashMap::new(), grids: HashMap::new() },
         }
@@ -318,7 +320,7 @@ impl State {
         if let Some(remains) = remains {
             println!("                 REMAINS {} bytes", remains.len());
         }
-        
+
         match msg {
             Message::S_SESS(sess) => {
                 println!("RX: S_SESS {:?}", sess.err);
@@ -435,7 +437,7 @@ impl State {
                                             }
                                             Some(Movement{
                                                 from: m.from,
-                                                to: m.to, 
+                                                to: m.to,
                                                 steps: m.steps,
                                                 step: step })
                                         } else {
@@ -470,7 +472,7 @@ impl State {
         println!("cache REL {}-{}", rel.seq, rel.seq + ((rel.rel.len() as u16) - 1));
         self.rel_cache.insert(rel.seq, rel);
     }
-    
+
     fn dispatch_rel_cache (&mut self, rel: &Rel) -> Result<(),Error> {
         //XXX are we handle seq right in the case of overflow ???
         let mut next_rel_seq = rel.seq + ((rel.rel.len() as u16) - 1);
@@ -491,7 +493,7 @@ impl State {
         self.rx_rel_seq = next_rel_seq + 1;
         Ok(())
     }
-        
+
     fn dispatch_rel (&mut self, rel: &Rel) {
         println!("dispatch REL {}-{}", rel.seq, rel.seq + ((rel.rel.len() as u16) - 1));
         //println!("RX: {:?}", rel);
@@ -539,7 +541,12 @@ impl State {
                     //FIXME BUG: object ID is uint32 but here it is int32 WHY??? XXX
                     self.hero.obj = Some(obj as u32);
                     println!("HERO: obj = '{:?}'", self.hero.obj);
-                    
+
+                    match self.hero_xy() {
+                        Some(xy) => { self.hero.start_xy = Some(xy); }
+                        None => { panic!("we have received hero object ID, but hero XY is None"); }
+                    }
+
                     //TODO move to fn client.update_grids_around(...) { ... }
                     //     if client.hero.current_grid_is_changed() { client.update_grids_around(); }
                     if let Some(xy) = self.hero_grid_xy() {
@@ -741,7 +748,7 @@ impl State {
     pub fn rx (&mut self, buf:&[u8]) -> Result<(),Error> {
         self.dispatch_message(buf)
     }
-    
+
     pub fn timeout (&mut self, seq: usize) {
         match self.que.back() {
             Some(ref mut buf) => {
@@ -781,7 +788,7 @@ impl State {
         Ok(())
     }
 
-    /*    
+    /*
     pub fn ready_to_go (&self) -> bool {
         let mut ret = false;
         for name in self.widgets.values() {
@@ -837,7 +844,7 @@ impl State {
         try!(self.enqueue_to_send(Message::REL(rel)));
         Ok(())
     }
-    
+
     pub fn choose_pick (&mut self, wdg_id: u16) -> Result<(),Error> {
         println!("GO");
         //TODO let mut rel = Rel::new(seq,id,name);
@@ -869,7 +876,7 @@ impl State {
             None => None
         }
     }
-    
+
     pub fn hero_grid_xy (&self) -> Option<(i32,i32)> {
         match self.hero_xy() {
             Some(xy) => Some(grid(xy)),
@@ -911,6 +918,10 @@ impl State {
             None => false
         }
     }
+
+    //pub fn next_event (&self) -> Option<Event> {
+    //    self.events.back()
+    //}
 }
 
 pub fn grid ((x,y): (i32,i32)) -> (i32,i32) {

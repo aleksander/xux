@@ -202,8 +202,10 @@ mod render {
         }
 
         pub fn update (&mut self, state: &State) {
-            //TODO
-            self.tx.send(42).unwrap();
+            if let Some(grid) = state.start_grid() { ... }
+            Event::Grid(x,y) => {
+                self.tx.send(42).unwrap();
+            }
         }
     }
 }
