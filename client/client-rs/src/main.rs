@@ -111,10 +111,15 @@ mod render {
     //use std::sync::mpsc::Receiver;
     use std::sync::mpsc::Sender;
     use std::thread;
-    use state::State;
+    //use state::State;
+
+    #[derive(Debug)]
+    pub enum Event {
+        Grid(i32,i32,Vec<u8>,Vec<i16>),
+    }
 
     pub struct Render {
-        tx: Sender<usize>,
+        tx: Sender<Event>,
     }
 
     impl Render {
@@ -130,6 +135,9 @@ mod render {
                     use ::glium::glutin;
                     use ::glium::Program;
                     use ::glium::uniforms::EmptyUniforms;
+                    use ::glium::draw_parameters::PolygonMode;
+                    use ::glium::draw_parameters::DrawParameters;
+                    use ::glium::texture::Texture2d;
                     use std::sync::mpsc::TryRecvError;
 
                     let display = WindowBuilder::new()
@@ -141,14 +149,17 @@ mod render {
                     #[derive(Copy, Clone)]
                     struct Vertex {
                         position: [f32; 2],
+                        tex_coord: [f32; 2],
                     }
 
-                    implement_vertex!(Vertex, position);
+                    implement_vertex!(Vertex, position, tex_coord);
 
-                    let vertex1 = Vertex { position: [-0.5, -0.5] };
-                    let vertex2 = Vertex { position: [ 0.0,  0.5] };
-                    let vertex3 = Vertex { position: [ 0.5, -0.25] };
-                    let shape = vec![vertex1, vertex2, vertex3];
+                    let vertex1 = Vertex { position: [-0.8,  0.8], tex_coord: [0.0, 0.0] };
+                    let vertex2 = Vertex { position: [ 0.8,  0.8], tex_coord: [1.0, 0.0] };
+                    let vertex3 = Vertex { position: [ 0.8, -0.8], tex_coord: [1.0, 1.0] };
+                    let vertex4 = Vertex { position: [-0.8, -0.8], tex_coord: [0.0, 1.0] };
+                    let shape = vec![vertex1, vertex2, vertex4,
+                                     vertex2, vertex3, vertex4];
 
                     let vertex_buffer = VertexBuffer::new(&display, shape);
                     let indices = NoIndices(PrimitiveType::TrianglesList);
@@ -156,43 +167,73 @@ mod render {
                     let vertex_shader_src = r#"
                         #version 140
                         in vec2 position;
+                        in vec2 tex_coords;
+                        out vec2 v_tex_coords;
                         void main() {
+                            v_tex_coords = tex_coords;
                             gl_Position = vec4(position, 0.0, 1.0);
                         }
                     "#;
 
                     let fragment_shader_src = r#"
                         #version 140
+                        in vec2 v_tex_coords;
                         out vec4 color;
+                        //uniform sampler2D tex;
                         void main() {
-                            color = vec4(0.3, 0.3, 0.3, 1.0);
+                            color = vec4(1.0,1.0,1.0,1.0);//texture(tex, v_tex_coords);
                         }
                     "#;
 
                     let program = Program::from_source(&display, vertex_shader_src, fragment_shader_src, None).unwrap();
 
-                    'main: loop {
+                    let mut time_to_exit = false;
+
+                    /*'ecto_loop:*/ loop {
                         let mut target = display.draw();
                         target.clear_color(0.1, 0.1, 0.1, 1.0);
-                        target.draw(&vertex_buffer, &indices, &program, &EmptyUniforms, &Default::default()).unwrap();
+                        let mut draw_params: DrawParameters = Default::default();
+                        draw_params.polygon_mode = PolygonMode::Line;
+                        target.draw(&vertex_buffer, &indices, &program, &EmptyUniforms, &draw_params).unwrap();
                         target.finish().unwrap();
 
                         for ev in display.poll_events() {
                             match ev {
-                                glutin::Event::KeyboardInput(_, _, Some(glutin::VirtualKeyCode::Escape)) => break 'main,
-                                glutin::Event::Closed => break 'main,
+                                glutin::Event::KeyboardInput(_, _, Some(glutin::VirtualKeyCode::Escape)) => /*break 'ecto_loop,*/{time_to_exit = true;break;}
+                                glutin::Event::Closed => /*break 'ecto_loop,*/{time_to_exit = true;break;}
                                 _ => ()
                             }
                         }
+                        if time_to_exit { break; }
 
                         match rx.try_recv() {
                             Ok(value) => {
-                                println!("render: received {}", value);
+                                /*
+                                match value {
+                                    Event::Grid(x,y,tiles,z) => {
+                                        println!("render: received Grid ({},{})", x, y);
+                                        //TODO do with iterator and .map() or .zip()
+                                        let mut image = Vec::new(); //TODO with_capacity
+                                        for y in 0..100 {
+                                            let mut row = Vec::new();
+                                            for x in 0..100 {
+                                                let tile = tiles[y*100 + x];
+                                                row.push((tile,tile,tile));
+                                            }
+                                            image.push(row);
+                                        }
+                                        let texture = Texture2d::new(&display, image)/*.unwrap()*/;
+                                        let uniforms = uniform! {
+                                            tex: &texture,
+                                        };
+                                    }
+                                }
+                                */
                             }
                             Err(e) => {
                                 if let TryRecvError::Disconnected = e {
                                     println!("render: disconnected");
-                                    break 'main;
+                                    break/* 'ecto_loop*/;
                                 }
                             }
                         }
@@ -201,11 +242,8 @@ mod render {
             Render{tx:tx}
         }
 
-        pub fn update (&mut self, state: &State) {
-            if let Some(grid) = state.start_grid() { ... }
-            Event::Grid(x,y) => {
-                self.tx.send(42).unwrap();
-            }
+        pub fn update (&mut self, event: Event) {
+            self.tx.send(event).unwrap();
         }
     }
 }
@@ -337,7 +375,16 @@ impl<A:Ai> Client<A> {
 
             self.ai.update(&mut self.state);
 
-            self.render.update(&self.state);
+            if let Some(xy) = self.state.start_point() {
+                let (start_grid_x,start_grid_y) = state::grid(xy);
+                while let Some(event) = self.state.next_event() {
+                    self.render.update(
+                        match event {
+                            state::Event::Grid(x,y,tiles,z) => render::Event::Grid(start_grid_x - x,start_grid_y - y,tiles,z)
+                        }
+                    );
+                }
+            }
         }
     }
 }

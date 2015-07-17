@@ -53,7 +53,7 @@ impl Driver {
                                 _tx.send(Event::Tcp( (reply_tx.clone(), buf[..len].to_vec()) )).unwrap();
                                 let reply = reply_rx.recv().unwrap();
                                 //println!("RENDERRED REPLY: {:?}", reply);
-                                let len = stream.write(reply.as_bytes()).unwrap();
+                                let /*len*/_ = stream.write(reply.as_bytes()).unwrap();
                             }
                         });
                     }

@@ -228,6 +228,10 @@ impl Map {
 
 }
 
+pub enum Event {
+    Grid(i32,i32,Vec<u8>,Vec<i16>),
+}
+
 pub struct State {
     //TODO do all fileds PRIVATE and use callback interface
     pub widgets     : HashMap<u16,Widget>,
@@ -242,6 +246,7 @@ pub struct State {
     pub rel_cache   : HashMap<u16,Rel>,
     pub hero        : Hero,
     pub map         : Map,
+        events      : LinkedList<Event>,
 }
 
 impl State {
@@ -270,6 +275,7 @@ impl State {
                 start_xy: None,
             },
             map: Map{ partial: HashMap::new(), grids: HashMap::new() },
+            events: LinkedList::new(),
         }
     }
 
@@ -379,6 +385,7 @@ impl State {
                     let map_buf = self.map.assemble(pktid);
                     let map = self.map.from_buf(map_buf);
                     println!("MAP COMPLETE ({},{}) name='{}' id={} tiles=[..{}] z=[..{}]", map.x, map.y, map.name, map.id, map.tiles.len(), map.z.len());
+                    self.events.push_front(Event::Grid(map.x,map.y,map.tiles.clone(),map.z.clone()));
                     self.map.grids.insert((map.x,map.y),map);
                     //TODO complete map only if (x,y) == requested (x,y)
                     self.remove_mapreq_from_que();
@@ -919,9 +926,13 @@ impl State {
         }
     }
 
-    //pub fn next_event (&self) -> Option<Event> {
-    //    self.events.back()
-    //}
+    pub fn start_point (&self) -> Option<(i32,i32)> {
+        self.hero.start_xy
+    }
+
+    pub fn next_event (&mut self) -> Option<Event> {
+        self.events.pop_back()
+    }
 }
 
 pub fn grid ((x,y): (i32,i32)) -> (i32,i32) {
