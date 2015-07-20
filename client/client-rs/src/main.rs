@@ -110,6 +110,7 @@ mod render {
     use std::sync::mpsc::channel;
     //use std::sync::mpsc::Receiver;
     use std::sync::mpsc::Sender;
+    use std::sync::mpsc::SendError;
     use std::thread;
     //use state::State;
 
@@ -137,7 +138,8 @@ mod render {
                     use ::glium::uniforms::EmptyUniforms;
                     use ::glium::draw_parameters::PolygonMode;
                     use ::glium::draw_parameters::DrawParameters;
-                    use ::glium::texture::Texture2d;
+                    use ::glium::texture::/*TODO Compressed*/Texture2d;
+                    use ::glium::texture::Texture2dArray;
                     use std::sync::mpsc::TryRecvError;
 
                     let display = WindowBuilder::new()
@@ -150,65 +152,77 @@ mod render {
                     struct Vertex {
                         position: [f32; 2],
                         tex_coord: [f32; 2],
+                        tex_id: u32,
                     }
 
-                    implement_vertex!(Vertex, position, tex_coord);
+                    implement_vertex!(Vertex, position, tex_coord, tex_id);
 
-                    let vertex1 = Vertex { position: [-0.8,  0.8], tex_coord: [0.0, 0.0] };
-                    let vertex2 = Vertex { position: [ 0.8,  0.8], tex_coord: [1.0, 0.0] };
-                    let vertex3 = Vertex { position: [ 0.8, -0.8], tex_coord: [1.0, 1.0] };
-                    let vertex4 = Vertex { position: [-0.8, -0.8], tex_coord: [0.0, 1.0] };
-                    let shape = vec![vertex1, vertex2, vertex4,
-                                     vertex2, vertex3, vertex4];
-
-                    let vertex_buffer = VertexBuffer::new(&display, shape);
+                    let mut vertex_buffer: VertexBuffer<Vertex> = VertexBuffer::empty_dynamic(&display, 120).unwrap();
                     let indices = NoIndices(PrimitiveType::TrianglesList);
 
                     let vertex_shader_src = r#"
                         #version 140
                         in vec2 position;
-                        in vec2 tex_coords;
-                        out vec2 v_tex_coords;
+                        in vec2 tex_coord;
+                        in uint tex_id;
+                        out vec2 v_tex_coord;
+                        flat out uint v_tex_id;
                         void main() {
-                            v_tex_coords = tex_coords;
+                            v_tex_coord = tex_coord;
+                            v_tex_id = tex_id;
                             gl_Position = vec4(position, 0.0, 1.0);
                         }
                     "#;
 
                     let fragment_shader_src = r#"
                         #version 140
-                        in vec2 v_tex_coords;
+                        in vec2 v_tex_coord;
+                        flat in uint v_tex_id;
                         out vec4 color;
                         //uniform sampler2D tex;
+                        uniform sampler2DArray tex;
                         void main() {
-                            color = vec4(1.0,1.0,1.0,1.0);//texture(tex, v_tex_coords);
+                            //color = texture(tex, v_tex_coord);
+                            color = texture(tex, vec3(v_tex_coord, float(v_tex_id)));
                         }
                     "#;
 
                     let program = Program::from_source(&display, vertex_shader_src, fragment_shader_src, None).unwrap();
 
-                    let mut time_to_exit = false;
+                    let mut texture_array = /*TODO Compressed*/Texture2dArray::empty(&display, 1, 1, 9).unwrap();
+                    let mut grids_count = 0;
+                    let mut images = Vec::new();
 
                     /*'ecto_loop:*/ loop {
-                        let mut target = display.draw();
-                        target.clear_color(0.1, 0.1, 0.1, 1.0);
-                        let mut draw_params: DrawParameters = Default::default();
-                        draw_params.polygon_mode = PolygonMode::Line;
-                        target.draw(&vertex_buffer, &indices, &program, &EmptyUniforms, &draw_params).unwrap();
-                        target.finish().unwrap();
+                        {
+                            let mut target = display.draw();
+                            target.clear_color(0.1, 0.1, 0.1, 1.0);
+                            let /*mut*/ draw_params: DrawParameters = Default::default();
+                            //draw_params.polygon_mode = PolygonMode::Line;
+                            let uniforms = uniform! {
+                                //tex: &texture,
+                                tex: &texture_array,
+                            };
+                            if let Err(e) = target.draw(vertex_buffer.slice(0 .. grids_count*6).unwrap(), &indices, &program, &uniforms/*EmptyUniforms*/, &draw_params) {
+                                println!("target.draw ERROR: {:?}", e);
+                                return;
+                            }
+                            if let Err(e) = target.finish() {
+                                println!("target.finish ERROR: {:?}", e);
+                                return;
+                            }
+                        }
 
                         for ev in display.poll_events() {
                             match ev {
-                                glutin::Event::KeyboardInput(_, _, Some(glutin::VirtualKeyCode::Escape)) => /*break 'ecto_loop,*/{time_to_exit = true;break;}
-                                glutin::Event::Closed => /*break 'ecto_loop,*/{time_to_exit = true;break;}
+                                glutin::Event::KeyboardInput(_, _, Some(glutin::VirtualKeyCode::Escape)) => /*break 'ecto_loop,*/return,
+                                glutin::Event::Closed => /*break 'ecto_loop,*/return,
                                 _ => ()
                             }
                         }
-                        if time_to_exit { break; }
 
                         match rx.try_recv() {
                             Ok(value) => {
-                                /*
                                 match value {
                                     Event::Grid(x,y,tiles,z) => {
                                         println!("render: received Grid ({},{})", x, y);
@@ -222,13 +236,21 @@ mod render {
                                             }
                                             image.push(row);
                                         }
-                                        let texture = Texture2d::new(&display, image)/*.unwrap()*/;
-                                        let uniforms = uniform! {
-                                            tex: &texture,
-                                        };
+                                        images.push(image);
+                                        //texture = /*TODO Compressed*/Texture2d::new(&display, image);
+                                        texture_array = Texture2dArray::new(&display, images.clone()).unwrap();
+                                        vertex_buffer.slice(grids_count*6 .. (grids_count+1)*6).unwrap().write(&[
+                                                              Vertex{position: [x as f32*0.6-0.3, y as f32*0.6-0.3], tex_coord: [1.0, 1.0], tex_id: grids_count as u32},
+                                                              Vertex{position: [x as f32*0.6-0.3, y as f32*0.6+0.3], tex_coord: [1.0, 0.0], tex_id: grids_count as u32},
+                                                              Vertex{position: [x as f32*0.6+0.3, y as f32*0.6+0.3], tex_coord: [0.0, 0.0], tex_id: grids_count as u32},
+
+                                                              Vertex{position: [x as f32*0.6-0.3, y as f32*0.6-0.3], tex_coord: [1.0, 1.0], tex_id: grids_count as u32},
+                                                              Vertex{position: [x as f32*0.6+0.3, y as f32*0.6+0.3], tex_coord: [0.0, 0.0], tex_id: grids_count as u32},
+                                                              Vertex{position: [x as f32*0.6+0.3, y as f32*0.6-0.3], tex_coord: [0.0, 1.0], tex_id: grids_count as u32}
+                                                              ]);
+                                        grids_count += 1;
                                     }
                                 }
-                                */
                             }
                             Err(e) => {
                                 if let TryRecvError::Disconnected = e {
@@ -242,8 +264,8 @@ mod render {
             Render{tx:tx}
         }
 
-        pub fn update (&mut self, event: Event) {
-            self.tx.send(event).unwrap();
+        pub fn update (&mut self, event: Event) -> Result<(), SendError<Event>> {
+            self.tx.send(event)
         }
     }
 }
@@ -378,11 +400,14 @@ impl<A:Ai> Client<A> {
             if let Some(xy) = self.state.start_point() {
                 let (start_grid_x,start_grid_y) = state::grid(xy);
                 while let Some(event) = self.state.next_event() {
-                    self.render.update(
+                    if let Err(e) = self.render.update(
                         match event {
                             state::Event::Grid(x,y,tiles,z) => render::Event::Grid(start_grid_x - x,start_grid_y - y,tiles,z)
                         }
-                    );
+                    ) {
+                        println!("render.update ERROR: {:?}", e);
+                        return None /*TODO Some(e)*/;
+                    }
                 }
             }
         }
