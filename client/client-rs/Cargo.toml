@@ -20,6 +20,7 @@ lua = "*"
 libc = "*"
 nom = "*"
 glium = "*"
+cgmath = "*"
 
 #[dependencies.openssl]
 #openssl = "0.5.5"

@@ -75,6 +75,8 @@ mod driver_std;
 use driver_std::Driver;
 use driver_std::Event;
 
+extern crate cgmath;
+
 /* TODO
 extern crate nix;
 use nix::sys::socket::setsockopt;
@@ -141,6 +143,8 @@ mod render {
                     use ::glium::texture::/*TODO Compressed*/Texture2d;
                     use ::glium::texture::Texture2dArray;
                     use std::sync::mpsc::TryRecvError;
+                    use cgmath/*::Matrix4*/;
+                    use cgmath::FixedArray;
 
                     let display = WindowBuilder::new()
                             .with_dimensions(256, 256)
@@ -164,9 +168,14 @@ mod render {
                         in vec3 v_pos;
                         in uint v_col;
                         flat out uint vv_col;
+
+                        uniform mat4 u_model;
+                        uniform mat4 u_view;
+                        uniform mat4 u_proj;
+
                         void main() {
                             vv_col = v_col;
-                            gl_Position = vec4(v_pos, 1.0);
+                            gl_Position = u_proj * u_view * u_model * vec4(v_pos, 1.0);
                         }
                     "#;
 
@@ -199,7 +208,21 @@ mod render {
                             let mut draw_params: DrawParameters = Default::default();
                             draw_params.polygon_mode = PolygonMode::Line;
 
-                            if let Err(e) = target.draw(&vertex_buffer, &indices, &program, &EmptyUniforms, &draw_params) {
+                            //let time = precise_time_s() as f32;
+                            let x = 1.0;//time.sin();
+                            let y = 1.0;//time.cos();
+                            let view: cgmath::AffineMatrix3<f32> = cgmath::Transform::look_at(
+                                &cgmath::Point3::new(x * 1.2, y * 1.2, 1.2),
+                                &cgmath::Point3::new(0.0, 0.0, 0.0),
+                                &cgmath::Vector3::unit_z(),
+                            );
+                            let uniforms = uniform! {
+                                u_model: cgmath::Matrix4::identity().into_fixed(),
+                                u_view: view.mat.into_fixed(),//cgmath::Matrix4::identity().into_fixed(),
+                                u_proj: cgmath::perspective(cgmath::deg(80.0f32), 1.0/*stream.get_aspect_ratio()*/, 0.1, 1000.0).into_fixed(),
+                            };
+
+                            if let Err(e) = target.draw(&vertex_buffer, &indices, &program, &uniforms/*EmptyUniforms*/, &draw_params) {
                                 println!("target.draw ERROR: {:?}", e);
                                 return;
                             }
@@ -222,12 +245,21 @@ mod render {
                                 match value {
                                     Event::Grid(gridx,gridy,tiles,z) => {
                                         println!("render: received Grid ({},{})", gridx, gridy);
+                                        let minz = {
+                                            let mut minz = z[0];
+                                            for i in 1 .. 10_000 {
+                                                if z[i] < minz {
+                                                    minz = z[i];
+                                                }
+                                            }
+                                            minz
+                                        };
                                         let mut vertices = Vec::with_capacity(10_000);
                                         for y in 0..100 {
                                             for x in 0..100 {
                                                 let vx = (gridx as f32) * 0.5 + (x as f32) * 0.005;
                                                 let vy = (gridy as f32) * 0.5 + (y as f32) * 0.005;
-                                                let vz = (z[y*100+x] as f32) / 32767.0;
+                                                let vz = ((z[y*100+x] - minz) as f32) / 327.67;
                                                 vertices.push([vx,vy,vz]);
                                             }
                                         }
