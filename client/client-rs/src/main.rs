@@ -150,60 +150,56 @@ mod render {
 
                     #[derive(Copy, Clone)]
                     struct Vertex {
-                        position: [f32; 2],
-                        tex_coord: [f32; 2],
-                        tex_id: u32,
+                        v_pos: [f32; 3],
+                        v_col: u8,
                     }
 
-                    implement_vertex!(Vertex, position, tex_coord, tex_id);
+                    implement_vertex!(Vertex, v_pos, v_col);
 
-                    let mut vertex_buffer: VertexBuffer<Vertex> = VertexBuffer::empty_dynamic(&display, 120).unwrap();
+                    let mut vertex_buffer: VertexBuffer<Vertex> = VertexBuffer::empty(&display, 0).unwrap();
                     let indices = NoIndices(PrimitiveType::TrianglesList);
 
                     let vertex_shader_src = r#"
                         #version 140
-                        in vec2 position;
-                        in vec2 tex_coord;
-                        in uint tex_id;
-                        out vec2 v_tex_coord;
-                        flat out uint v_tex_id;
+                        in vec3 v_pos;
+                        in uint v_col;
+                        flat out uint vv_col;
                         void main() {
-                            v_tex_coord = tex_coord;
-                            v_tex_id = tex_id;
-                            gl_Position = vec4(position, 0.0, 1.0);
+                            vv_col = v_col;
+                            gl_Position = vec4(v_pos, 1.0);
                         }
                     "#;
 
                     let fragment_shader_src = r#"
                         #version 140
-                        in vec2 v_tex_coord;
-                        flat in uint v_tex_id;
+                        flat in uint vv_col;
                         out vec4 color;
-                        //uniform sampler2D tex;
-                        uniform sampler2DArray tex;
                         void main() {
-                            //color = texture(tex, v_tex_coord);
-                            color = texture(tex, vec3(v_tex_coord, float(v_tex_id)));
+                            float c = float(vv_col) / 255.0;
+                            color = vec4(c, c, c, 0.0);
                         }
                     "#;
 
-                    let program = Program::from_source(&display, vertex_shader_src, fragment_shader_src, None).unwrap();
+                    //FIXME don't do init here. move it to Render struct new()
+                    let program = match Program::from_source(&display, vertex_shader_src, fragment_shader_src, None) {
+                        Ok(program) => program,
+                        Err(error) => {
+                            println!("compile program ERROR: {:?}", error);
+                            return;
+                        }
+                    };
 
-                    let mut texture_array = /*TODO Compressed*/Texture2dArray::empty(&display, 1, 1, 9).unwrap();
+                    let mut landscape = Vec::new();
                     let mut grids_count = 0;
-                    let mut images = Vec::new();
 
                     /*'ecto_loop:*/ loop {
                         {
                             let mut target = display.draw();
                             target.clear_color(0.1, 0.1, 0.1, 1.0);
-                            let /*mut*/ draw_params: DrawParameters = Default::default();
-                            //draw_params.polygon_mode = PolygonMode::Line;
-                            let uniforms = uniform! {
-                                //tex: &texture,
-                                tex: &texture_array,
-                            };
-                            if let Err(e) = target.draw(vertex_buffer.slice(0 .. grids_count*6).unwrap(), &indices, &program, &uniforms/*EmptyUniforms*/, &draw_params) {
+                            let mut draw_params: DrawParameters = Default::default();
+                            draw_params.polygon_mode = PolygonMode::Line;
+
+                            if let Err(e) = target.draw(&vertex_buffer, &indices, &program, &EmptyUniforms, &draw_params) {
                                 println!("target.draw ERROR: {:?}", e);
                                 return;
                             }
@@ -224,30 +220,33 @@ mod render {
                         match rx.try_recv() {
                             Ok(value) => {
                                 match value {
-                                    Event::Grid(x,y,tiles,z) => {
-                                        println!("render: received Grid ({},{})", x, y);
-                                        //TODO do with iterator and .map() or .zip()
-                                        let mut image = Vec::new(); //TODO with_capacity
+                                    Event::Grid(gridx,gridy,tiles,z) => {
+                                        println!("render: received Grid ({},{})", gridx, gridy);
+                                        let mut vertices = Vec::with_capacity(10_000);
                                         for y in 0..100 {
-                                            let mut row = Vec::new();
                                             for x in 0..100 {
-                                                let tile = tiles[y*100 + x];
-                                                row.push((tile,tile,tile));
+                                                let vx = (gridx as f32) * 0.5 + (x as f32) * 0.005;
+                                                let vy = (gridy as f32) * 0.5 + (y as f32) * 0.005;
+                                                let vz = (z[y*100+x] as f32) / 32767.0;
+                                                vertices.push([vx,vy,vz]);
                                             }
-                                            image.push(row);
                                         }
-                                        images.push(image);
-                                        //texture = /*TODO Compressed*/Texture2d::new(&display, image);
-                                        texture_array = Texture2dArray::new(&display, images.clone()).unwrap();
-                                        vertex_buffer.slice(grids_count*6 .. (grids_count+1)*6).unwrap().write(&[
-                                                              Vertex{position: [x as f32*0.6-0.3, y as f32*0.6-0.3], tex_coord: [1.0, 1.0], tex_id: grids_count as u32},
-                                                              Vertex{position: [x as f32*0.6-0.3, y as f32*0.6+0.3], tex_coord: [1.0, 0.0], tex_id: grids_count as u32},
-                                                              Vertex{position: [x as f32*0.6+0.3, y as f32*0.6+0.3], tex_coord: [0.0, 0.0], tex_id: grids_count as u32},
+                                        let mut shape = Vec::with_capacity(60_000);
+                                        for y in 0..99 {
+                                            for x in 0..99 {
+                                                let index = y*100+x;
+                                                let color = tiles[index];
+                                                shape.push(Vertex{v_pos: vertices[index+100], v_col: color});
+                                                shape.push(Vertex{v_pos: vertices[index], v_col: color});
+                                                shape.push(Vertex{v_pos: vertices[index+1], v_col: color});
 
-                                                              Vertex{position: [x as f32*0.6-0.3, y as f32*0.6-0.3], tex_coord: [1.0, 1.0], tex_id: grids_count as u32},
-                                                              Vertex{position: [x as f32*0.6+0.3, y as f32*0.6+0.3], tex_coord: [0.0, 0.0], tex_id: grids_count as u32},
-                                                              Vertex{position: [x as f32*0.6+0.3, y as f32*0.6-0.3], tex_coord: [0.0, 1.0], tex_id: grids_count as u32}
-                                                              ]);
+                                                shape.push(Vertex{v_pos: vertices[index+100], v_col: color});
+                                                shape.push(Vertex{v_pos: vertices[index+1], v_col: color});
+                                                shape.push(Vertex{v_pos: vertices[index+101], v_col: color});
+                                            }
+                                        }
+                                        landscape.extend(&shape);
+                                        vertex_buffer = VertexBuffer::new(&display, &landscape).unwrap();
                                         grids_count += 1;
                                     }
                                 }
