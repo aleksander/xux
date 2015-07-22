@@ -148,7 +148,7 @@ mod render {
                     use cgmath::FixedArray;
 
                     let display = WindowBuilder::new()
-                            .with_dimensions(256, 256)
+                            .with_dimensions(512, 512)
                             .with_title(format!("render"))
                             .build_glium()
                             .unwrap();
@@ -258,8 +258,11 @@ mod render {
 
                         for ev in display.poll_events() {
                             match ev {
-                                glutin::Event::KeyboardInput(_, _, Some(glutin::VirtualKeyCode::Escape)) => /*break 'ecto_loop,*/return,
-                                glutin::Event::Closed => /*break 'ecto_loop,*/return,
+                                glutin::Event::KeyboardInput(_, _, Some(glutin::VirtualKeyCode::Escape)) |
+                                glutin::Event::Closed => {
+                                    /*break 'ecto_loop;*/
+                                    return;
+                                }
                                 glutin::Event::MouseInput(glutin::ElementState::Pressed, glutin::MouseButton::Left) => {
                                     dragging = true;
                                 }
@@ -287,7 +290,8 @@ mod render {
                             Ok(value) => {
                                 match value {
                                     Event::Grid(gridx,gridy,tiles,z) => {
-                                        let gridx = -gridx;
+                                        //let gridx = -gridx;
+                                        //let gridy = -gridy;
                                         println!("render: received Grid ({},{})", gridx, gridy);
                                         let minz = {
                                             let mut minz = z[0];
@@ -478,7 +482,7 @@ impl<A:Ai> Client<A> {
                 while let Some(event) = self.state.next_event() {
                     if let Err(e) = self.render.update(
                         match event {
-                            state::Event::Grid(x,y,tiles,z) => render::Event::Grid(start_grid_x - x,start_grid_y - y,tiles,z)
+                            state::Event::Grid(x,y,tiles,z) => render::Event::Grid(x - start_grid_x, y - start_grid_y, tiles, z)
                         }
                     ) {
                         println!("render.update ERROR: {:?}", e);

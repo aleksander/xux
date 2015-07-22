@@ -344,7 +344,7 @@ impl State {
             },
             Message::C_SESS(_) => { println!("     !!! client must not receive C_SESS !!!"); },
             Message::REL( rel ) => {
-                println!("RX: REL {}", rel.seq);
+                //println!("RX: REL {}", rel.seq);
                 if rel.seq == self.rx_rel_seq {
                     try!(self.dispatch_rel_cache(&rel));
                 } else {
@@ -365,7 +365,7 @@ impl State {
                 }
             },
             Message::ACK(ack)   => {
-                println!("RX: ACK {}", ack.seq);
+                //println!("RX: ACK {}", ack.seq);
                 if ack.seq == self.seq {
                     //println!("our rel {} acked", self.seq);
                     self.remove_rel_from_que();
@@ -507,22 +507,22 @@ impl State {
         for r in rel.rel.iter() {
             match *r {
                 RelElem::NEWWDG(ref wdg) => {
-                    println!("      {:?}", wdg);
+                    //println!("      {:?}", wdg);
                     self.dispatch_newwdg(wdg);
                 },
                 RelElem::WDGMSG(ref msg) => {
-                    println!("      {:?}", msg);
+                    //println!("      {:?}", msg);
                     self.dispatch_wdgmsg(msg);
                 },
                 RelElem::DSTWDG(ref wdg) => {
-                    println!("      {:?}", wdg);
+                    //println!("      {:?}", wdg);
                     self.widgets.remove(&wdg.id);
                 },
                 RelElem::MAPIV(_) => {},
                 RelElem::GLOBLOB(_) => {},
                 RelElem::PAGINAE(_) => {},
                 RelElem::RESID(ref res) => {
-                    println!("      {:?}", res);
+                    //println!("      {:?}", res);
                     self.resources.insert(res.id, res.name.clone()/*FIXME String -> &str*/);
                 },
                 RelElem::PARTY(_) => {},
@@ -783,7 +783,7 @@ impl State {
         let buf = self.tx_buf.pop_back();
         if let Some(ref buf) = buf {
             match Message::from_buf(buf.buf.as_slice(), MessageDirection::FromClient) {
-                Ok((msg,_)) => println!("TX: {:?}", msg),
+                Ok((msg,_)) => /*println!("TX: {:?}", msg)*/(),
                 Err(e) => panic!("ERROR: malformed TX message: {:?}", e),
             }
         }
