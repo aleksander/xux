@@ -214,7 +214,10 @@ mod render {
                     let mut camera_z = 1.0;
 
                     let mut dragging = false;
-                    let mut mouse_xy = None;
+                    let mut dragging_xy = None;
+                    let mut zooming = false;
+                    let mut zooming_xy = None;
+
 
                     /*'ecto_loop:*/ loop {
                         {
@@ -268,15 +271,35 @@ mod render {
                                 }
                                 glutin::Event::MouseInput(glutin::ElementState::Released, glutin::MouseButton::Left) => {
                                     dragging = false;
-                                    mouse_xy = None;
+                                    dragging_xy = None;
+                                }
+                                glutin::Event::MouseInput(glutin::ElementState::Pressed, glutin::MouseButton::Right) => {
+                                    zooming = true;
+                                }
+                                glutin::Event::MouseInput(glutin::ElementState::Released, glutin::MouseButton::Right) => {
+                                    zooming = false;
+                                    zooming_xy = None;
                                 }
                                 glutin::Event::MouseMoved((x,y)) => {
                                     if dragging {
-                                        mouse_xy = match mouse_xy {
+                                        dragging_xy = match dragging_xy {
                                             None => Some((x,y)),
                                             Some((mx,my)) => {
                                                 camera_x += ((x - mx) as f32) / 1000.0;
                                                 camera_z += ((y - my) as f32) / 1000.0;
+                                                Some((x,y))
+                                            }
+                                        }
+                                    }
+                                    if zooming {
+                                        zooming_xy = match zooming_xy {
+                                            None => Some((x,y)),
+                                            Some((mx,my)) => {
+                                                let dy = y - my;
+                                                let factor = 1.0 + (dy as f32) / 100.0;
+                                                camera_x *= factor;
+                                                camera_y *= factor;
+                                                camera_z *= factor;
                                                 Some((x,y))
                                             }
                                         }
@@ -473,6 +496,11 @@ impl<A:Ai> Client<A> {
                     tx.send(reply).unwrap();
                     //self.driver.reply(reply);
                 }
+                /*TODO:
+                Event::RenderQuit => {
+                    self.state.close();
+                }
+                */
             }
 
             self.ai.update(&mut self.state);
