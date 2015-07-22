@@ -143,7 +143,8 @@ mod render {
                     use ::glium::texture::/*TODO Compressed*/Texture2d;
                     use ::glium::texture::Texture2dArray;
                     use std::sync::mpsc::TryRecvError;
-                    use cgmath/*::Matrix4*/;
+                    use cgmath;
+                    use cgmath::Matrix;
                     use cgmath::FixedArray;
 
                     let display = WindowBuilder::new()
@@ -199,7 +200,21 @@ mod render {
                     };
 
                     let mut landscape = Vec::new();
+                    landscape.extend(&[Vertex{v_pos: [-1.0,-1.0,0.0], v_col: 255},
+                                       Vertex{v_pos: [-1.0,1.0,0.0], v_col: 255},
+                                       Vertex{v_pos: [1.0,1.0,0.0], v_col: 255},
+                                       Vertex{v_pos: [-1.0,-1.0,0.0], v_col: 255},
+                                       Vertex{v_pos: [1.0,1.0,0.0], v_col: 255},
+                                       Vertex{v_pos: [1.0,-1.0,0.0], v_col: 255},
+                                        ]);
                     let mut grids_count = 0;
+
+                    let mut camera_x = 1.0;
+                    let mut camera_y = 1.0;
+                    let mut camera_z = 1.0;
+
+                    let mut dragging = false;
+                    let mut mouse_xy = None;
 
                     /*'ecto_loop:*/ loop {
                         {
@@ -208,17 +223,26 @@ mod render {
                             let mut draw_params: DrawParameters = Default::default();
                             draw_params.polygon_mode = PolygonMode::Line;
 
-                            //let time = precise_time_s() as f32;
-                            let x = 1.0;//time.sin();
-                            let y = 1.0;//time.cos();
                             let view: cgmath::AffineMatrix3<f32> = cgmath::Transform::look_at(
-                                &cgmath::Point3::new(x * 1.2, y * 1.2, 1.2),
+                                &cgmath::Point3::new(camera_x, camera_y, camera_z),
                                 &cgmath::Point3::new(0.0, 0.0, 0.0),
                                 &cgmath::Vector3::unit_z(),
                             );
+                            /*
+                            let view: cgmath::AffineMatrix3<f32> = cgmath::Transform::look_at(
+                                &cgmath::Point3::new(0.275, 0.275, 1.2),
+                                &cgmath::Point3::new(0.275, 0.275, 0.0),
+                                &cgmath::Vector3::unit_y(),
+                            );
+                            */
+                            let model_scale = 0.005;
                             let uniforms = uniform! {
-                                u_model: cgmath::Matrix4::identity().into_fixed(),
-                                u_view: view.mat.into_fixed(),//cgmath::Matrix4::identity().into_fixed(),
+                                //u_model: cgmath::Matrix4::identity().into_fixed(),
+                                u_model: cgmath::Matrix4::new(model_scale, 0.0, 0.0, 0.0,
+                                                              0.0, model_scale, 0.0, 0.0,
+                                                              0.0, 0.0, model_scale, 0.0,
+                                                              0.0, 0.0, 0.0, 1.0).into_fixed(),
+                                u_view: view.mat.into_fixed(),
                                 u_proj: cgmath::perspective(cgmath::deg(80.0f32), 1.0/*stream.get_aspect_ratio()*/, 0.1, 1000.0).into_fixed(),
                             };
 
@@ -236,6 +260,25 @@ mod render {
                             match ev {
                                 glutin::Event::KeyboardInput(_, _, Some(glutin::VirtualKeyCode::Escape)) => /*break 'ecto_loop,*/return,
                                 glutin::Event::Closed => /*break 'ecto_loop,*/return,
+                                glutin::Event::MouseInput(glutin::ElementState::Pressed, glutin::MouseButton::Left) => {
+                                    dragging = true;
+                                }
+                                glutin::Event::MouseInput(glutin::ElementState::Released, glutin::MouseButton::Left) => {
+                                    dragging = false;
+                                    mouse_xy = None;
+                                }
+                                glutin::Event::MouseMoved((x,y)) => {
+                                    if dragging {
+                                        mouse_xy = match mouse_xy {
+                                            None => Some((x,y)),
+                                            Some((mx,my)) => {
+                                                camera_x += ((x - mx) as f32) / 1000.0;
+                                                camera_z += ((y - my) as f32) / 1000.0;
+                                                Some((x,y))
+                                            }
+                                        }
+                                    }
+                                }
                                 _ => ()
                             }
                         }
@@ -244,6 +287,7 @@ mod render {
                             Ok(value) => {
                                 match value {
                                     Event::Grid(gridx,gridy,tiles,z) => {
+                                        let gridx = -gridx;
                                         println!("render: received Grid ({},{})", gridx, gridy);
                                         let minz = {
                                             let mut minz = z[0];
@@ -257,9 +301,10 @@ mod render {
                                         let mut vertices = Vec::with_capacity(10_000);
                                         for y in 0..100 {
                                             for x in 0..100 {
-                                                let vx = (gridx as f32) * 0.5 + (x as f32) * 0.005;
-                                                let vy = (gridy as f32) * 0.5 + (y as f32) * 0.005;
-                                                let vz = ((z[y*100+x] - minz) as f32) / 327.67;
+                                                let index = y*100+x;
+                                                let vx = (gridx as f32) * 100.0 + (x as f32);
+                                                let vy = (gridy as f32) * 100.0 + (y as f32);
+                                                let vz = (z[index] - minz) as f32;
                                                 vertices.push([vx,vy,vz]);
                                             }
                                         }
