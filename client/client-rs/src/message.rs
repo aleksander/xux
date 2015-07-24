@@ -523,6 +523,26 @@ pub enum Message {
     CLOSE/*( Close )*/,
 }
 
+/*TODO maybe:
+pub enum ClientMessage {
+    C_SESS( cSess ),
+    REL( Rel ),
+    ACK( Ack ),
+    BEAT,
+    MAPREQ( MapReq ),
+    OBJACK( ObjAck ),
+    CLOSE/*( Close )*/,
+}
+pub enum ServerMessage {
+    S_SESS( sSess ),
+    REL( Rel ),
+    ACK( Ack ),
+    MAPDATA( MapData ),
+    OBJDATA( ObjData ),
+    CLOSE/*( Close )*/,
+}
+*/
+
 #[allow(non_camel_case_types)]
 #[derive(Debug)]
 //TODO replace with plain struct variants
@@ -1056,4 +1076,3 @@ impl Message {
         }
     }
 }
-

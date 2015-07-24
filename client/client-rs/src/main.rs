@@ -200,18 +200,19 @@ mod render {
                     };
 
                     let mut landscape = Vec::new();
-                    landscape.extend(&[Vertex{v_pos: [-1.0,-1.0,0.0], v_col: 255},
-                                       Vertex{v_pos: [-1.0,1.0,0.0], v_col: 255},
-                                       Vertex{v_pos: [1.0,1.0,0.0], v_col: 255},
-                                       Vertex{v_pos: [-1.0,-1.0,0.0], v_col: 255},
-                                       Vertex{v_pos: [1.0,1.0,0.0], v_col: 255},
-                                       Vertex{v_pos: [1.0,-1.0,0.0], v_col: 255},
-                                        ]);
+                    /*
+                    landscape.extend(&[Vertex{v_pos: [-100.0,-100.0,0.0], v_col: 255},
+                                       Vertex{v_pos: [-100.0,100.0,0.0], v_col: 255},
+                                       Vertex{v_pos: [100.0,100.0,0.0], v_col: 255},
+                                       Vertex{v_pos: [-100.0,-100.0,0.0], v_col: 255},
+                                       Vertex{v_pos: [100.0,100.0,0.0], v_col: 255},
+                                       Vertex{v_pos: [100.0,-100.0,0.0], v_col: 255}]);
+                    */
                     let mut grids_count = 0;
 
                     let mut camera_x = 1.0;
                     let mut camera_y = 1.0;
-                    let mut camera_z = 1.0;
+                    let mut camera_z = 3.0;
 
                     let mut dragging = false;
                     let mut dragging_xy = None;
@@ -246,7 +247,7 @@ mod render {
                                                               0.0, 0.0, model_scale, 0.0,
                                                               0.0, 0.0, 0.0, 1.0).into_fixed(),
                                 u_view: view.mat.into_fixed(),
-                                u_proj: cgmath::perspective(cgmath::deg(80.0f32), 1.0/*stream.get_aspect_ratio()*/, 0.1, 1000.0).into_fixed(),
+                                u_proj: cgmath::perspective(cgmath::deg(60.0f32), 1.0/*stream.get_aspect_ratio()*/, 0.1, 1000.0).into_fixed(),
                             };
 
                             if let Err(e) = target.draw(&vertex_buffer, &indices, &program, &uniforms/*EmptyUniforms*/, &draw_params) {
@@ -316,6 +317,7 @@ mod render {
                                         //let gridx = -gridx;
                                         //let gridy = -gridy;
                                         println!("render: received Grid ({},{})", gridx, gridy);
+                                        /*
                                         let minz = {
                                             let mut minz = z[0];
                                             for i in 1 .. 10_000 {
@@ -325,13 +327,14 @@ mod render {
                                             }
                                             minz
                                         };
+                                        */
                                         let mut vertices = Vec::with_capacity(10_000);
                                         for y in 0..100 {
                                             for x in 0..100 {
                                                 let index = y*100+x;
                                                 let vx = (gridx as f32) * 100.0 + (x as f32);
                                                 let vy = (gridy as f32) * 100.0 + (y as f32);
-                                                let vz = (z[index] - minz) as f32;
+                                                let vz = (z[index]/* - minz*/) as f32;
                                                 vertices.push([vx,vy,vz]);
                                             }
                                         }
@@ -350,6 +353,7 @@ mod render {
                                             }
                                         }
                                         landscape.extend(&shape);
+                                        println!("render: vertices {}, faces {}, quads {}", landscape.len(), landscape.len()/3, landscape.len()/6);
                                         vertex_buffer = VertexBuffer::new(&display, &landscape).unwrap();
                                         grids_count += 1;
                                     }
