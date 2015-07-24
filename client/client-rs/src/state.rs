@@ -386,9 +386,8 @@ impl State {
                     let map = self.map.from_buf(map_buf);
                     println!("MAP COMPLETE ({},{}) name='{}' id={} tiles=[..{}] z=[..{}]", map.x, map.y, map.name, map.id, map.tiles.len(), map.z.len());
                     self.events.push_front(Event::Grid(map.x,map.y,map.tiles.clone(),map.z.clone()));
+                    self.remove_mapreq_from_que(map.x, map.y);
                     self.map.grids.insert((map.x,map.y),map);
-                    //TODO complete map only if (x,y) == requested (x,y)
-                    self.remove_mapreq_from_que();
                 }
             },
             Message::OBJDATA(objdata) => {
@@ -685,11 +684,12 @@ impl State {
     }
 
     //TODO do something with this ugly duplication of previous fn
-    fn remove_mapreq_from_que (&mut self) {
+    fn remove_mapreq_from_que (&mut self, x: i32, y: i32) {
         let mut should_be_removed = false;
         if let Some(ref buf) = self.que.back() {
             if let Ok(msg) = Message::from_buf(&buf.buf, MessageDirection::FromClient) {
                 //FIXME TODO check that this is exactly MAPDATA we are waiting for
+                //TODO complete map only if (x,y) == requested (x,y)
                 if let (Message::MAPREQ(_),_) = msg {
                     should_be_removed = true;
                 }
