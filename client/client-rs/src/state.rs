@@ -320,6 +320,8 @@ impl State {
 
                 match ebuf.timeout {
                     Some(_) => {
+                        //FIXME TODO merge que and tx_buf (remove tx_buf and que only)
+                        //     + remove EnqueuedBuffer clone deriving
                         if self.que.is_empty() {
                             self.tx_buf.push_front(ebuf.clone());
                         }
@@ -395,12 +397,13 @@ impl State {
                 //println!("RX: MAPDATA {:?}", mapdata);
                 let pktid = mapdata.pktid;
                 self.map.append(mapdata);
-                //TODO if self.mapdata.complete() { ... }
                 if self.map.complete(pktid) {
                     //TODO let map = self.mapdata.assemble(pktid).to_map();
                     let map_buf = self.map.assemble(pktid);
                     let map = self.map.from_buf(map_buf);
-                    println!("MAP COMPLETE ({},{}) name='{}' id={} tiles=[..{}] z=[..{}]", map.x, map.y, map.name, map.id, map.tiles.len(), map.z.len());
+                    assert!(map.tiles.len() == 10_000);
+                    assert!(map.z.len() == 10_000);
+                    println!("MAP COMPLETE ({},{}) name='{}' id={}", map.x, map.y, map.name, map.id);
                     self.events.push_front(Event::Grid(map.x,map.y,map.tiles.clone(),map.z.clone()));
                     self.remove_from_que(MessageHint::MAPREQ(map.x, map.y));
                     self.map.grids.insert((map.x,map.y),map);
@@ -666,7 +669,7 @@ impl State {
                     self.tx_buf.push_front(buf.clone());
                 }
                 None => {
-                    //println!("remove_sess: empty que");
+                    //println!("remove_from_que: empty que");
                 }
             }
         }
