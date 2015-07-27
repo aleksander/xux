@@ -75,9 +75,19 @@ pub struct Timeout {
     pub seq : usize,
 }
 
+#[derive(Clone,PartialEq)]
+pub enum MessageHint {
+    C_SESS,
+    REL(u16),
+    MAPREQ(i32,i32),
+    CLOSE,
+    NONE,
+}
+
 #[derive(Clone)]
 pub struct EnqueuedBuffer {
     pub buf : Vec<u8>,
+    pub msg_hint : MessageHint,
     pub timeout : Option<Timeout>,
 }
 
@@ -283,34 +293,44 @@ impl State {
         /*TODO*/
     }
 
-    pub fn enqueue_to_send (&mut self, msg: Message) -> Result<(),Error> {
+    pub fn enqueue_to_send (&mut self, mut msg: Message) -> Result<(),Error> {
+        if let Message::REL(ref mut rel) = msg {
+            assert!(rel.seq == 0);
+            rel.seq = self.seq;
+            self.seq += rel.rel.len() as u16;
+        }
         match msg.to_buf() {
             Ok(buf) => {
-                match msg {
-                    Message::C_SESS(_) |
-                    Message::REL(_) |
-                    Message::MAPREQ(_) |
-                    Message::CLOSE => {
-                        //TODO maybe we should increase timeout in the case of MAPREQ?
-                        let ebuf = EnqueuedBuffer{buf : buf, timeout : Some(Timeout{ms : 100, seq : self.enqueue_seq})};
+                let (msg_hint, timeout) = match msg {
+                    Message::C_SESS(_)      => (MessageHint::C_SESS, Some(Timeout{ms : 100, seq : self.enqueue_seq})),
+                    Message::REL(rel)       => (MessageHint::REL(rel.seq), Some(Timeout{ms : 100, seq : self.enqueue_seq})),
+                    Message::CLOSE          => (MessageHint::CLOSE, Some(Timeout{ms : 100, seq : self.enqueue_seq})),
+                    Message::MAPREQ(mapreq) => (MessageHint::MAPREQ(mapreq.x,mapreq.y), Some(Timeout{ms : 400, seq : self.enqueue_seq})),
+                    Message::ACK(_) |
+                    Message::BEAT |
+                    Message::OBJACK(_)      => (MessageHint::NONE,   None),
+                    Message::S_SESS(_) |
+                    Message::MAPDATA(_) |
+                    Message::OBJDATA(_) => {
+                        return Err(Error{source:"client must NOT send this kind of message",detail:None});
+                    }
+                };
+
+                let ebuf = EnqueuedBuffer{ buf: buf, timeout: timeout, msg_hint: msg_hint };
+
+                match ebuf.timeout {
+                    Some(_) => {
                         if self.que.is_empty() {
                             self.tx_buf.push_front(ebuf.clone());
                         }
                         self.que.push_front(ebuf);
                         self.enqueue_seq += 1;
                     }
-                    Message::ACK(_) |
-                    Message::BEAT |
-                    Message::OBJACK(_) => {
-                        let ebuf = EnqueuedBuffer{buf : buf, timeout : None};
+                    None => {
                         self.tx_buf.push_front(ebuf);
                     }
-                    Message::S_SESS(_) |
-                    Message::MAPDATA(_) |
-                    Message::OBJDATA(_) => {
-                        return Err(Error{source:"client must NOT send this kind of message",detail:None});
-                    }
                 }
+
                 Ok(())
             },
             Err(e) => { println!("enqueue error: {:?}", e); Err(e) },
@@ -339,7 +359,7 @@ impl State {
                         //??? or can we re-send our SESS requests in case of BUSY err ?
                     }
                 }
-                self.remove_sess_from_que();
+                self.remove_from_que(MessageHint::C_SESS);
                 Self::start_send_beats();
             },
             Message::C_SESS(_) => { println!("     !!! client must not receive C_SESS !!!"); },
@@ -366,12 +386,8 @@ impl State {
             },
             Message::ACK(ack)   => {
                 //println!("RX: ACK {}", ack.seq);
-                if ack.seq == self.seq {
-                    //println!("our rel {} acked", self.seq);
-                    self.remove_rel_from_que();
-                    //FIXME self.seq += last_rel.rels.len()
-                    self.seq += 1;
-                }
+                //println!("our rel {} acked", self.seq);
+                self.remove_from_que(MessageHint::REL(ack.seq));
             },
             Message::BEAT       => { println!("     !!! client must not receive BEAT !!!"); },
             Message::MAPREQ(_)  => { println!("     !!! client must not receive MAPREQ !!!"); },
@@ -386,7 +402,7 @@ impl State {
                     let map = self.map.from_buf(map_buf);
                     println!("MAP COMPLETE ({},{}) name='{}' id={} tiles=[..{}] z=[..{}]", map.x, map.y, map.name, map.id, map.tiles.len(), map.z.len());
                     self.events.push_front(Event::Grid(map.x,map.y,map.tiles.clone(),map.z.clone()));
-                    self.remove_mapreq_from_que(map.x, map.y);
+                    self.remove_from_que(MessageHint::MAPREQ(map.x, map.y));
                     self.map.grids.insert((map.x,map.y),map);
                 }
             },
@@ -635,13 +651,11 @@ impl State {
         }
     }
 
-    fn remove_sess_from_que (&mut self) {
+    fn remove_from_que (&mut self, msg_hint: MessageHint) {
         let mut should_be_removed = false;
-        if let Some(ref buf) = self.que.back() {
-            if let Ok(msg) = Message::from_buf(&buf.buf, MessageDirection::FromClient) {
-                if let (Message::C_SESS(_),_) = msg {
-                    should_be_removed = true;
-                }
+        if let Some(ref emsg) = self.que.back() {
+            if emsg.msg_hint == msg_hint {
+                should_be_removed = true;
             }
         }
         if should_be_removed {
@@ -653,57 +667,6 @@ impl State {
                 }
                 None => {
                     //println!("remove_sess: empty que");
-                }
-            }
-        }
-    }
-
-    //TODO do something with this ugly duplication of previous fn
-    fn remove_rel_from_que (&mut self) {
-        let mut should_be_removed = false;
-        if let Some(ref buf) = self.que.back() {
-            if let Ok(msg) = Message::from_buf(&buf.buf, MessageDirection::FromClient) {
-                //FIXME TODO check that this is exactly same REL we are waiting for
-                if let (Message::REL(_),_) = msg {
-                    should_be_removed = true;
-                }
-            }
-        }
-        if should_be_removed {
-            self.que.pop_back();
-            match self.que.back() {
-                Some(buf) => {
-                    //println!("enqueue next packet");
-                    self.tx_buf.push_front(buf.clone());
-                }
-                None => {
-                    //println!("remove_rel: empty que");
-                }
-            }
-        }
-    }
-
-    //TODO do something with this ugly duplication of previous fn
-    fn remove_mapreq_from_que (&mut self, x: i32, y: i32) {
-        let mut should_be_removed = false;
-        if let Some(ref buf) = self.que.back() {
-            if let Ok(msg) = Message::from_buf(&buf.buf, MessageDirection::FromClient) {
-                //FIXME TODO check that this is exactly MAPDATA we are waiting for
-                //TODO complete map only if (x,y) == requested (x,y)
-                if let (Message::MAPREQ(_),_) = msg {
-                    should_be_removed = true;
-                }
-            }
-        }
-        if should_be_removed {
-            self.que.pop_back();
-            match self.que.back() {
-                Some(buf) => {
-                    //println!("enqueue next packet");
-                    self.tx_buf.push_front(buf.clone());
-                }
-                None => {
-                    //println!("remove_mapreq: empty que");
                 }
             }
         }
@@ -736,7 +699,7 @@ impl State {
 
     pub fn send_play (&mut self, i: usize) -> Result<(),Error> {
         //TODO let mut rel = Rel::new(seq,id,name);
-        let mut rel = Rel{seq:self.seq, rel:Vec::new()};
+        let mut rel = Rel{seq:0, rel:Vec::new()};
         let id = self.widget_id("charlist", None).expect("charlist widget is not found");
         let name = "play".to_string();
         let charname = self.charlist[i].clone();
@@ -818,7 +781,7 @@ impl State {
     pub fn go (&mut self, x: i32, y: i32) -> Result<(),Error> /*TODO Option<Error>*/ {
         println!("GO");
         //TODO let mut rel = Rel::new(seq,id,name);
-        let mut rel = Rel{seq:self.seq, rel:Vec::new()};
+        let mut rel = Rel{seq:0, rel:Vec::new()};
         let id = self.widget_id("mapview", None).expect("mapview widget is not found");
         let name : String = "click".to_string();
         let mut args : Vec<MsgList> = Vec::new();
@@ -832,11 +795,10 @@ impl State {
         Ok(())
     }
 
-    /*
     pub fn pick (&mut self, obj_id: u32) -> Result<(),Error> {
         println!("PICK");
         //TODO let mut rel = Rel::new(seq,id,name);
-        let mut rel = Rel{seq:self.seq, rel:Vec::new()};
+        let mut rel = Rel{seq:0, rel:Vec::new()};
         let id = self.widget_id("mapview", None).expect("mapview widget is not found");
         let name = "click".to_string();
         let mut args = Vec::new();
@@ -862,7 +824,7 @@ impl State {
     pub fn choose_pick (&mut self, wdg_id: u16) -> Result<(),Error> {
         println!("GO");
         //TODO let mut rel = Rel::new(seq,id,name);
-        let mut rel = Rel{seq:self.seq, rel:Vec::new()};
+        let mut rel = Rel{seq:0, rel:Vec::new()};
         let name = "cl".to_string();
         let mut args = Vec::new();
         args.push(MsgList::tINT(0));
@@ -872,7 +834,6 @@ impl State {
         try!(self.enqueue_to_send(Message::REL(rel)));
         Ok(())
     }
-    */
 
     //TODO fn grid(Coord) {...}, fn xy(Grid) {...}
     //     and then we can do: hero.grid().xy();
