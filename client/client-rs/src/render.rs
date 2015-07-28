@@ -40,6 +40,7 @@ impl Render {
                 let display = WindowBuilder::new()
                         .with_dimensions(512, 512)
                         .with_title(format!("render"))
+                        .with_depth_buffer(24)
                         .build_glium()
                         .unwrap();
 
@@ -90,14 +91,14 @@ impl Render {
                 };
 
                 let mut landscape = Vec::new();
-                /*
-                landscape.extend(&[Vertex{v_pos: [-100.0,-100.0,0.0], v_col: 255},
-                                   Vertex{v_pos: [-100.0,100.0,0.0], v_col: 255},
-                                   Vertex{v_pos: [100.0,100.0,0.0], v_col: 255},
-                                   Vertex{v_pos: [-100.0,-100.0,0.0], v_col: 255},
-                                   Vertex{v_pos: [100.0,100.0,0.0], v_col: 255},
-                                   Vertex{v_pos: [100.0,-100.0,0.0], v_col: 255}]);
-                */
+
+                landscape.extend(&[Vertex{v_pos: [-300.0, 0.0,-300.0], v_col: 255},
+                                   Vertex{v_pos: [-300.0, 0.0, 300.0], v_col: 255},
+                                   Vertex{v_pos: [ 300.0, 0.0, 300.0], v_col: 255},
+                                   Vertex{v_pos: [-300.0, 0.0,-300.0], v_col: 255},
+                                   Vertex{v_pos: [ 300.0, 0.0, 300.0], v_col: 255},
+                                   Vertex{v_pos: [ 300.0, 0.0,-300.0], v_col: 255}]);
+
                 let mut grids_count = 0;
 
                 let mut camera_x = 1.0;
@@ -119,9 +120,15 @@ impl Render {
                 /*'ecto_loop:*/ loop {
                     {
                         let mut target = display.draw();
-                        target.clear_color(0.1, 0.1, 0.1, 1.0);
-                        let mut draw_params: DrawParameters = Default::default();
-                        draw_params.polygon_mode = PolygonMode::Line;
+                        //target.clear_color(0.1, 0.1, 0.1, 1.0);
+                        target.clear_color_and_depth((0.1, 0.1, 0.1, 1.0), 1.0);
+                        //let mut draw_params: DrawParameters = Default::default();
+                        //draw_params.polygon_mode = PolygonMode::Line;
+                        let draw_params = DrawParameters {
+                            depth_test: ::glium::DepthTest::IfLess,
+                            depth_write: true,
+                            .. Default::default()
+                        };
 
                         /*
                         let view: cgmath::AffineMatrix3<f32> = cgmath::Transform::look_at(
@@ -210,8 +217,8 @@ impl Render {
                                 Event::Grid(gridx,gridy,tiles,z) => {
                                     println!("render: received Grid ({},{})", gridx, gridy);
                                     if gridx == 0 && gridy == 0 {
-                                        camera.target = [0.25, 0.25, z[0] as f32 * model_scale];
-                                        //camera.target = [0.25, z[0] as f32 * model_scale, 0.25];
+                                        //camera.target = [0.25, 0.25, z[0] as f32 * model_scale];
+                                        camera.target = [0.25, z[0] as f32 * model_scale, 0.25];
                                     }
 
                                     let mut vertices = Vec::with_capacity(10_000);
@@ -221,8 +228,8 @@ impl Render {
                                             let vx = (gridx as f32) * 100.0 + (x as f32);
                                             let vy = (gridy as f32) * 100.0 + (y as f32);
                                             let vz = z[index] as f32;
-                                            vertices.push([vx,vy,vz]);
-                                            //vertices.push([vx,vz,vy]);
+                                            //vertices.push([vx,vy,vz]);
+                                            vertices.push([vx,vz,vy]);
                                         }
                                     }
                                     let mut shape = Vec::with_capacity(60_000);
