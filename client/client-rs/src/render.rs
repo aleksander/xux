@@ -26,14 +26,14 @@ impl Render {
                 use ::glium::index::PrimitiveType;
                 use ::glium::glutin;
                 use ::glium::Program;
-                use ::glium::uniforms::EmptyUniforms;
-                use ::glium::draw_parameters::PolygonMode;
+                //use ::glium::uniforms::EmptyUniforms;
                 use ::glium::draw_parameters::DrawParameters;
-                use ::glium::texture::/*TODO Compressed*/Texture2d;
-                use ::glium::texture::Texture2dArray;
+                //use ::glium::texture::/*TODO Compressed*/Texture2d;
+                //use ::glium::texture::Texture2dArray;
+                use ::glium::DepthTest;
                 use std::sync::mpsc::TryRecvError;
                 use cgmath;
-                use cgmath::Matrix;
+                //use cgmath::Matrix;
                 use cgmath::FixedArray;
                 use camera_controllers as camera;
 
@@ -99,11 +99,11 @@ impl Render {
                                    Vertex{v_pos: [ 300.0, 0.0, 300.0], v_col: 255},
                                    Vertex{v_pos: [ 300.0, 0.0,-300.0], v_col: 255}]);
 
-                let mut grids_count = 0;
+                //let mut grids_count = 0;
 
-                let mut camera_x = 1.0;
-                let mut camera_y = 1.0;
-                let mut camera_z = 1.0;
+                //let mut camera_x = 1.0;
+                //let mut camera_y = 1.0;
+                //let mut camera_z = 1.0;
 
                 let mut dragging = false;
                 let mut dragging_xy = None;
@@ -111,8 +111,6 @@ impl Render {
                 let mut zooming_xy = None;
 
                 let mut camera = camera::OrbitZoomCamera::new([0.0, 0.0, 0.0], camera::OrbitZoomCameraSettings::default().pitch_speed(1.0).orbit_speed(0.004));
-                //camera.pitch = 3.14 / 2.0;
-                //camera.yaw = 3.14 / 2.0;
                 camera.distance = 2.0;
 
                 let model_scale = 0.005;
@@ -120,13 +118,12 @@ impl Render {
                 /*'ecto_loop:*/ loop {
                     {
                         let mut target = display.draw();
-                        //target.clear_color(0.1, 0.1, 0.1, 1.0);
                         target.clear_color_and_depth((0.1, 0.1, 0.1, 1.0), 1.0);
-                        //let mut draw_params: DrawParameters = Default::default();
-                        //draw_params.polygon_mode = PolygonMode::Line;
+
                         let draw_params = DrawParameters {
-                            depth_test: ::glium::DepthTest::IfLess,
+                            depth_test: DepthTest::IfLess,
                             depth_write: true,
+                            //polygon_mode: ::glium::draw_parameters::PolygonMode::Line,
                             .. Default::default()
                         };
 
@@ -185,8 +182,8 @@ impl Render {
                                     dragging_xy = match dragging_xy {
                                         None => Some((x,y)),
                                         Some((mx,my)) => {
-                                            camera_x += ((x - mx) as f32) / 1000.0;
-                                            camera_z += ((y - my) as f32) / 1000.0;
+                                            //camera_x += ((x - mx) as f32) / 1000.0;
+                                            //camera_z += ((y - my) as f32) / 1000.0;
                                             //camera.control_camera((x - mx) as f32, (y - my) as f32);
                                             camera.control_camera(-(x - mx) as f32, -(y - my) as f32);
                                             Some((x,y))
@@ -196,12 +193,12 @@ impl Render {
                                 if zooming {
                                     zooming_xy = match zooming_xy {
                                         None => Some((x,y)),
-                                        Some((mx,my)) => {
-                                            let dy = y - my;
-                                            let factor = 1.0 + (dy as f32) / 100.0;
-                                            camera_x *= factor;
-                                            camera_y *= factor;
-                                            camera_z *= factor;
+                                        Some((/*mx*/_,/*my*/_)) => {
+                                            //let dy = y - my;
+                                            //let factor = 1.0 + (dy as f32) / 100.0;
+                                            //camera_x *= factor;
+                                            //camera_y *= factor;
+                                            //camera_z *= factor;
                                             Some((x,y))
                                         }
                                     }
@@ -249,7 +246,7 @@ impl Render {
                                     landscape.extend(&shape);
                                     println!("render: vertices {}, faces {}, quads {}", landscape.len(), landscape.len()/3, landscape.len()/6);
                                     vertex_buffer = VertexBuffer::new(&display, &landscape).unwrap();
-                                    grids_count += 1;
+                                    //grids_count += 1;
                                 }
                             }
                         }

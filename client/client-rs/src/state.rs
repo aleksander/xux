@@ -75,6 +75,7 @@ pub struct Timeout {
     pub seq : usize,
 }
 
+#[allow(non_camel_case_types)]
 #[derive(Clone,PartialEq)]
 pub enum MessageHint {
     C_SESS,
@@ -756,7 +757,7 @@ impl State {
         let buf = self.tx_buf.pop_back();
         if let Some(ref buf) = buf {
             match Message::from_buf(buf.buf.as_slice(), MessageDirection::FromClient) {
-                Ok((msg,_)) => /*println!("TX: {:?}", msg)*/(),
+                Ok((/*msg*/_,_)) => /*println!("TX: {:?}", msg)*/(),
                 Err(e) => panic!("ERROR: malformed TX message: {:?}", e),
             }
         }
@@ -798,6 +799,7 @@ impl State {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub fn pick (&mut self, obj_id: u32) -> Result<(),Error> {
         println!("PICK");
         //TODO let mut rel = Rel::new(seq,id,name);
@@ -824,6 +826,7 @@ impl State {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub fn choose_pick (&mut self, wdg_id: u16) -> Result<(),Error> {
         println!("GO");
         //TODO let mut rel = Rel::new(seq,id,name);
