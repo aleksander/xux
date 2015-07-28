@@ -21,6 +21,7 @@ libc = "*"
 nom = "*"
 glium = "*"
 cgmath = "*"
+camera_controllers = "*"
 
 #[dependencies.openssl]
 #openssl = "0.5.5"
