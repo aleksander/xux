@@ -128,7 +128,7 @@ pub type PacketId = i32;
 
 pub struct Map {
     pub partial: HashMap<PacketId,MapPieces>, //TODO somehow clean up from old pieces (periodically or whatever)
-    pub grids: HashMap<(i32,i32),Surface>, //TODO unify coords
+    pub grids: HashMap<(i32,i32)/*TODO struct Coord*/,(String,i64)/*TODO struct GridHint*/>,
 }
 
 impl Map {
@@ -405,9 +405,10 @@ impl State {
                     assert!(map.tiles.len() == 10_000);
                     assert!(map.z.len() == 10_000);
                     println!("MAP COMPLETE ({},{}) name='{}' id={}", map.x, map.y, map.name, map.id);
-                    self.events.push_front(Event::Grid(map.x,map.y,map.tiles.clone(),map.z.clone()));
+                    //FIXME TODO update grid only if new grid id != cached grid id
+                    self.events.push_front(Event::Grid(map.x, map.y, map.tiles, map.z));
                     self.remove_from_que(MessageHint::MAPREQ(map.x, map.y));
-                    self.map.grids.insert((map.x,map.y),map);
+                    self.map.grids.insert((map.x, map.y), (map.name, map.id));
                 }
             },
             Message::OBJDATA(objdata) => {
@@ -865,7 +866,7 @@ impl State {
         }
     }
 
-    pub fn hero_grid (&self) -> Option<&Surface> {
+    pub fn hero_grid (&self) -> Option<&(String,i64)> {
         match self.hero_grid_xy() {
             Some(xy) => self.map.grids.get(&xy),
             None => None

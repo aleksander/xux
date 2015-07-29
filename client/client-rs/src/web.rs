@@ -75,10 +75,10 @@ fn _responce (state: &State, buf: &str) -> Option<String> {
 
         period = "";
         match state.hero_grid() {
-            Some(grid) => {
-                for y in 0..100 {
-                    for x in 0..100 {
-                        body = body + &format!("{}{}", period, grid.z[x+y*100]);
+            Some(/*grid*/_) => {
+                for /*y*/_ in 0..100 {
+                    for /*x*/_ in 0..100 {
+                        body = body + &format!("{}{}", period, 0/*grid.z[x+y*100]*/); //FIXME grids Z buffers moved from State to Client
                         period = ",";
                     }
                 }
