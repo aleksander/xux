@@ -241,6 +241,7 @@ impl Map {
 
 pub enum Event {
     Grid(i32,i32,Vec<u8>,Vec<i16>),
+    Obj(i32,i32),
 }
 
 pub struct State {
@@ -481,6 +482,7 @@ impl State {
                             _ => {}
                         }
                     }
+                    self.events.push_front(Event::Obj(obj.x, obj.y));
                 }
             },
             Message::OBJACK(_)  => {},

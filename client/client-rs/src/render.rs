@@ -8,6 +8,7 @@ use std::thread;
 #[derive(Debug)]
 pub enum Event {
     Grid(i32,i32,Vec<u8>,Vec<i16>),
+    Obj(i32,i32),
 }
 
 pub struct Render {
@@ -208,55 +209,84 @@ impl Render {
                         }
                     }
 
-                    match rx.try_recv() {
-                        Ok(value) => {
-                            match value {
-                                Event::Grid(gridx,gridy,tiles,z) => {
-                                    println!("render: received Grid ({},{})", gridx, gridy);
-                                    if gridx == 0 && gridy == 0 {
-                                        //camera.target = [0.25, 0.25, z[0] as f32 * model_scale];
-                                        camera.target = [0.25, z[0] as f32 * model_scale, 0.25];
-                                    }
-
-                                    let mut vertices = Vec::with_capacity(10_000);
-                                    for y in 0..100 {
-                                        for x in 0..100 {
-                                            let index = y*100+x;
-                                            let vx = (gridx as f32) * 100.0 + (x as f32);
-                                            let vy = (gridy as f32) * 100.0 + (y as f32);
-                                            let vz = z[index] as f32;
-                                            //vertices.push([vx,vy,vz]);
-                                            vertices.push([vx,vz,vy]);
+                    loop {
+                        match rx.try_recv() {
+                            Ok(value) => {
+                                match value {
+                                    Event::Grid(gridx,gridy,tiles,z) => {
+                                        println!("render: received Grid ({},{})", gridx, gridy);
+                                        if gridx == 0 && gridy == 0 {
+                                            //camera.target = [0.25, 0.25, z[0] as f32 * model_scale];
+                                            camera.target = [0.25, z[0] as f32 * model_scale, 0.25];
                                         }
-                                    }
-                                    let mut shape = Vec::with_capacity(60_000);
-                                    for y in 0..99 {
-                                        for x in 0..99 {
-                                            let index = y*100+x;
-                                            let color = tiles[index];
-                                            shape.push(Vertex{v_pos: vertices[index+100], v_col: color});
-                                            shape.push(Vertex{v_pos: vertices[index], v_col: color});
-                                            shape.push(Vertex{v_pos: vertices[index+1], v_col: color});
 
-                                            shape.push(Vertex{v_pos: vertices[index+100], v_col: color});
-                                            shape.push(Vertex{v_pos: vertices[index+1], v_col: color});
-                                            shape.push(Vertex{v_pos: vertices[index+101], v_col: color});
+                                        let mut vertices = Vec::with_capacity(10_000);
+                                        for y in 0..100 {
+                                            for x in 0..100 {
+                                                let index = y*100+x;
+                                                let vx = (gridx as f32) * 100.0 + (x as f32);
+                                                let vy = (gridy as f32) * 100.0 + (y as f32);
+                                                let vz = z[index] as f32;
+                                                //vertices.push([vx,vy,vz]);
+                                                vertices.push([vx,vz,vy]);
+                                            }
                                         }
+                                        let mut shape = Vec::with_capacity(60_000);
+                                        for y in 0..99 {
+                                            for x in 0..99 {
+                                                let index = y*100+x;
+                                                let color = tiles[index];
+                                                shape.push(Vertex{v_pos: vertices[index+100], v_col: color});
+                                                shape.push(Vertex{v_pos: vertices[index], v_col: color});
+                                                shape.push(Vertex{v_pos: vertices[index+1], v_col: color});
+
+                                                shape.push(Vertex{v_pos: vertices[index+100], v_col: color});
+                                                shape.push(Vertex{v_pos: vertices[index+1], v_col: color});
+                                                shape.push(Vertex{v_pos: vertices[index+101], v_col: color});
+                                            }
+                                        }
+                                        landscape.extend(&shape);
+                                        println!("render: vertices {}, faces {}, quads {}", landscape.len(), landscape.len()/3, landscape.len()/6);
+                                        vertex_buffer = VertexBuffer::new(&display, &landscape).unwrap();
+                                        //grids_count += 1;
                                     }
-                                    landscape.extend(&shape);
-                                    println!("render: vertices {}, faces {}, quads {}", landscape.len(), landscape.len()/3, landscape.len()/6);
-                                    vertex_buffer = VertexBuffer::new(&display, &landscape).unwrap();
-                                    //grids_count += 1;
+                                    Event::Obj(x,y) => {
+                                        println!("render: received Obj ({},{})", x, y);
+                                        let x = x as f32;
+                                        let y = y as f32;
+
+                                        let mut vertices = Vec::with_capacity(4);
+                                        vertices.push([x-1.0, 0.01, y-1.0]);
+                                        vertices.push([x-1.0, 0.01, y+1.0]);
+                                        vertices.push([x+1.0, 0.01, y+1.0]);
+                                        vertices.push([x+1.0, 0.01, y-1.0]);
+
+                                        let mut mesh = Vec::with_capacity(6);
+                                        mesh.push(Vertex{v_pos: vertices[0], v_col: 0});
+                                        mesh.push(Vertex{v_pos: vertices[1], v_col: 0});
+                                        mesh.push(Vertex{v_pos: vertices[2], v_col: 0});
+
+                                        mesh.push(Vertex{v_pos: vertices[2], v_col: 0});
+                                        mesh.push(Vertex{v_pos: vertices[3], v_col: 0});
+                                        mesh.push(Vertex{v_pos: vertices[0], v_col: 0});
+
+                                        landscape.extend(&mesh);
+                                        vertex_buffer = VertexBuffer::new(&display, &landscape).unwrap();
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                if let TryRecvError::Disconnected = e {
+                                    println!("render: disconnected");
+                                    //break/* 'ecto_loop*/;
+                                    return;
+                                } else {
+                                    break;
                                 }
                             }
                         }
-                        Err(e) => {
-                            if let TryRecvError::Disconnected = e {
-                                println!("render: disconnected");
-                                break/* 'ecto_loop*/;
-                            }
-                        }
                     }
+
                 }
         });
         Render{tx:tx}
