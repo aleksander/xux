@@ -48,7 +48,7 @@ impl Render {
                 #[derive(Copy, Clone)]
                 struct Vertex {
                     v_pos: [f32; 3],
-                    v_col: u8,
+                    v_col: [f32; 3],
                 }
 
                 implement_vertex!(Vertex, v_pos, v_col);
@@ -59,8 +59,8 @@ impl Render {
                 let vertex_shader_src = r#"
                     #version 140
                     in vec3 v_pos;
-                    in uint v_col;
-                    flat out uint vv_col;
+                    in vec3 v_col;
+                    flat out vec3 vv_col;
 
                     uniform mat4 u_model;
                     uniform mat4 u_view;
@@ -74,11 +74,11 @@ impl Render {
 
                 let fragment_shader_src = r#"
                     #version 140
-                    flat in uint vv_col;
+                    flat in vec3 vv_col;
                     out vec4 color;
                     void main() {
-                        float c = float(vv_col) / 255.0;
-                        color = vec4(c, c, c, 0.0);
+                        //float c = float(vv_col) / 255.0;
+                        color = vec4(vv_col, 1.0);
                     }
                 "#;
 
@@ -93,12 +93,15 @@ impl Render {
 
                 let mut landscape = Vec::new();
 
-                landscape.extend(&[Vertex{v_pos: [-300.0, 0.0,-300.0], v_col: 255},
-                                   Vertex{v_pos: [-300.0, 0.0, 300.0], v_col: 255},
-                                   Vertex{v_pos: [ 300.0, 0.0, 300.0], v_col: 255},
-                                   Vertex{v_pos: [-300.0, 0.0,-300.0], v_col: 255},
-                                   Vertex{v_pos: [ 300.0, 0.0, 300.0], v_col: 255},
-                                   Vertex{v_pos: [ 300.0, 0.0,-300.0], v_col: 255}]);
+                {
+                    let col = [1.0; 3];
+                    landscape.extend(&[Vertex{v_pos: [-300.0, 0.0,-300.0], v_col: col},
+                                       Vertex{v_pos: [-300.0, 0.0, 300.0], v_col: col},
+                                       Vertex{v_pos: [ 300.0, 0.0, 300.0], v_col: col},
+                                       Vertex{v_pos: [-300.0, 0.0,-300.0], v_col: col},
+                                       Vertex{v_pos: [ 300.0, 0.0, 300.0], v_col: col},
+                                       Vertex{v_pos: [ 300.0, 0.0,-300.0], v_col: col}]);
+                }
 
                 let mut grids_count = 0;
 
@@ -234,7 +237,7 @@ impl Render {
                                         for y in 0..99 {
                                             for x in 0..99 {
                                                 let index = y*100+x;
-                                                let color = tiles[index];
+                                                let color = [tiles[index] as f32 / 255.0; 3];
                                                 shape.push(Vertex{v_pos: vertices[index+100], v_col: color});
                                                 shape.push(Vertex{v_pos: vertices[index], v_col: color});
                                                 shape.push(Vertex{v_pos: vertices[index+1], v_col: color});
@@ -260,14 +263,15 @@ impl Render {
                                         vertices.push([x+1.0, 0.01, y+1.0]);
                                         vertices.push([x+1.0, 0.01, y-1.0]);
 
+                                        let col = [0.0, 1.0, 0.0];
                                         let mut mesh = Vec::with_capacity(6);
-                                        mesh.push(Vertex{v_pos: vertices[0], v_col: 0});
-                                        mesh.push(Vertex{v_pos: vertices[1], v_col: 0});
-                                        mesh.push(Vertex{v_pos: vertices[2], v_col: 0});
+                                        mesh.push(Vertex{v_pos: vertices[0], v_col: col});
+                                        mesh.push(Vertex{v_pos: vertices[1], v_col: col});
+                                        mesh.push(Vertex{v_pos: vertices[2], v_col: col});
 
-                                        mesh.push(Vertex{v_pos: vertices[2], v_col: 0});
-                                        mesh.push(Vertex{v_pos: vertices[3], v_col: 0});
-                                        mesh.push(Vertex{v_pos: vertices[0], v_col: 0});
+                                        mesh.push(Vertex{v_pos: vertices[2], v_col: col});
+                                        mesh.push(Vertex{v_pos: vertices[3], v_col: col});
+                                        mesh.push(Vertex{v_pos: vertices[0], v_col: col});
 
                                         landscape.extend(&mesh);
                                         vertex_buffer = VertexBuffer::new(&display, &landscape).unwrap();
