@@ -244,13 +244,11 @@ impl<A:Ai> Client<A> {
 
             self.ai.update(&mut self.state);
 
-            if let Some(xy) = self.state.start_point() {
-                let (start_x, start_y) = xy;
-                let (start_grid_x, start_grid_y) = state::grid(xy);
+            if let Some((start_x, start_y)) = self.state.start_point() {
                 while let Some(event) = self.state.next_event() {
                     if let Err(e) = self.render.update(
                         match event {
-                            state::Event::Grid(x,y,tiles,z) => render::Event::Grid(x - start_grid_x, y - start_grid_y, tiles, z),
+                            state::Event::Grid(x,y,tiles,z) => render::Event::Grid(x * 1100 - start_x, y * 1100 - start_y, tiles, z),
                             state::Event::Obj(x,y)          => render::Event::Obj(x - start_x, y - start_y),
                         }
                     ) {

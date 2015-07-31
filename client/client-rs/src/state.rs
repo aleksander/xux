@@ -406,10 +406,15 @@ impl State {
                     assert!(map.tiles.len() == 10_000);
                     assert!(map.z.len() == 10_000);
                     println!("MAP COMPLETE ({},{}) name='{}' id={}", map.x, map.y, map.name, map.id);
-                    //FIXME TODO update grid only if new grid id != cached grid id
-                    self.events.push_front(Event::Grid(map.x, map.y, map.tiles, map.z));
                     self.remove_from_que(MessageHint::MAPREQ(map.x, map.y));
-                    self.map.grids.insert((map.x, map.y), (map.name, map.id));
+                    //FIXME TODO update grid only if new grid id != cached grid id
+                    match self.map.grids.get(&(map.x, map.y)) {
+                        Some(_) => println!("MAP DUPLICATE"),
+                        None => {
+                            self.events.push_front(Event::Grid(map.x, map.y, map.tiles, map.z));
+                            self.map.grids.insert((map.x, map.y), (map.name, map.id));
+                        }
+                    }
                 }
             },
             Message::OBJDATA(objdata) => {
@@ -571,10 +576,10 @@ impl State {
                     self.hero.obj = Some(obj as u32);
                     println!("HERO: obj = '{:?}'", self.hero.obj);
 
-                    match self.hero_xy() {
-                        Some(xy) => { self.hero.start_xy = Some(xy); }
-                        None => { panic!("we have received hero object ID, but hero XY is None"); }
-                    }
+                    self.hero.start_xy = match self.hero_xy() {
+                        Some(xy) => Some(xy),
+                        None => panic!("we have received hero object ID, but hero XY is None")
+                    };
 
                     self.update_grids_around();
                 }
@@ -638,23 +643,25 @@ impl State {
         }
     }
 
-    fn update_grids_around (&mut self) {
+    fn update_grids_around (&mut self) /*TODO return Result*/ {
         //TODO move to fn client.update_grids_around(...) { ... }
         //     if client.hero.current_grid_is_changed() { client.update_grids_around(); }
         //TODO if grids.not_contains(xy) and requests.not_contains(xy) then add_map_request(xy)
-        if let Some(xy) = self.hero_grid_xy() {
-            let (x,y) = xy;
-            self.mapreq(x,y).unwrap();
-            self.mapreq(x-1,y-1).unwrap();
-            self.mapreq(x,y-1).unwrap();
-            self.mapreq(x+1,y-1).unwrap();
-            self.mapreq(x-1,y).unwrap();
-            self.mapreq(x+1,y).unwrap();
-            self.mapreq(x-1,y+1).unwrap();
-            self.mapreq(x,y+1).unwrap();
-            self.mapreq(x+1,y+1).unwrap();
-        } else {
-            panic!("update_grids_around when hero_grid_xy is None");
+        match self.hero_grid_xy() {
+            Some((x,y)) => {
+                self.mapreq(x,  y).unwrap();
+                self.mapreq(x-1,y).unwrap();
+                self.mapreq(x+1,y).unwrap();
+
+                self.mapreq(x-1,y-1).unwrap();
+                self.mapreq(x,  y-1).unwrap();
+                self.mapreq(x+1,y-1).unwrap();
+
+                self.mapreq(x-1,y+1).unwrap();
+                self.mapreq(x,  y+1).unwrap();
+                self.mapreq(x+1,y+1).unwrap();
+            }
+            None => panic!("update_grids_around when hero_grid_xy is None")
         }
     }
 

@@ -100,7 +100,7 @@ impl Render {
                                    Vertex{v_pos: [ 300.0, 0.0, 300.0], v_col: 255},
                                    Vertex{v_pos: [ 300.0, 0.0,-300.0], v_col: 255}]);
 
-                //let mut grids_count = 0;
+                let mut grids_count = 0;
 
                 //let mut camera_x = 1.0;
                 //let mut camera_y = 1.0;
@@ -114,7 +114,7 @@ impl Render {
                 let mut camera = camera::OrbitZoomCamera::new([0.0, 0.0, 0.0], camera::OrbitZoomCameraSettings::default().pitch_speed(1.0).orbit_speed(0.004));
                 camera.distance = 2.0;
 
-                let model_scale = 0.005;
+                let model_scale = 0.001;
 
                 /*'ecto_loop:*/ loop {
                     {
@@ -215,17 +215,16 @@ impl Render {
                                 match value {
                                     Event::Grid(gridx,gridy,tiles,z) => {
                                         println!("render: received Grid ({},{})", gridx, gridy);
-                                        if gridx == 0 && gridy == 0 {
-                                            //camera.target = [0.25, 0.25, z[0] as f32 * model_scale];
-                                            camera.target = [0.25, z[0] as f32 * model_scale, 0.25];
+                                        if grids_count == 0 {
+                                            camera.target = [0.0, z[0] as f32 * model_scale, 0.0];
                                         }
 
                                         let mut vertices = Vec::with_capacity(10_000);
                                         for y in 0..100 {
                                             for x in 0..100 {
                                                 let index = y*100+x;
-                                                let vx = (gridx as f32) * 100.0 + (x as f32);
-                                                let vy = (gridy as f32) * 100.0 + (y as f32);
+                                                let vx = (gridx + x as i32 * 11) as f32;
+                                                let vy = (gridy + y as i32 * 11) as f32;
                                                 let vz = z[index] as f32;
                                                 //vertices.push([vx,vy,vz]);
                                                 vertices.push([vx,vz,vy]);
@@ -248,7 +247,7 @@ impl Render {
                                         landscape.extend(&shape);
                                         println!("render: vertices {}, faces {}, quads {}", landscape.len(), landscape.len()/3, landscape.len()/6);
                                         vertex_buffer = VertexBuffer::new(&display, &landscape).unwrap();
-                                        //grids_count += 1;
+                                        grids_count += 1;
                                     }
                                     Event::Obj(x,y) => {
                                         println!("render: received Obj ({},{})", x, y);
