@@ -217,7 +217,7 @@ impl Render {
                             Ok(value) => {
                                 match value {
                                     Event::Grid(gridx,gridy,tiles,z) => {
-                                        println!("render: received Grid ({},{})", gridx, gridy);
+                                        //println!("render: received Grid ({},{})", gridx, gridy);
                                         if grids_count == 0 {
                                             camera.target = [0.0, z[0] as f32 * model_scale, 0.0];
                                         }
@@ -253,7 +253,7 @@ impl Render {
                                         grids_count += 1;
                                     }
                                     Event::Obj(x,y) => {
-                                        println!("render: received Obj ({},{})", x, y);
+                                        //println!("render: received Obj ({},{})", x, y);
                                         let x = x as f32;
                                         let y = y as f32;
 

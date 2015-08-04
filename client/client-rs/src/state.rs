@@ -418,7 +418,7 @@ impl State {
                 }
             },
             Message::OBJDATA(objdata) => {
-                //println!("RX: OBJDATA {:?}", objdata);
+                println!("RX: OBJDATA {:?}", objdata);
                 try!(self.enqueue_to_send(Message::OBJACK(ObjAck::new(&objdata)))); // send OBJACKs
                 for o in objdata.obj.iter() {
                     //FIXME ??? do NOT add hero object
@@ -478,7 +478,7 @@ impl State {
                                         }
                                     }
                                     None => {
-                                        println!("WARNING: odLINSTEP while movement == None");
+                                        println!("WARNING: odLINSTEP({}) while movement == None", step);
                                         None
                                     }
                                 };

@@ -202,61 +202,68 @@ impl<A:Ai> Client<A> {
         return Err(Error{source:"'cookie' command unexpected answer", detail:Some(String::from_utf8(msg).unwrap())});
     }
 
+    fn send_all_enqueued (&mut self) {
+        //TODO use iterator
+        while let Some(ebuf) = self.state.tx() {
+            self.driver.tx(&ebuf.buf).unwrap();
+            if let Some(timeout) = ebuf.timeout {
+                self.driver.timeout(timeout.seq, timeout.ms);
+            }
+        }
+    }
+
+    fn dispatch_single_event (&mut self) {
+        match self.driver.event().unwrap() {
+            Event::Rx(buf) => {
+                //println!("event::rx: {} bytes", buf.len());
+                self.state.rx(&buf).unwrap();
+            }
+            Event::Timeout(seq) => {
+                //println!("event::timeout: {} seq", seq);
+                self.state.timeout(seq);
+            }
+            Event::Tcp((tx,buf)) => {
+                let reply = web::responce(&buf, &self.state);
+                tx.send(reply).unwrap();
+                //self.driver.reply(reply);
+            }
+            /*TODO:
+            Event::RenderQuit => {
+                self.state.close();
+            }
+            */
+        }
+    }
+
     fn run (&mut self, login: &str, cookie: &[u8]) -> Option<Error> {
         println!("connect {} / {}", login, cookie.to_hex());
         self.state.connect(login, cookie).unwrap();
-        loop {
-            loop {
-                //TODO use iterator
-                match self.state.tx() {
-                    Some(ebuf) => {
-                        self.driver.tx(&ebuf.buf).unwrap();
-                        if let Some(timeout) = ebuf.timeout {
-                            self.driver.timeout(timeout.seq, timeout.ms);
-                        }
-                    }
-                    None => {
-                        break;
-                    }
-                }
-            }
 
-            match self.driver.event().unwrap() {
-                Event::Rx(buf) => {
-                    //println!("event::rx: {} bytes", buf.len());
-                    self.state.rx(&buf).unwrap();
-                }
-                Event::Timeout(seq) => {
-                    //println!("event::timeout: {} seq", seq);
-                    self.state.timeout(seq);
-                }
-                Event::Tcp((tx,buf)) => {
-                    let reply = web::responce(&buf, &self.state);
-                    tx.send(reply).unwrap();
-                    //self.driver.reply(reply);
-                }
-                /*TODO:
-                Event::RenderQuit => {
-                    self.state.close();
-                }
-                */
-            }
-
+        while let None = self.state.start_point() {
+            self.send_all_enqueued();
+            self.dispatch_single_event();
             self.ai.update(&mut self.state);
+        }
 
-            if let Some((start_x, start_y)) = self.state.start_point() {
-                while let Some(event) = self.state.next_event() {
-                    if let Err(e) = self.render.update(
-                        match event {
-                            state::Event::Grid(x,y,tiles,z) => render::Event::Grid(x * 1100 - start_x, y * 1100 - start_y, tiles, z),
-                            state::Event::Obj(x,y)          => render::Event::Obj(x - start_x, y - start_y),
-                        }
-                    ) {
-                        println!("render.update ERROR: {:?}", e);
-                        return None /*TODO Some(e)*/;
-                    }
+        let (start_x, start_y) = match self.state.start_point() {
+            Some(xy) => xy,
+            None => panic!("this can't be")
+        };
+
+        loop {
+            while let Some(event) = self.state.next_event() {
+                let event = match event {
+                    state::Event::Grid(x,y,tiles,z) => render::Event::Grid(x * 1100 - start_x, y * 1100 - start_y, tiles, z),
+                    state::Event::Obj(x,y)          => render::Event::Obj(x - start_x, y - start_y),
+                };
+                if let Err(e) = self.render.update(event) {
+                    println!("render.update ERROR: {:?}", e);
+                    return None /*TODO Some(e)*/;
                 }
             }
+            self.send_all_enqueued();
+            self.dispatch_single_event();
+            self.ai.update(&mut self.state);
         }
     }
 }
