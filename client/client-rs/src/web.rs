@@ -55,11 +55,24 @@ fn _responce (state: &State, buf: &str) -> Option<String> {
 
         period = "";
         for o in state.objects.values() {
-            let resname = match state.resources.get(&o.resid) {
-                Some(res) => res.as_str(),
-                None      => "null"
+            let resname = match o.resid {
+                Some(resid) => {
+                    match state.resources.get(&resid) {
+                        Some(res) => res.as_str(),
+                        None      => "null"
+                    }
+                }
+                None => "null"
             };
-            body = body + &format!("\r\n{}{{\"x\":{},\"y\":{},\"resid\":{},\"resname\":\"{}\"}}", period, o.x, o.y, o.resid, resname);
+            let (x,y) = match o.xy {
+                Some(xy) => xy,
+                None => (0,0)
+            };
+            let resid = match o.resid {
+                Some(resid) => resid,
+                None => 0
+            };
+            body = body + &format!("\r\n{}{{\"x\":{},\"y\":{},\"resid\":{},\"resname\":\"{}\"}}", period, x, y, resid, resname);
             period = ",";
         }
 
@@ -99,11 +112,20 @@ fn _responce (state: &State, buf: &str) -> Option<String> {
     } else if buf.starts_with("objects ") {
         let mut body = String::new();
         for o in state.objects.values() {
-            let resname = match state.resources.get(&o.resid) {
-                Some(res) => res.as_str(),
-                None      => "null"
+            let (resid,resname) = match o.resid {
+                Some(resid) => {
+                    match state.resources.get(&resid) {
+                        Some(res) => (resid,res.as_str()),
+                        None => (resid,"null")
+                    }
+                }
+                None => (0,"null")
             };
-            body = body + &format!("{{\"x\":{},\"y\":{},\"resid\":{},\"resname\":\"{}\"}},", o.x, o.y, o.resid, resname);
+            let (x,y) = match o.xy {
+                Some(xy) => xy,
+                None => (0,0)
+            };
+            body = body + &format!("{{\"x\":{},\"y\":{},\"resid\":{},\"resname\":\"{}\"}},", x, y, resid, resname);
         }
         body = "[ ".to_string() + &body[..body.len()-1] + " ]";
         Some(format!("HTTP/1.1 200 OK\r\nContent-Type: text/json\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\n\r\n", body.len()) + &body)

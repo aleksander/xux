@@ -54,10 +54,9 @@ use self::flate2::read::ZlibDecoder;
 
 pub struct Obj {
     pub id : u32,
-    pub resid : u16,
-    pub frame : i32,
-    pub x : i32, //TODO unify coords
-    pub y : i32, //TODO unify coords
+    pub resid : Option<u16>,
+    pub frame : Option<i32>,
+    pub xy : Option<(i32,i32)>, //TODO unify coords
     pub movement : Option<Movement>,
 }
 
@@ -241,7 +240,7 @@ impl Map {
 
 pub enum Event {
     Grid(i32,i32,Vec<u8>,Vec<i16>),
-    Obj(i32,i32),
+    Obj((i32,i32)),
 }
 
 pub struct State {
@@ -430,64 +429,68 @@ impl State {
                     //              }
                     //          }
                     //      }
+
+                    let mut to_remove = false;
+
                     {
-                        let mut to_remove = false;
+                        let obj = self.objects.entry(o.id).or_insert(Obj{id:o.id, frame:None, resid:None, xy:None, movement:None});
+
+                        //FIXME consider o.frame overflow !!!
+                        if let Some(frame) = obj.frame {
+                            if o.frame <= frame {
+                                continue;
+                            }
+                        }
+
                         for prop in o.prop.iter() {
-                            if let ObjProp::odREM = *prop {
-                                 to_remove = true;
-                                 break;
-                            }
-                        }
-                        if to_remove {
-                            self.objects.remove(&o.id);
-                            continue;
-                        }
-                    }
-                    let obj = self.objects.entry(o.id).or_insert(Obj{id:o.id, frame:0, resid:0, x:0, y:0, movement:None});
-                    //FIXME consider o.frame overflow !!!
-                    if o.frame <= obj.frame {
-                        continue;
-                    }
-                    for prop in o.prop.iter() {
-                        match *prop {
-                            ObjProp::odMOVE(xy,_) => { let (x,y) = xy; obj.x = x; obj.y = y; }
-                            ObjProp::odRES(resid) => { obj.resid = resid; }
-                            ObjProp::odCOMPOSE(resid) => { obj.resid = resid; }
-                            ObjProp::odLINBEG((x1,y1),(x2,y2),steps) => {
-                                obj.movement = Some(Movement{
-                                    from: (x1,y1),
-                                    to: (x2,y2),
-                                    steps: steps,
-                                    step: 0
-                                })
-                            }
-                            ObjProp::odLINSTEP(step) => {
-                                let movement = match obj.movement {
-                                    Some(ref m) => {
-                                        if (step > 0) && (step < m.steps) {
-                                            if step <= m.step {
-                                                println!("WARNING: odLINSTEP step <= m.step");
+                            match *prop {
+                                ObjProp::odREM => { to_remove = true; break; }
+                                ObjProp::odMOVE(xy,_) => { obj.xy = Some(xy); }
+                                ObjProp::odRES(resid) => { obj.resid = Some(resid); }
+                                ObjProp::odCOMPOSE(resid) => { obj.resid = Some(resid); }
+                                ObjProp::odLINBEG(xy1,xy2,steps) => {
+                                    obj.movement = Some(Movement{
+                                        from: xy1,
+                                        to: xy2,
+                                        steps: steps,
+                                        step: 0
+                                    })
+                                }
+                                ObjProp::odLINSTEP(step) => {
+                                    let movement = match obj.movement {
+                                        Some(ref m) => {
+                                            if (step > 0) && (step < m.steps) {
+                                                if step <= m.step {
+                                                    println!("WARNING: odLINSTEP step <= m.step");
+                                                }
+                                                Some(Movement{
+                                                    from: m.from,
+                                                    to: m.to,
+                                                    steps: m.steps,
+                                                    step: step })
+                                            } else {
+                                                None
                                             }
-                                            Some(Movement{
-                                                from: m.from,
-                                                to: m.to,
-                                                steps: m.steps,
-                                                step: step })
-                                        } else {
+                                        }
+                                        None => {
+                                            println!("WARNING: odLINSTEP({}) while movement == None", step);
                                             None
                                         }
-                                    }
-                                    None => {
-                                        println!("WARNING: odLINSTEP({}) while movement == None", step);
-                                        None
-                                    }
-                                };
-                                obj.movement = movement;
+                                    };
+                                    obj.movement = movement;
+                                }
+                                _ => {}
                             }
-                            _ => {}
+                        }
+
+                        if let Some(xy) = obj.xy {
+                            self.events.push_front(Event::Obj(xy));
                         }
                     }
-                    self.events.push_front(Event::Obj(obj.x, obj.y));
+
+                    if to_remove {
+                        self.objects.remove(&o.id);
+                    }
                 }
             },
             Message::OBJACK(_)  => {},
@@ -818,8 +821,15 @@ impl State {
         let name = "click".to_string();
         let mut args = Vec::new();
         let (obj_x,obj_y) = {
-            let obj = self.objects.get(&obj_id).unwrap();
-            (obj.x, obj.y)
+            match self.objects.get(&obj_id) {
+                Some(obj) => {
+                    match obj.xy {
+                        Some(xy) => xy,
+                        None => panic!("pick(): picking object has no XY")
+                    }
+                }
+                None => panic!("pick(): picking object is not found")
+            }
         };
         args.push(MsgList::tCOORD((863, 832))); //TODO set some random coords in the center of screen
         args.push(MsgList::tCOORD((obj_x-1, obj_y+1)));
@@ -863,7 +873,7 @@ impl State {
 
     pub fn hero_xy (&self) -> Option<(i32,i32)> {
         match self.hero_obj() {
-            Some(hero) => Some((hero.x,hero.y)),
+            Some(hero) => hero.xy,
             None => None
         }
     }

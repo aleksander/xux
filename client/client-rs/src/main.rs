@@ -254,7 +254,7 @@ impl<A:Ai> Client<A> {
             while let Some(event) = self.state.next_event() {
                 let event = match event {
                     state::Event::Grid(x,y,tiles,z) => render::Event::Grid(x * 1100 - start_x, y * 1100 - start_y, tiles, z),
-                    state::Event::Obj(x,y)          => render::Event::Obj(x - start_x, y - start_y),
+                    state::Event::Obj((x,y))          => render::Event::Obj(x - start_x, y - start_y),
                 };
                 if let Err(e) = self.render.update(event) {
                     println!("render.update ERROR: {:?}", e);
