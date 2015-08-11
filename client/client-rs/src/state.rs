@@ -442,6 +442,8 @@ impl State {
                             }
                         }
 
+                        obj.frame = Some(o.frame);
+
                         for prop in o.prop.iter() {
                             match *prop {
                                 ObjProp::odREM => { to_remove = true; break; }
