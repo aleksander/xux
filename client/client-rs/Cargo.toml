@@ -5,7 +5,6 @@ version = "0.0.0"
 authors = ["Aleksander Usov <aleksander.usov@gmail.com>"]
 
 [dependencies]
-#rustc-serialize = "0.3.12"
 rustc-serialize = "*"
 byteorder = "*"
 openssl = "*"
@@ -15,7 +14,7 @@ mio = "*"
 flate2 = "*"
 image = "*"
 #hlua = "*"
-lua = "*"
+#lua = "*"
 #lua-rs = "*"
 libc = "*"
 nom = "*"

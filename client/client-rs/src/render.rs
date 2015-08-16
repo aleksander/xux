@@ -39,7 +39,7 @@ impl Render {
                 use camera_controllers as camera;
 
                 let display = WindowBuilder::new()
-                        .with_dimensions(512, 512)
+                        .with_dimensions(1024, 1024)
                         .with_title(format!("render"))
                         .with_depth_buffer(24)
                         .build_glium()
@@ -115,7 +115,7 @@ impl Render {
                 let mut zooming_xy = None;
 
                 let mut camera = camera::OrbitZoomCamera::new([0.0, 0.0, 0.0], camera::OrbitZoomCameraSettings::default().pitch_speed(1.0).orbit_speed(0.004));
-                camera.distance = 2.0;
+                camera.distance = 5.0;
 
                 let model_scale = 0.001;
 
@@ -212,7 +212,7 @@ impl Render {
                         }
                     }
 
-                    loop {
+                    //loop {
                         match rx.try_recv() {
                             Ok(value) => {
                                 match value {
@@ -228,7 +228,7 @@ impl Render {
                                                 let index = y*100+x;
                                                 let vx = (gridx + x as i32 * 11) as f32;
                                                 let vy = (gridy + y as i32 * 11) as f32;
-                                                let vz = z[index] as f32;
+                                                let vz = z[index] as f32 * 4.0;
                                                 //vertices.push([vx,vy,vz]);
                                                 vertices.push([vx,vz,vy]);
                                             }
@@ -258,10 +258,10 @@ impl Render {
                                         let y = y as f32;
 
                                         let mut vertices = Vec::with_capacity(4);
-                                        vertices.push([x-1.0, 0.01, y-1.0]);
-                                        vertices.push([x-1.0, 0.01, y+1.0]);
-                                        vertices.push([x+1.0, 0.01, y+1.0]);
-                                        vertices.push([x+1.0, 0.01, y-1.0]);
+                                        vertices.push([x-3.0, 0.01, y-3.0]);
+                                        vertices.push([x-3.0, 0.01, y+3.0]);
+                                        vertices.push([x+3.0, 0.01, y+3.0]);
+                                        vertices.push([x+3.0, 0.01, y-3.0]);
 
                                         let col = [0.0, 1.0, 0.0];
                                         let mut mesh = Vec::with_capacity(6);
@@ -283,12 +283,12 @@ impl Render {
                                     println!("render: disconnected");
                                     //break/* 'ecto_loop*/;
                                     return;
-                                } else {
-                                    break;
-                                }
+                                }// else {
+                                //    break;
+                                //}
                             }
                         }
-                    }
+                    //}
 
                 }
         });
