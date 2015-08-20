@@ -53,7 +53,7 @@ extern crate flate2;
 use self::flate2::read::ZlibDecoder;
 
 pub struct Obj {
-    pub id : u32,
+    pub id : u32, //TODO maybe remove this? because this is also a key field in objects hashmap
     pub resid : Option<u16>,
     pub frame : Option<i32>,
     pub xy : Option<(i32,i32)>, //TODO unify coords
