@@ -2,8 +2,11 @@ use std::env;
 use std::fs;
 //use std::io::Read;
 
-//extern crate nom;
-//use nom::IResult;
+#[macro_use]
+extern crate nom;
+use nom::IResult;
+use nom::be_u8;
+use nom::Err;
 
 extern crate pcapng;
 //use pcapng::block::parse_blocks;
@@ -83,6 +86,70 @@ fn main () {
                  ip.get_destination(), udp.get_destination());
         */
 
+        fn parse_sess (i: &[u8]) -> IResult<&[u8], &str> {
+            IResult::Done(i, "SESS")
+        }
+
+        fn parse_rel (i: &[u8]) -> IResult<&[u8], &str> {
+            IResult::Done(i, "REL")
+        }
+
+        fn parse_ack (i: &[u8]) -> IResult<&[u8], &str> {
+            IResult::Done(i, "ACK")
+        }
+
+        fn parse_beat (i: &[u8]) -> IResult<&[u8], &str> {
+            IResult::Done(i, "BEAT")
+        }
+
+        fn parse_mapreq (i: &[u8]) -> IResult<&[u8], &str> {
+            IResult::Done(i, "MAPREQ")
+        }
+
+        fn parse_mapdata (i: &[u8]) -> IResult<&[u8], &str> {
+            IResult::Done(i, "MAPDATA")
+        }
+
+        fn parse_objdata (i: &[u8]) -> IResult<&[u8], &str> {
+            IResult::Done(i, "OBJDATA")
+        }
+
+        fn parse_objack (i: &[u8]) -> IResult<&[u8], &str> {
+            IResult::Done(i, "OBJACK")
+        }
+
+        fn parse_close (i: &[u8]) -> IResult<&[u8], &str> {
+            IResult::Done(i, "CLOSE")
+        }
+
+        fn parse (i: &[u8]) -> IResult<&[u8], &str> {
+            match be_u8(i) {
+                IResult::Done(i, o) => {
+                    match o {
+                        0 => parse_sess(i),
+                        1 => parse_rel(i),
+                        2 => parse_ack(i),
+                        3 => parse_beat(i),
+                        4 => parse_mapreq(i),
+                        5 => parse_mapdata(i),
+                        6 => parse_objdata(i),
+                        7 => parse_objack(i),
+                        8 => parse_close(i),
+                        _ => IResult::Error(Err::Code(1))
+                    }
+                }
+                IResult::Error(e) => IResult::Error(e),
+                IResult::Incomplete(n) => IResult::Incomplete(n),
+            }
+        }
+
+        match parse(udp.payload()) {
+            IResult::Done(i, o) => { println!("{:?}", o); if i.len() > 0 { println!("REMAINS: {} bytes", i.len()); } }
+            IResult::Error(e) => { println!("Error: {:?}", e); break; }
+            IResult::Incomplete(n) => { println!("Incomplete: {:?}", n); break; }
+        }
+
+        /*
         println!("");
         match Message::from_buf(udp.payload(), dir) {
             Ok((msg,remains)) => {
@@ -96,5 +163,6 @@ fn main () {
                 println!("BUF: {:?}", udp.payload());
             }
         }
+        */
     }
 }

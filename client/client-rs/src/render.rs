@@ -189,7 +189,7 @@ impl Render {
                                             //camera_x += ((x - mx) as f32) / 1000.0;
                                             //camera_z += ((y - my) as f32) / 1000.0;
                                             //camera.control_camera((x - mx) as f32, (y - my) as f32);
-                                            camera.control_camera(-(x - mx) as f32, -(y - my) as f32);
+                                            /*FIXME*/ //camera.control_camera(-(x - mx) as f32, -(y - my) as f32);
                                             Some((x,y))
                                         }
                                     }
