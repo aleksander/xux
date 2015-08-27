@@ -86,7 +86,7 @@ impl Render {
                 let program = match Program::from_source(&display, vertex_shader_src, fragment_shader_src, None) {
                     Ok(program) => program,
                     Err(error) => {
-                        println!("compile program ERROR: {:?}", error);
+                        info!("compile program ERROR: {:?}", error);
                         return;
                     }
                 };
@@ -151,11 +151,11 @@ impl Render {
                         };
 
                         if let Err(e) = target.draw(&vertex_buffer, &indices, &program, &uniforms/*EmptyUniforms*/, &draw_params) {
-                            println!("target.draw ERROR: {:?}", e);
+                            info!("target.draw ERROR: {:?}", e);
                             return;
                         }
                         if let Err(e) = target.finish() {
-                            println!("target.finish ERROR: {:?}", e);
+                            info!("target.finish ERROR: {:?}", e);
                             return;
                         }
                     }
@@ -217,7 +217,7 @@ impl Render {
                             Ok(value) => {
                                 match value {
                                     Event::Grid(gridx,gridy,tiles,z) => {
-                                        //println!("render: received Grid ({},{})", gridx, gridy);
+                                        //info!("render: received Grid ({},{})", gridx, gridy);
                                         if grids_count == 0 {
                                             camera.target = [0.0, z[0] as f32 * model_scale, 0.0];
                                         }
@@ -248,12 +248,12 @@ impl Render {
                                             }
                                         }
                                         landscape.extend(&shape);
-                                        println!("render: vertices {}, faces {}, quads {}", landscape.len(), landscape.len()/3, landscape.len()/6);
+                                        info!("render: vertices {}, faces {}, quads {}", landscape.len(), landscape.len()/3, landscape.len()/6);
                                         vertex_buffer = VertexBuffer::new(&display, &landscape).unwrap();
                                         grids_count += 1;
                                     }
                                     Event::Obj(x,y) => {
-                                        //println!("render: received Obj ({},{})", x, y);
+                                        //info!("render: received Obj ({},{})", x, y);
                                         let x = x as f32;
                                         let y = y as f32;
 
@@ -280,7 +280,7 @@ impl Render {
                             }
                             Err(e) => {
                                 if let TryRecvError::Disconnected = e {
-                                    println!("render: disconnected");
+                                    info!("render: disconnected");
                                     //break/* 'ecto_loop*/;
                                     return;
                                 }// else {

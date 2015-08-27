@@ -7,6 +7,11 @@ use std::net::IpAddr;
 //use std::net::Ipv4Addr;
 use std::net::SocketAddr;
 
+#[macro_use]
+extern crate log;
+
+extern crate fern;
+
 extern crate openssl;
 use self::openssl::crypto::hash::Type;
 use self::openssl::crypto::hash::hash;
@@ -57,8 +62,8 @@ type le = LittleEndian;
 #[allow(non_camel_case_types)]
 type be = BigEndian;
 
-#[macro_use]
-extern crate glium;
+//#[macro_use]
+//extern crate glium;
 
 use std::vec::Vec;
 use std::io::Cursor;
@@ -75,9 +80,11 @@ mod driver_std;
 use driver_std::Driver;
 use driver_std::Event;
 
-extern crate cgmath;
+//extern crate cgmath;
 
-extern crate camera_controllers;
+//extern crate camera_controllers;
+
+extern crate ncurses;
 
 /* TODO
 extern crate nix;
@@ -110,10 +117,10 @@ nix::sys::socket::setsockopt(sock.as_raw_fd, SockLevel::Socket, BindToDevice::ne
 
 mod web;
 
-mod render;
+//mod render;
 
 struct Client<A:Ai> {
-    render: render::Render,
+    //render: render::Render,
     state: State,
     ai: A,
     driver: Driver,
@@ -125,7 +132,7 @@ impl<A:Ai> Client<A> {
         ai.init();
 
         Client {
-            render: render::Render::new(),
+            //render: render::Render::new(),
             state: State::new(),
             ai: ai,
             driver: Driver::new(ip, port).unwrap(),
@@ -134,7 +141,7 @@ impl<A:Ai> Client<A> {
 
     pub fn authorize (ip: IpAddr, port: u16, user: String, pass: String) -> Result<(String,Vec<u8>),Error> {
         let auth_addr = SocketAddr::new(ip, port);
-        println!("authorize {} @ {}", user, auth_addr);
+        info!("authorize {} @ {}", user, auth_addr);
         let stream = std::net::TcpStream::connect(&auth_addr).unwrap();
         let context = SslContext::new(SslMethod::Sslv23).unwrap();
         let mut stream = SslStream::new(&context, stream).unwrap();
@@ -164,9 +171,9 @@ impl<A:Ai> Client<A> {
         let mut msg = vec![0; len as usize];
         let len2 = stream.read(msg.as_mut_slice()).ok().expect("read error");
         if len2 != len as usize { return Err(Error{source:"len2 != len",detail:None}); }
-        println!("msg='{}'", str::from_utf8(msg.as_slice()).unwrap());
-        println!("msg='{}'", msg.as_slice().to_hex());
-        println!("msg='{:?}'", msg.as_slice());
+        info!("msg='{}'", str::from_utf8(msg.as_slice()).unwrap());
+        info!("msg='{}'", msg.as_slice().to_hex());
+        info!("msg='{:?}'", msg.as_slice());
         if msg.len() < "ok\0\0".len() {
             return Err(Error{source:"'pw' command unexpected answer", detail:Some(String::from_utf8(msg).unwrap())});
         }
@@ -193,8 +200,8 @@ impl<A:Ai> Client<A> {
             let mut msg = vec![0; len as usize];
             let len2 = stream.read(msg.as_mut_slice()).ok().expect("read error");
             if len2 != len as usize { return Err(Error{source:"len2 != len",detail:None}); }
-            //println!("msg='{}'", str::from_utf8(msg.as_slice()).unwrap());
-            println!("msg='{}'", msg.as_slice().to_hex());
+            //info!("msg='{}'", str::from_utf8(msg.as_slice()).unwrap());
+            info!("msg='{}'", msg.as_slice().to_hex());
             //TODO check cookie length
             let cookie = msg[3..].to_vec();
             return Ok((login, cookie));
@@ -215,11 +222,11 @@ impl<A:Ai> Client<A> {
     fn dispatch_single_event (&mut self) {
         match self.driver.event().unwrap() {
             Event::Rx(buf) => {
-                //println!("event::rx: {} bytes", buf.len());
+                //info!("event::rx: {} bytes", buf.len());
                 self.state.rx(&buf).unwrap();
             }
             Event::Timeout(seq) => {
-                //println!("event::timeout: {} seq", seq);
+                //info!("event::timeout: {} seq", seq);
                 self.state.timeout(seq);
             }
             Event::Tcp((tx,buf)) => {
@@ -236,9 +243,24 @@ impl<A:Ai> Client<A> {
     }
 
     fn run (&mut self, login: &str, cookie: &[u8]) -> Option<Error> {
-        println!("connect {} / {}", login, cookie.to_hex());
+        use std::thread;
+
+        info!("connect {} / {}", login, cookie.to_hex());
         self.state.connect(login, cookie).unwrap();
 
+        /*
+        thread::spawn(move || {
+            use ncurses::*;
+            initscr();
+            mvprintw(0, 0, "Hello, world!");
+            mvprintw(1, 0, "Hello, world!");
+            mvprintw(2, 0, "Hello, world!");
+            refresh();
+            getch();
+            endwin();
+        });
+        */
+        
         while let None = self.state.start_point() {
             self.send_all_enqueued();
             self.dispatch_single_event();
@@ -252,14 +274,16 @@ impl<A:Ai> Client<A> {
 
         loop {
             while let Some(event) = self.state.next_event() {
+                /*
                 let event = match event {
                     state::Event::Grid(x,y,tiles,z) => render::Event::Grid(x * 1100 - start_x, y * 1100 - start_y, tiles, z),
                     state::Event::Obj((x,y))          => render::Event::Obj(x - start_x, y - start_y),
                 };
                 if let Err(e) = self.render.update(event) {
-                    println!("render.update ERROR: {:?}", e);
+                    info!("render.update ERROR: {:?}", e);
                     return None /*TODO Some(e)*/;
                 }
+                */
             }
             self.send_all_enqueued();
             self.dispatch_single_event();
@@ -269,13 +293,32 @@ impl<A:Ai> Client<A> {
 }
 
 fn main () {
+    let logger_config = fern::DispatchConfig {
+        format: Box::new( |msg: &str, level: &log::LogLevel, _location: &log::LogLocation| {
+            //format!("[{}][{}] {}", time::now().strftime("%Y-%m-%d][%H:%M:%S").unwrap(), level, msg)
+            format!("[{}] {}", level, msg)
+        }),
+        output: vec![/*fern::OutputConfig::stdout(),*/ fern::OutputConfig::file("log")],
+        level: log::LogLevelFilter::Trace,
+    };
+
+    if let Err(e) = fern::init_global_logger(logger_config, log::LogLevelFilter::Trace) {
+        panic!("Failed to initialize global logger: {}", e);
+    }
+    
+    //trace!("Trace message");
+    //debug!("Debug message");
+    //info!("Info message");
+    //warn!("Warning message");
+    //error!("Error message");
+    
     //TODO handle keyboard interrupt
     //TODO replace all unwraps with normal error handling
     //TODO ADD tests:
     //        for i in range(0u8, 255) {
     //            let mut v = Vec::new();
     //            v.push(i);
-    //            println!("{}", Message::from_buf(v.as_slice()));
+    //            info!("{}", Message::from_buf(v.as_slice()));
     //        }
     //TODO highlight ERRORs with RED console color
     //TODO various formatters for Message and other structs output (full, short, type only)
@@ -285,8 +328,8 @@ fn main () {
 
     let args: Vec<String> = std::env::args().collect();
     if args.len() < 3 || args.len() > 3 {
-        println!("wrong argument count");
-        println!("usage: {} username password", args[0]);
+        info!("wrong argument count");
+        info!("usage: {} username password", args[0]);
         return;
     }
 
@@ -298,10 +341,11 @@ fn main () {
         let host = ips.next().expect("ip.next").ok().expect("ip.next.ok");
         host.ip()
     };
-    println!("connect to {}", ip);
+    info!("connect to {}", ip);
 
     match Client::<AiImpl>::authorize(ip, 1871, username, password) {
         Ok((login, cookie)) => { Client::<AiImpl>::new(ip, 1870).run(&login, &cookie); }
-        Err(e) => { println!("ERROR: {:?}", e); }
+        Err(e) => { info!("ERROR: {:?}", e); }
     }
 }
+

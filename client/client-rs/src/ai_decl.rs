@@ -34,7 +34,7 @@ impl DeclAi {
 
 impl Ai for DeclAi {
     fn update (&mut self, state: &mut State) {
-        //println!("AI: {:?}", self.state);
+        //info!("AI: {:?}", self.state);
         match self.state {
             AiState::WaitForCharList => {
                 if state.charlist.len() > 0 {
@@ -95,11 +95,11 @@ impl Ai for DeclAi {
     }
 
     fn exec (&mut self, s: &str) {
-        println!("AI: EXEC: {}", s);
+        info!("AI: EXEC: {}", s);
     }
 
     fn init (&mut self) {
-        println!("AI: INIT");
+        info!("AI: INIT");
     }
 
     fn new () -> DeclAi {

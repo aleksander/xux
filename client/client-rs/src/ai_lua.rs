@@ -19,11 +19,11 @@ unsafe extern "C" fn test_c_callback (l: *mut lua_State) -> c_int {
     let mut lua = lua::State::from_ptr(l);
     let x = lua.to_integer(1);
     let y = lua.to_integer(2);
-    println!("LUA: go: ({},{})", x, y);
+    info!("LUA: go: ({},{})", x, y);
     lua.push("state");
     lua.get_table(lua::REGISTRYINDEX);
     let addr = lua.to_integer(-1);
-    println!("LUA: go: we received '{}'", addr);
+    info!("LUA: go: we received '{}'", addr);
     0
 }
 
@@ -32,8 +32,8 @@ unsafe extern "C" fn out (l: *mut lua_State) -> c_int {
     //TODO check arguments count on stack
     //TODO match type_of(1) { Table => print rows }
     match lua.to_str(1) {
-        Some(s) => { println!("LUA: out: {}", s); }
-        None    => { println!("LUA: out: {:?}", lua.type_of(1)); }
+        Some(s) => { info!("LUA: out: {}", s); }
+        None    => { info!("LUA: out: {:?}", lua.type_of(1)); }
     }
     0
 }
@@ -53,7 +53,7 @@ impl LuaAi {
         for i in 1..top+1 {
             print!("{}={:?} ", i, self.lua.type_of(i));
         }
-        println!("");
+        info!("");
     }
     */
 
@@ -83,12 +83,12 @@ impl LuaAi {
         let status = self.lua.do_string(string);
         match status {
             lua::ThreadStatus::Ok => {
-                //println!("do_string: ok\n")
+                //info!("do_string: ok\n")
             }
             _ => {
                 match self.lua.to_type::<String>() {
-                    Some(s) => { self.lua.pop(1); println!("lua: {:?}: {}\n", status, s); }
-                    None    => { println!("lua: {:?}: no info\n", status); }
+                    Some(s) => { self.lua.pop(1); info!("lua: {:?}: {}\n", status, s); }
+                    None    => { info!("lua: {:?}: no info\n", status); }
                 }
             }
         }
@@ -243,7 +243,7 @@ impl LuaAi {
 
         //let wtype = self.lua.get_global("widgets");
         //if wtype != lua::Type::Table {
-        //    println!("ERROR: widgets type({:?}) is not a Table", wtype);
+        //    info!("ERROR: widgets type({:?}) is not a Table", wtype);
         //    return;
         //}
         self.lua.new_table();
@@ -313,24 +313,24 @@ impl LuaAi {
 
         match action {
             QUIT => {
-                println!("QUIT");
+                info!("QUIT");
                 match state.close() {
                     Ok(_) => {}
-                    Err(e) => { println!("ERROR: state.close: {:?}", e); }
+                    Err(e) => { info!("ERROR: state.close: {:?}", e); }
                 }
             }
             GO => {
-                println!("GO");
+                info!("GO");
 
                 let x = self.get_number("g_x");
                 let y = self.get_number("g_y");
                 
                 if let Err(e) = state.go(x as i32, y as i32) {
-                    println!("ERROR: state.go: {:?}", e);
+                    info!("ERROR: state.go: {:?}", e);
                 }
             }
             _ => {
-                //println!("???: {}", action);
+                //info!("???: {}", action);
             }
         }
         self.set_number("g_action", 0);
@@ -352,7 +352,7 @@ impl Ai for LuaAi {
     
     fn init (&mut self) {
         self.init();
-        println!("Lua AI initialised");
+        info!("Lua AI initialised");
     }
     
     fn new () -> LuaAi {

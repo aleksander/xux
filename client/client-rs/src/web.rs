@@ -3,7 +3,7 @@ use std::str;
 
 pub fn responce (buf: &[u8], state: &State) -> String {
     let buf = str::from_utf8(buf).unwrap();
-    println!("render: {:?}", buf);
+    info!("render: {:?}", buf);
     if buf.starts_with("GET /") {
         let pattern: &[_] = &['\r','\n'];
         let crlf = buf.find(pattern).unwrap_or(buf.len());
@@ -141,14 +141,14 @@ fn _responce (state: &State, buf: &str) -> Option<String> {
         Some("HTTP/1.1 404 Not Implemented\r\n\r\n".to_string())
     } else if buf.starts_with("go/") {
         //FIXME should NOT be implemented for web. web is for view only
-        //println!("GO: {} {}", x, y);
+        //info!("GO: {} {}", x, y);
         //if let Err(e) = client.go(x,y) {
-        //    println!("ERROR: client.go: {:?}", e);
+        //    info!("ERROR: client.go: {:?}", e);
         //}
         let tmp1: Vec<&str> = buf.split(' ').collect();
-        println!("TMP1: {:?}", tmp1);
+        info!("TMP1: {:?}", tmp1);
         let tmp2: Vec<&str> = tmp1[1].split('/').collect();
-        println!("TMP2: {:?}", tmp2);
+        info!("TMP2: {:?}", tmp2);
         if tmp2.len() > 3 {
             let /*x*/_: i32 = match str::FromStr::from_str(tmp2[2]) { Ok(v) => v, Err(_) => 0 };
             let /*y*/_: i32 = match str::FromStr::from_str(tmp2[3]) { Ok(v) => v, Err(_) => 0 };
@@ -159,7 +159,7 @@ fn _responce (state: &State, buf: &str) -> Option<String> {
         Some("HTTP/1.1 200 OK\r\n\r\n".to_string())
     } else if buf.starts_with("quit ") {
         /*FIXME if let Err(e) = state.close() {
-            println!("ERROR: client.close: {:?}", e);
+            info!("ERROR: client.close: {:?}", e);
         }*/
         Some("HTTP/1.1 200 OK\r\n\r\n".to_string())
     } else {

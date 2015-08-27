@@ -280,7 +280,7 @@ pub fn read_list (r : &mut Cursor<&[u8]>) -> Vec<MsgList> /*TODO return Result i
                 list[deep].push(MsgList::tFLOAT64( r.read_f64::<le>().unwrap() ));
             },
             /*UNKNOWN*/    _  => {
-                println!("    !!! UNKNOWN LIST ELEMENT !!!");
+                info!("    !!! UNKNOWN LIST ELEMENT !!!");
                 return list.remove(0); /*TODO return Error instead*/
             },
         }
@@ -961,10 +961,10 @@ impl Message {
                 let len = try!(r.read_u16::<le>());
                 let mut buf = Vec::new();
                 try!(r.read_to_end(&mut buf));
-                //println!("    pktid={} off={} len={}", pktid, off, len);
+                //info!("    pktid={} off={} len={}", pktid, off, len);
                 //if (off == 0) {
-                //    println!("      coord=({}, {})", r.read_i32::<le>().unwrap(), r.read_i32::<le>().unwrap());
-                //    println!("      mmname=\"{}\"", r.read_until(0).unwrap());
+                //    info!("      coord=({}, {})", r.read_i32::<le>().unwrap(), r.read_i32::<le>().unwrap());
+                //    info!("      mmname=\"{}\"", r.read_until(0).unwrap());
                 //    loop {
                 //        let pidx = r.read_u8().unwrap();
                 //        if pidx == 255 break;

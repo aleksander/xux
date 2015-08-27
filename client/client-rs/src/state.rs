@@ -173,7 +173,7 @@ impl Map {
             }
         }
         if buf.len() as u16 != map.total_len {
-            println!("ERROR: buf.len() as u16 != map.total_len");
+            info!("ERROR: buf.len() as u16 != map.total_len");
             //return Err(Error{source:"buf.len() as u16 != map.total_len",detail:None});
         }
         buf
@@ -219,12 +219,12 @@ impl Map {
             let typ = r.read_u8().unwrap();
             let (x1,y1) = (r.read_u8().unwrap() as usize, r.read_u8().unwrap() as usize);
             let (x2,y2) = (r.read_u8().unwrap() as usize, r.read_u8().unwrap() as usize);
-            println!("#### {} ({},{}) - ({},{})", typ, x1, y1, x2, y2);
+            info!("#### {} ({},{}) - ({},{})", typ, x1, y1, x2, y2);
             let oli = match typ {
                 0 => if (fl & 1) == 1 { 2 } else { 1 },
                 1 => if (fl & 1) == 1 { 8 } else { 4 },
                 2 => 16,
-                _ => { println!("ERROR: unknown plot type {}", typ); break; }
+                _ => { info!("ERROR: unknown plot type {}", typ); break; }
             };
             for y in y1..y2+1 {
                 for x in x1..x2+1 {
@@ -336,23 +336,23 @@ impl State {
 
                 Ok(())
             },
-            Err(e) => { println!("enqueue error: {:?}", e); Err(e) },
+            Err(e) => { info!("enqueue error: {:?}", e); Err(e) },
         }
     }
 
     pub fn dispatch_message (&mut self, buf:&[u8]/*, tx_buf:&mut LinkedList<Vec<u8>>*/) -> Result<(),Error> {
         let (msg,remains) = match Message::from_buf(buf,MessageDirection::FromServer) {
             Ok((msg,remains)) => { (msg,remains) },
-            Err(err) => { println!("message parse error: {:?}", err); return Err(err); },
+            Err(err) => { info!("message parse error: {:?}", err); return Err(err); },
         };
 
         if let Some(remains) = remains {
-            println!("                 REMAINS {} bytes", remains.len());
+            info!("                 REMAINS {} bytes", remains.len());
         }
 
         match msg {
             Message::S_SESS(sess) => {
-                println!("RX: S_SESS {:?}", sess.err);
+                info!("RX: S_SESS {:?}", sess.err);
                 match sess.err {
                     SessError::OK => {},
                     _ => {
@@ -365,9 +365,9 @@ impl State {
                 self.remove_from_que(MessageHint::C_SESS);
                 Self::start_send_beats();
             },
-            Message::C_SESS(_) => { println!("     !!! client must not receive C_SESS !!!"); },
+            Message::C_SESS(_) => { info!("     !!! client must not receive C_SESS !!!"); },
             Message::REL( rel ) => {
-                //println!("RX: REL {}", rel.seq);
+                //info!("RX: REL {}", rel.seq);
                 if rel.seq == self.rx_rel_seq {
                     try!(self.dispatch_rel_cache(&rel));
                 } else {
@@ -380,7 +380,7 @@ impl State {
                         self.cache_rel(rel);
                     } else {
                         // past REL
-                        println!("past");
+                        info!("past");
                         //TODO self.ack(seq);
                         let last_acked_seq = self.rx_rel_seq - 1;
                         try!(self.enqueue_to_send(Message::ACK(Ack{seq : last_acked_seq})));
@@ -388,14 +388,14 @@ impl State {
                 }
             },
             Message::ACK(ack)   => {
-                //println!("RX: ACK {}", ack.seq);
-                //println!("our rel {} acked", self.seq);
+                //info!("RX: ACK {}", ack.seq);
+                //info!("our rel {} acked", self.seq);
                 self.remove_from_que(MessageHint::REL(ack.seq));
             },
-            Message::BEAT       => { println!("     !!! client must not receive BEAT !!!"); },
-            Message::MAPREQ(_)  => { println!("     !!! client must not receive MAPREQ !!!"); },
+            Message::BEAT       => { info!("     !!! client must not receive BEAT !!!"); },
+            Message::MAPREQ(_)  => { info!("     !!! client must not receive MAPREQ !!!"); },
             Message::MAPDATA(mapdata) => {
-                //println!("RX: MAPDATA {:?}", mapdata);
+                //info!("RX: MAPDATA {:?}", mapdata);
                 let pktid = mapdata.pktid;
                 self.map.append(mapdata);
                 if self.map.complete(pktid) {
@@ -404,11 +404,11 @@ impl State {
                     let map = self.map.from_buf(map_buf);
                     assert!(map.tiles.len() == 10_000);
                     assert!(map.z.len() == 10_000);
-                    println!("MAP COMPLETE ({},{}) name='{}' id={}", map.x, map.y, map.name, map.id);
+                    info!("MAP COMPLETE ({},{}) name='{}' id={}", map.x, map.y, map.name, map.id);
                     self.remove_from_que(MessageHint::MAPREQ(map.x, map.y));
                     //FIXME TODO update grid only if new grid id != cached grid id
                     match self.map.grids.get(&(map.x, map.y)) {
-                        Some(_) => println!("MAP DUPLICATE"),
+                        Some(_) => info!("MAP DUPLICATE"),
                         None => {
                             self.events.push_front(Event::Grid(map.x, map.y, map.tiles, map.z));
                             self.map.grids.insert((map.x, map.y), (map.name, map.id));
@@ -417,7 +417,7 @@ impl State {
                 }
             },
             Message::OBJDATA(objdata) => {
-                println!("RX: OBJDATA {:?}", objdata);
+                info!("RX: OBJDATA {:?}", objdata);
                 try!(self.enqueue_to_send(Message::OBJACK(ObjAck::new(&objdata)))); // send OBJACKs
                 for o in objdata.obj.iter() {
                     //FIXME ??? do NOT add hero object
@@ -463,7 +463,7 @@ impl State {
                                         Some(ref m) => {
                                             if (step > 0) && (step < m.steps) {
                                                 if step <= m.step {
-                                                    println!("WARNING: odLINSTEP step <= m.step");
+                                                    info!("WARNING: odLINSTEP step <= m.step");
                                                 }
                                                 Some(Movement{
                                                     from: m.from,
@@ -475,7 +475,7 @@ impl State {
                                             }
                                         }
                                         None => {
-                                            println!("WARNING: odLINSTEP({}) while movement == None", step);
+                                            info!("WARNING: odLINSTEP({}) while movement == None", step);
                                             None
                                         }
                                     };
@@ -497,7 +497,7 @@ impl State {
             },
             Message::OBJACK(_)  => {},
             Message::CLOSE => {
-                println!("RX: CLOSE");
+                info!("RX: CLOSE");
                 //TODO return Status::EndOfSession instead of Error
                 return Err(Error{source:"session closed",detail:None});
             },
@@ -508,7 +508,7 @@ impl State {
     }
 
     fn cache_rel (&mut self, rel: Rel) {
-        println!("cache REL {}-{}", rel.seq, rel.seq + ((rel.rel.len() as u16) - 1));
+        info!("cache REL {}-{}", rel.seq, rel.seq + ((rel.rel.len() as u16) - 1));
         self.rel_cache.insert(rel.seq, rel);
     }
 
@@ -534,27 +534,27 @@ impl State {
     }
 
     fn dispatch_rel (&mut self, rel: &Rel) {
-        println!("dispatch REL {}-{}", rel.seq, rel.seq + ((rel.rel.len() as u16) - 1));
-        //println!("RX: {:?}", rel);
+        info!("dispatch REL {}-{}", rel.seq, rel.seq + ((rel.rel.len() as u16) - 1));
+        //info!("RX: {:?}", rel);
         for r in rel.rel.iter() {
             match *r {
                 RelElem::NEWWDG(ref wdg) => {
-                    //println!("      {:?}", wdg);
+                    //info!("      {:?}", wdg);
                     self.dispatch_newwdg(wdg);
                 },
                 RelElem::WDGMSG(ref msg) => {
-                    //println!("      {:?}", msg);
+                    //info!("      {:?}", msg);
                     self.dispatch_wdgmsg(msg);
                 },
                 RelElem::DSTWDG(ref wdg) => {
-                    //println!("      {:?}", wdg);
+                    //info!("      {:?}", wdg);
                     self.widgets.remove(&wdg.id);
                 },
                 RelElem::MAPIV(_) => {},
                 RelElem::GLOBLOB(_) => {},
                 RelElem::PAGINAE(_) => {},
                 RelElem::RESID(ref res) => {
-                    //println!("      {:?}", res);
+                    //info!("      {:?}", res);
                     self.resources.insert(res.id, res.name.clone()/*FIXME String -> &str*/);
                 },
                 RelElem::PARTY(_) => {},
@@ -574,12 +574,12 @@ impl State {
             "gameui" => {
                 if let Some(&MsgList::tSTR(ref name)) = wdg.cargs.get(0) {
                     self.hero.name = Some(name.clone());
-                    println!("HERO: name = '{:?}'", self.hero.name);
+                    info!("HERO: name = '{:?}'", self.hero.name);
                 }
                 if let Some(&MsgList::tINT(obj)) = wdg.cargs.get(1) {
                     //FIXME BUG: object ID is uint32 but here it is int32 WHY??? XXX
                     self.hero.obj = Some(obj as u32);
-                    println!("HERO: obj = '{:?}'", self.hero.obj);
+                    info!("HERO: obj = '{:?}'", self.hero.obj);
 
                     self.hero.start_xy = match self.hero_xy() {
                         Some(xy) => Some(xy),
@@ -596,7 +596,7 @@ impl State {
                         if let Some(&MsgList::tCOORD((x,y))) = wdg.pargs.get(0) {
                             if let Some(&MsgList::tUINT16(id)) = wdg.cargs.get(0) {
                                 self.hero.inventory.insert((x,y), id);
-                                println!("HERO: inventory: {:?}", self.hero.inventory);
+                                info!("HERO: inventory: {:?}", self.hero.inventory);
                             }
                         }
                     }
@@ -612,7 +612,7 @@ impl State {
                 "charlist" => {
                     if msg.name == "add" {
                         if let Some(&MsgList::tSTR(ref name)) = msg.args.get(0) {
-                            println!("    add char '{}'", name);
+                            info!("    add char '{}'", name);
                             /*FIXME rewrite without cloning*/
                             self.charlist.push(name.clone());
                         }
@@ -622,7 +622,7 @@ impl State {
                     if msg.name == "weight" {
                         if let Some(&MsgList::tUINT16(w)) = msg.args.get(0) {
                             self.hero.weight = Some(w);
-                            println!("HERO: weight = '{:?}'", self.hero.weight);
+                            info!("HERO: weight = '{:?}'", self.hero.weight);
                         }
                     }
                 }
@@ -630,7 +630,7 @@ impl State {
                     if msg.name == "tmexp" {
                         if let Some(&MsgList::tINT(i)) = msg.args.get(0) {
                             self.hero.tmexp = Some(i);
-                            println!("HERO: tmexp = '{:?}'", self.hero.tmexp);
+                            info!("HERO: tmexp = '{:?}'", self.hero.tmexp);
                         }
                     }
                 }
@@ -639,7 +639,7 @@ impl State {
                         if let Some(&MsgList::tCOORD((x,y))) = msg.args.get(0) {
                             //self.objects.insert(0xffffffff, Obj{resid:0xffff, x:x, y:y});
                             self.hero.hearthfire = Some((x,y));
-                            println!("HERO: heathfire = '{:?}'", self.hero.hearthfire);
+                            info!("HERO: heathfire = '{:?}'", self.hero.hearthfire);
                         }
                     }
                 }
@@ -681,11 +681,11 @@ impl State {
             self.que.pop_back();
             match self.que.back() {
                 Some(buf) => {
-                    //println!("enqueue next packet");
+                    //info!("enqueue next packet");
                     self.tx_buf.push_front(buf.clone());
                 }
                 None => {
-                    //println!("remove_from_que: empty que");
+                    //info!("remove_from_que: empty que");
                 }
             }
         }
@@ -722,7 +722,7 @@ impl State {
         let id = self.widget_id("charlist", None).expect("charlist widget is not found");
         let name = "play".to_string();
         let charname = self.charlist[i].clone();
-        println!("send play '{}'", charname);
+        info!("send play '{}'", charname);
         let mut args : Vec<MsgList> = Vec::new();
         args.push(MsgList::tSTR(charname));
         //TODO rel.append(RelElem::new())
@@ -751,19 +751,19 @@ impl State {
                 match buf.timeout {
                     Some(ref timeout) => {
                         if timeout.seq == seq {
-                            //println!("timeout {}: re-enqueue", seq);
+                            //info!("timeout {}: re-enqueue", seq);
                             self.tx_buf.push_front(buf.clone());
                         } else {
-                            //println!("timeout {}: packet dropped", seq);
+                            //info!("timeout {}: packet dropped", seq);
                         }
                     }
                     None => {
-                        println!("ERROR: enqueued packet without timeout");
+                        info!("ERROR: enqueued packet without timeout");
                     }
                 }
             }
             None => {
-                //println!("timeout {}: empty que", seq);
+                //info!("timeout {}: empty que", seq);
             }
         }
     }
@@ -772,7 +772,7 @@ impl State {
         let buf = self.tx_buf.pop_back();
         if let Some(ref buf) = buf {
             match Message::from_buf(buf.buf.as_slice(), MessageDirection::FromClient) {
-                Ok((/*msg*/_,_)) => /*println!("TX: {:?}", msg)*/(),
+                Ok((/*msg*/_,_)) => /*info!("TX: {:?}", msg)*/(),
                 Err(e) => panic!("ERROR: malformed TX message: {:?}", e),
             }
         }
@@ -798,7 +798,7 @@ impl State {
     */
 
     pub fn go (&mut self, x: i32, y: i32) -> Result<(),Error> /*TODO Option<Error>*/ {
-        println!("GO");
+        info!("GO");
         //TODO let mut rel = Rel::new(seq,id,name);
         let mut rel = Rel{seq:0, rel:Vec::new()};
         let id = self.widget_id("mapview", None).expect("mapview widget is not found");
@@ -816,7 +816,7 @@ impl State {
 
     #[allow(dead_code)]
     pub fn pick (&mut self, obj_id: u32) -> Result<(),Error> {
-        println!("PICK");
+        info!("PICK");
         //TODO let mut rel = Rel::new(seq,id,name);
         let mut rel = Rel{seq:0, rel:Vec::new()};
         let id = self.widget_id("mapview", None).expect("mapview widget is not found");
@@ -850,7 +850,7 @@ impl State {
 
     #[allow(dead_code)]
     pub fn choose_pick (&mut self, wdg_id: u16) -> Result<(),Error> {
-        println!("GO");
+        info!("GO");
         //TODO let mut rel = Rel::new(seq,id,name);
         let mut rel = Rel{seq:0, rel:Vec::new()};
         let name = "cl".to_string();

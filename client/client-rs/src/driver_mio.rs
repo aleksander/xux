@@ -49,7 +49,7 @@ impl Driver {
         let mut handler = AnyHandler::new(sock, tcp_listener, std::net::SocketAddr::new(ip, 1870)/*, &mut client, &mut ai*/);
         handler.client.connect().ok().expect("client.connect()");
 
-        println!("run event loop");
+        info!("run event loop");
         eloop.run(&mut handler).ok().expect("Failed to run the event loop");
     }
 }
@@ -86,7 +86,7 @@ impl ControlConn {
     }
 
     fn writable (&mut self, eloop: &mut EventLoop<AnyHandler>/*, client : &mut Client*/) -> std::io::Result<()> {
-        //println!("{:?}: writable", self.token);
+        //info!("{:?}: writable", self.token);
         //let mut buf = self.buf.take().unwrap();
 
         //let mut buf = ByteBuf::mut_with_capacity(2048);
@@ -99,22 +99,22 @@ impl ControlConn {
             Some(ref buf) => {
                 match self.sock.try_write_buf(&mut ByteBuf::from_slice(buf.as_bytes())) {
                     Ok(None) => {
-                        println!("client flushing buf; WOULDBLOCK");
+                        info!("client flushing buf; WOULDBLOCK");
                         //self.buf = Some(buf);
                         //self.interest.insert(Interest::writable());
                         if let Err(e) = eloop.reregister(&self.sock, self.token.unwrap(), Interest::writable(), PollOpt::edge() | PollOpt::oneshot()) {
-                            println!("ERROR: failed to re-reg for write: {}", e);
+                            info!("ERROR: failed to re-reg for write: {}", e);
                         }
                     }
                     Ok(Some(/*r*/_)) => {
-                        //println!("CONN: we wrote {} bytes!", r);
+                        //info!("CONN: we wrote {} bytes!", r);
                         //self.mut_buf = Some(buf.flip());
                         //self.interest.insert(Interest::readable());
                         //self.interest.remove(Interest::writable());
                         //FIXME check that we wrote same byte count as self.responce.len()
                         //FIXME self.responce = None;
                         if let Err(e) = eloop.reregister(&self.sock, self.token.unwrap(), Interest::readable(), PollOpt::edge() | PollOpt::oneshot()) {
-                            println!("ERROR: failed to re-reg for read: {}", e);
+                            info!("ERROR: failed to re-reg for read: {}", e);
                         }
                     }
                     Err(e) => panic!("ERROR: not implemented; client err={:?}", e),
@@ -234,14 +234,14 @@ impl ControlConn {
             Some("HTTP/1.1 404 Not Implemented\r\n\r\n".to_string())
         } else if buf.starts_with("go/") {
             //FIXME should NOT be implemented for web. web is for view only
-            //println!("GO: {} {}", x, y);
+            //info!("GO: {} {}", x, y);
             //if let Err(e) = client.go(x,y) {
-            //    println!("ERROR: client.go: {:?}", e);
+            //    info!("ERROR: client.go: {:?}", e);
             //}
             let tmp1: Vec<&str> = buf.split(' ').collect();
-            println!("TMP1: {:?}", tmp1);
+            info!("TMP1: {:?}", tmp1);
             let tmp2: Vec<&str> = tmp1[1].split('/').collect();
-            println!("TMP2: {:?}", tmp2);
+            info!("TMP2: {:?}", tmp2);
             if tmp2.len() > 3 {
                 let /*x*/_: i32 = match str::FromStr::from_str(tmp2[2]) { Ok(v) => v, Err(_) => 0 };
                 let /*y*/_: i32 = match str::FromStr::from_str(tmp2[3]) { Ok(v) => v, Err(_) => 0 };
@@ -252,7 +252,7 @@ impl ControlConn {
             Some("HTTP/1.1 200 OK\r\n\r\n".to_string())
         } else if buf.starts_with("quit ") {
             if let Err(e) = state.close() {
-                println!("ERROR: client.close: {:?}", e);
+                info!("ERROR: client.close: {:?}", e);
             }
             Some("HTTP/1.1 200 OK\r\n\r\n".to_string())
         } else {
@@ -261,7 +261,7 @@ impl ControlConn {
     }
 
     fn readable (&mut self, eloop: &mut EventLoop<AnyHandler>, state: &mut State, ai: &mut Ai) -> std::io::Result<()> {
-        //println!("{:?}: readable", self.token);
+        //info!("{:?}: readable", self.token);
         //self.url = None;
         //self.text = None;
         self.responce = None;
@@ -269,21 +269,21 @@ impl ControlConn {
         let mut buf = ByteBuf::mut_with_capacity(2048);
         match self.sock.try_read_buf(&mut buf) {
             Ok(None) => {
-                println!("We just got readable, but were unable to read from the socket?");
+                info!("We just got readable, but were unable to read from the socket?");
                 eloop.shutdown();
             }
             Ok(Some(0)) => {
-                println!("read zero bytes. de-reg this conn");
+                info!("read zero bytes. de-reg this conn");
                 if let Err(e) = eloop.deregister(&self.sock) {
-                    println!("deregister error: {}", e);
+                    info!("deregister error: {}", e);
                 }
                 return Err(Error::new(ErrorKind::Other, "read zero bytes"));
             }
             Ok(Some(/*r*/ _)) => {
-                //println!("{:?}: read {} bytes", self.token, r);
+                //info!("{:?}: read {} bytes", self.token, r);
                 let buf = buf.flip();
                 let buf = String::from_utf8_lossy(&buf.bytes()).into_owned();
-                //println!("CONN read: {}", buf);
+                //info!("CONN read: {}", buf);
                 if buf.starts_with("GET /") {
                     let pattern: &[_] = &['\r','\n'];
                     let crlf = buf.find(pattern).unwrap_or(buf.len());
@@ -291,7 +291,7 @@ impl ControlConn {
                 } else {
 
                     //TODO wrap buf into coroutine and execute it
-                    println!("EXEC: {}", buf.as_str());
+                    info!("EXEC: {}", buf.as_str());
                     ai.exec(buf.as_str());
                     self.responce = Some("ok\n".to_string());
 
@@ -309,7 +309,7 @@ impl ControlConn {
                             let y: i32 = match str::FromStr::from_str(tmp[2]) { Ok(v) => v, Err(_) => 0 };
                             let (hx,hy) = client.hero_xy();
                             if let Err(e) = client.go(hx+x,hy+y) {
-                                println!("ERROR: client.go: {:?}", e);
+                                info!("ERROR: client.go: {:?}", e);
                             }
                             self.text = Some("ok\n".to_string());
                         } else {
@@ -321,7 +321,7 @@ impl ControlConn {
                         if tmp.len() > 1 {
                             let obj_id: u32 = match str::FromStr::from_str(tmp[1]) { Ok(v) => v, Err(_) => 0 };
                             if let Err(e) = client.pick(obj_id) {
-                                println!("ERROR: client.pick: {:?}", e);
+                                info!("ERROR: client.pick: {:?}", e);
                             }
                             self.text = Some("ok\n".to_string());
                         } else {
@@ -333,7 +333,7 @@ impl ControlConn {
                         if tmp.len() > 1 {
                             let widget_id: u16 = match str::FromStr::from_str(tmp[1]) { Ok(v) => v, Err(_) => 0 };
                             if let Err(e) = client.choose_pick(widget_id) {
-                                println!("ERROR: client.choose_pick: {:?}", e);
+                                info!("ERROR: client.choose_pick: {:?}", e);
                             }
                             self.text = Some("ok\n".to_string());
                         } else {
@@ -482,7 +482,7 @@ impl ControlConn {
                 eloop.reregister(&self.sock, self.token.unwrap(), Interest::writable(), PollOpt::edge()).unwrap();
             }
             Err(e) => {
-                println!("not implemented; client err={:?}", e);
+                info!("not implemented; client err={:?}", e);
                 //self.interest.remove(Interest::readable());
                 eloop.shutdown();
             }
@@ -521,7 +521,7 @@ impl/*<'a>*/ AnyHandler/*<'a>*/ {
     }
 
     fn accept (&mut self, eloop: &mut EventLoop<AnyHandler>) -> std::io::Result<()> {
-        println!("TCP: new connection");
+        info!("TCP: new connection");
         let tcp_stream = self.tcp_listener.accept().unwrap().unwrap();
         let conn = ControlConn::new(tcp_stream);
         let tok = self.conns.insert(conn).ok().expect("could not add connection to slab");
@@ -531,7 +531,7 @@ impl/*<'a>*/ AnyHandler/*<'a>*/ {
     }
     
     fn conn_readable (&mut self, eloop: &mut EventLoop<AnyHandler>, tok: Token) -> std::io::Result<()> {
-        //println!("conn readable; tok={:?}", tok);
+        //info!("conn readable; tok={:?}", tok);
         //if let Err(e) = self.conn(tok).readable(eloop) {
         if let Err(_) = self.conns[tok].readable(eloop, self.client.state, self.ai) {
             self.conns.remove(tok);
@@ -540,7 +540,7 @@ impl/*<'a>*/ AnyHandler/*<'a>*/ {
     }
 
     fn conn_writable (&mut self, eloop: &mut EventLoop<AnyHandler>, tok: Token) -> std::io::Result<()> {
-        //println!("conn writable; tok={:?}", tok);
+        //info!("conn writable; tok={:?}", tok);
         //self.conn(tok).writable(eloop)
         self.conns[tok].writable(eloop, self.client)
     }
@@ -564,7 +564,7 @@ impl/*<'a>*/ Handler for AnyHandler/*<'a>*/ {
                 self.sock.recv_from(&mut rx_buf).ok().expect("sock.recv");
                 let buf: &[u8] = Buf::bytes(&rx_buf);
                 if let Err(e) = self.client.state.rx(buf) {
-                    println!("ERROR: client.rx: {:?}", e);
+                    info!("ERROR: client.rx: {:?}", e);
                     eloop.shutdown();
                 }
             },
@@ -588,18 +588,18 @@ impl/*<'a>*/ Handler for AnyHandler/*<'a>*/ {
                         //if self.counter % 3 == 0 {
                             let mut buf = SliceBuf::wrap(ebuf.buf.as_slice());
                             if let Err(e) = self.sock.send_to(&mut buf, &self.addr) {
-                                println!("ERROR: send_to error: {}", e);
+                                info!("ERROR: send_to error: {}", e);
                                 eloop.shutdown();
                             }
                         //} else {
-                        //    println!("DROPPED!");
+                        //    info!("DROPPED!");
                         //}
                         
                         if let Some(timeout) = ebuf.timeout {
                             //TODO use returned timeout handle to cancel timeout
-                            //println!("set {} timeout {} ms", timeout.seq, timeout.ms);
+                            //info!("set {} timeout {} ms", timeout.seq, timeout.ms);
                             if let Err(e) = eloop.timeout_ms(timeout.seq, timeout.ms) {
-                                println!("eloop.timeout FAILED: {:?}", e);
+                                info!("eloop.timeout FAILED: {:?}", e);
                                 eloop.shutdown();
                             }
                         }
@@ -608,12 +608,12 @@ impl/*<'a>*/ Handler for AnyHandler/*<'a>*/ {
                 }
             }
             TCP => {
-                println!("ERROR: writable on tcp listener");
+                info!("ERROR: writable on tcp listener");
                 eloop.shutdown();
             }
             _ => {
                 if let Err(e) = self.conn_writable(eloop, token) {
-                    println!("ERROR: {:?} conn_writable: {}", token, e);
+                    info!("ERROR: {:?} conn_writable: {}", token, e);
                 }
             }
         }

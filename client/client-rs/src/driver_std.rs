@@ -30,7 +30,7 @@ impl Driver {
                 //FIXME check the sender ip:port
                 let (len, src) = _sock.recv_from(&mut buf).unwrap();
                 if src != serv {
-                    println!("WARNING: datagram not from serv");
+                    info!("WARNING: datagram not from serv");
                     continue;
                 }
                 //TODO zero-copy data processing
@@ -52,12 +52,12 @@ impl Driver {
                                 let len = stream.read(&mut buf).unwrap();
                                 _tx.send(Event::Tcp( (reply_tx.clone(), buf[..len].to_vec()) )).unwrap();
                                 let reply = reply_rx.recv().unwrap();
-                                //println!("RENDERRED REPLY: {:?}", reply);
+                                //info!("RENDERRED REPLY: {:?}", reply);
                                 let /*len*/_ = stream.write(reply.as_bytes()).unwrap();
                             }
                         });
                     }
-                    Err(e) => { println!("connection error: {:?}", e); break; }
+                    Err(e) => { info!("connection error: {:?}", e); break; }
                 }
             }
         });
@@ -72,14 +72,14 @@ impl Driver {
     }
 
     pub fn tx (&self, buf: &[u8]) -> std::io::Result<()> {
-        //println!("driver.tx: {} bytes", buf.len());
+        //info!("driver.tx: {} bytes", buf.len());
         let len = try!(self.sock.send_to(buf, &self.dst));
         if len != buf.len() { return Err(std::io::Error::new(std::io::ErrorKind::Other, "sent len != buf len")) }
         Ok(())
     }
 
     pub fn timeout (&self, seq: usize, ms: u64) {
-        //println!("driver.timeout: {} {}ms", seq, ms);
+        //info!("driver.timeout: {} {}ms", seq, ms);
         let tx = self.tx.clone();
         thread::spawn(move || {
             thread::sleep_ms(ms as u32);
