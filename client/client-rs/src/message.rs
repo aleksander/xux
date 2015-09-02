@@ -260,14 +260,13 @@ pub fn read_list (r : &mut Cursor<&[u8]>) -> Vec<MsgList> /*TODO return Result i
                 let len = r.read_u8().unwrap();
                 if (len & 128) != 0 {
                     let len = r.read_i32::<le>().unwrap();
+                    assert!(len > 0);
                     let mut bytes = vec![0; len as usize];
-                    let b = r.read(&mut bytes).unwrap();
-                    assert_eq!(b, len as usize);
+                    r.read_exact(&mut bytes).unwrap();
                     list[deep].push(MsgList::tBYTES( bytes ));
                 } else {
                     let mut bytes = vec![0; len as usize];
-                    let b = r.read(&mut bytes).unwrap();
-                    assert_eq!(b, len as usize);
+                    r.read_exact(&mut bytes).unwrap();
                     list[deep].push(MsgList::tBYTES( bytes ));
                 }
             },
@@ -605,8 +604,7 @@ impl ObjProp {
                     let sdt_len = r.read_u8().unwrap();
                     let /*sdt*/ _ = {
                         let mut tmp = vec![0; sdt_len as usize];
-                        let len = r.read(&mut tmp).unwrap();
-                        assert_eq!(len, sdt_len as usize);
+                        r.read_exact(&mut tmp).unwrap();
                         tmp
                     };
                 }
@@ -688,8 +686,7 @@ impl ObjProp {
                         let sdt_len = try!(r.read_u8()) as usize;
                         let /*sdt*/ _ = {
                             let mut tmp = vec![0; sdt_len as usize];
-                            let len = r.read(&mut tmp).unwrap();
-                            assert_eq!(len, sdt_len as usize);
+                            r.read_exact(&mut tmp).unwrap();
                             tmp
                         };
                     }
@@ -730,8 +727,7 @@ impl ObjProp {
                             let sdt_len = try!(r.read_u8()) as usize;
                             let /*sdt*/ _ = {
                                 let mut tmp = vec![0; sdt_len as usize];
-                                let len = r.read(&mut tmp).unwrap();
-                                assert_eq!(len, sdt_len as usize);
+                                r.read_exact(&mut tmp).unwrap();
                                 tmp
                             };
                         }
@@ -756,8 +752,7 @@ impl ObjProp {
                             let sdt_len = try!(r.read_u8()) as usize;
                             let /*sdt*/ _ = {
                                 let mut tmp = vec![0; sdt_len as usize];
-                                let len = r.read(&mut tmp).unwrap();
-                                assert_eq!(len, sdt_len as usize);
+                                r.read_exact(&mut tmp).unwrap();
                                 tmp
                             };
                         }
@@ -870,8 +865,7 @@ impl Message {
                         let cookie_len = try!(r.read_u16::<le>());
                         let cookie = {
                             let mut tmp = vec![0; cookie_len as usize];
-                            let len = try!(r.read(&mut tmp));
-                            assert_eq!(len, cookie_len as usize);
+                            try!(r.read_exact(&mut tmp));
                             tmp
                         };
                         Ok( Message::C_SESS( cSess{ login : login, cookie : cookie } ) )
@@ -893,8 +887,7 @@ impl Message {
                         rel_type &= !0x80;
                         let rel_len = try!(r.read_u16::<le>());
                         let mut tmp = vec![0; rel_len as usize];
-                        let b = r.read(&mut tmp).unwrap();
-                        assert_eq!(b, rel_len as usize);
+                        r.read_exact(&mut tmp).unwrap();
                         tmp
                     } else {
                         let mut tmp = Vec::new();

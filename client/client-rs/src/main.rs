@@ -2,6 +2,7 @@
 #![feature(ip_addr)]
 #![feature(lookup_host)]
 #![feature(associated_consts)]
+#![feature(read_exact)]
 
 use std::net::IpAddr;
 //use std::net::Ipv4Addr;
