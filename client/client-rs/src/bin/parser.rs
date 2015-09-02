@@ -150,11 +150,11 @@ fn main () {
                         0 => parse_ssess(i),
                         1 => parse_rel(i),
                         2 => parse_ack(i),
-                        3 => parse_beat(i),
-                        4 => parse_mapreq(i),
+                        3 => IResult::Error(Err::Code(1))/*parse_beat(i)*/,
+                        4 => IResult::Error(Err::Code(1))/*parse_mapreq(i)*/,
                         5 => parse_mapdata(i),
                         6 => parse_objdata(i),
-                        7 => parse_objack(i),
+                        7 => IResult::Error(Err::Code(1))/*parse_objack(i)*/,
                         8 => parse_close(i),
                         _ => IResult::Error(Err::Code(1))
                     }
@@ -173,8 +173,8 @@ fn main () {
                         2 => parse_ack(i),
                         3 => parse_beat(i),
                         4 => parse_mapreq(i),
-                        5 => parse_mapdata(i),
-                        6 => parse_objdata(i),
+                        5 => IResult::Error(Err::Code(1))/*parse_mapdata(i)*/,
+                        6 => IResult::Error(Err::Code(1))/*parse_objdata(i)*/,
                         7 => parse_objack(i),
                         8 => parse_close(i),
                         _ => IResult::Error(Err::Code(1))
@@ -185,10 +185,26 @@ fn main () {
             }
         }
 
+        let dir_str = match dir {
+            MessageDirection::FromServer => "SERVER",
+            MessageDirection::FromClient => "CLIENT",
+        };
+        
         match parse(udp.payload(), dir) {
-            IResult::Done(i, o) => { println!("{:?}", o); if i.len() > 0 { println!("REMAINS: {} bytes", i.len()); } }
-            IResult::Error(e) => { println!("Error: {:?}", e); break; }
-            IResult::Incomplete(n) => { println!("Incomplete: {:?}", n); break; }
+            IResult::Done(i, o) => {
+                println!("{}: {:?}", dir_str, o);
+                if i.len() > 0 {
+                    println!("REMAINS: {} bytes", i.len());
+                }
+            }
+            IResult::Error(e) => {
+                println!("Error: {:?}", e);
+                break;
+            }
+            IResult::Incomplete(n) => {
+                println!("Incomplete: {:?}", n);
+                break;
+            }
         }
 
         /*
