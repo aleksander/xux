@@ -229,10 +229,8 @@ pub fn read_list (r : &mut Cursor<&[u8]>) -> Vec<MsgList> /*TODO return Result i
                 list[deep].push(MsgList::tINT( r.read_i32::<le>().unwrap() ));
             },
             /*T_STR    */  2  => {
-                let mut tmp = Vec::new();
-                r.read_until(0, &mut tmp).unwrap();
-                tmp.pop();
-                list[deep].push(MsgList::tSTR( String::from_utf8(tmp).unwrap() ));
+                let tmp = r.read_strz().unwrap();
+                list[deep].push(MsgList::tSTR(tmp));
             },
             /*T_COORD  */  3  => {
                 list[deep].push(MsgList::tCOORD( (r.read_i32::<le>().unwrap(),r.read_i32::<le>().unwrap()) ));
@@ -287,6 +285,20 @@ pub fn read_list (r : &mut Cursor<&[u8]>) -> Vec<MsgList> /*TODO return Result i
     }
 }
 
+use std::io;
+
+pub trait ReadExtExt: io::BufRead {
+    #[inline]
+    fn read_strz (&mut self) -> io::Result<String> {
+        let mut tmp = Vec::new();
+        try!(self.read_until(0, &mut tmp));
+        tmp.pop();
+        Ok(String::from_utf8(tmp).unwrap())
+    }
+}
+
+impl<R: io::BufRead + ?Sized> ReadExtExt for R {}
+
 impl RelElem {
     pub fn from_buf (kind:u8, buf:&[u8]) -> Result<RelElem,Error> {
         let mut r = Cursor::new(buf);
@@ -294,12 +306,7 @@ impl RelElem {
         match kind {
             0  /*NEWWDG*/  => {
                 let id = try!(r.read_u16::<le>());
-                let name = {
-                    let mut tmp = Vec::new();
-                    r.read_until(0, &mut tmp).unwrap();
-                    tmp.pop();
-                    String::from_utf8(tmp).unwrap()
-                };
+                let name = r.read_strz().unwrap();
                 let parent = try!(r.read_u16::<le>());
                 let pargs = read_list(&mut r);
                 let cargs = read_list(&mut r);
@@ -307,12 +314,7 @@ impl RelElem {
             },
             1  /*WDGMSG*/  => {
                 let id = try!(r.read_u16::<le>());
-                let name = {
-                    let mut tmp = Vec::new();
-                    r.read_until(0, &mut tmp).unwrap();
-                    tmp.pop();
-                    String::from_utf8(tmp).unwrap()
-                };
+                let name = r.read_strz().unwrap();
                 let args = read_list(&mut r);
                 Ok( RelElem::WDGMSG( WdgMsg{ id:id, name:name, args:args } ) )
             },
@@ -325,12 +327,7 @@ impl RelElem {
             5  /*PAGINAE*/ => { Ok( RelElem::PAGINAE(Paginae) ) },
             6  /*RESID*/   => {
                 let id = try!(r.read_u16::<le>());
-                let name = {
-                    let mut tmp = Vec::new();
-                    r.read_until(0, &mut tmp).unwrap();
-                    tmp.pop();
-                    String::from_utf8(tmp).unwrap()
-                };
+                let name = r.read_strz().unwrap();
                 let ver = try!(r.read_u16::<le>());
                 Ok( RelElem::RESID( ResId{ id:id, name:name, ver:ver } ) )
             },
@@ -345,12 +342,7 @@ impl RelElem {
                         Ok(b) => {b}
                         Err(_) => {break;}
                     };
-                    let name = {
-                        let mut tmp = Vec::new();
-                        r.read_until(0, &mut tmp).unwrap();
-                        tmp.pop();
-                        String::from_utf8(tmp).unwrap()
-                    };
+                    let name = r.read_strz().unwrap();
                     let ver = try!(r.read_u16::<le>());
                     tiles.push(TilesElem{ id:id, name:name, ver:ver });
                 }
@@ -632,12 +624,7 @@ impl ObjProp {
             },
             5   /*OD_SPEECH*/ => {
                 let zo = try!(r.read_u16::<le>());
-                let text = {
-                    let mut tmp = Vec::new();
-                    r.read_until(0, &mut tmp).unwrap();
-                    tmp.pop();
-                    String::from_utf8(tmp).unwrap()
-                };
+                let text = r.read_strz().unwrap();
                 Ok(Some(ObjProp::odSPEECH(zo,text)))
             },
             6   /*OD_COMPOSE*/ => {
@@ -671,12 +658,7 @@ impl ObjProp {
                     Ok(Some(ObjProp::odFOLLOW(odFOLLOW::Stop)))
                 } else {
                     let xfres = try!(r.read_u16::<le>());
-                    let xfname = {
-                        let mut tmp = Vec::new();
-                        r.read_until(0, &mut tmp).unwrap();
-                        tmp.pop();
-                        String::from_utf8(tmp).unwrap()
-                    };
+                    let xfname = r.read_strz().unwrap();
                     Ok(Some(ObjProp::odFOLLOW(odFOLLOW::To(oid,xfres,xfname))))
                 }
             },
@@ -722,12 +704,7 @@ impl ObjProp {
                 Ok(Some(ObjProp::odHEALTH(hp)))
             },
             15  /*OD_BUDDY*/ => {
-                let name = {
-                    let mut tmp = Vec::new();
-                    r.read_until(0, &mut tmp).unwrap();
-                    tmp.pop();
-                    String::from_utf8(tmp).unwrap()
-                };
+                let name = r.read_strz().unwrap();
                 //XXX FIXME C string is not like Rust string, it has \0 at the end,
                 //          so this check is incorrect, I SUPPOSE.
                 //          MOST PROBABLY we will crash here because 2 more readings.
@@ -824,12 +801,7 @@ impl ObjProp {
                 loop {
                     let h = try!(r.read_u8());
                     if h == 255 { break; }
-                    let at = {
-                        let mut tmp = Vec::new();
-                        r.read_until(0, &mut tmp).unwrap();
-                        tmp.pop();
-                        String::from_utf8(tmp).unwrap()
-                    };
+                    let at = r.read_strz().unwrap();
                     let resid = try!(r.read_u16::<le>());
                     let off = if (h & 0x80) != 0 {
                         let x = try!(r.read_u16::<le>());
@@ -892,19 +864,9 @@ impl Message {
                 match dir {
                     MessageDirection::FromClient => {
                         let /*unknown*/ _ = try!(r.read_u16::<le>());
-                        let /*proto*/ _ = {
-                            let mut tmp = Vec::new();
-                            try!(r.read_until(0, &mut tmp));
-                            tmp.pop();
-                            tmp
-                        };
+                        let /*proto*/ _ = r.read_strz().unwrap();
                         let /*version*/ _ = try!(r.read_u16::<le>());
-                        let login = {
-                            let mut tmp = Vec::new();
-                            try!(r.read_until(0, &mut tmp));
-                            tmp.pop();
-                            tmp
-                        };
+                        let login = r.read_strz().unwrap();
                         let cookie_len = try!(r.read_u16::<le>());
                         let cookie = {
                             let mut tmp = vec![0; cookie_len as usize];
@@ -912,7 +874,7 @@ impl Message {
                             assert_eq!(len, cookie_len as usize);
                             tmp
                         };
-                        Ok( Message::C_SESS( cSess{ login : try!(String::from_utf8(login)), cookie : cookie } ) )
+                        Ok( Message::C_SESS( cSess{ login : login, cookie : cookie } ) )
                     }
                     MessageDirection::FromServer => {
                         Ok( Message::S_SESS( sSess{ err : SessError::new(try!(r.read_u8())) } ) )
