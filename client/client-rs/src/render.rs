@@ -4,20 +4,73 @@ use std::sync::mpsc::Sender;
 use std::sync::mpsc::SendError;
 use std::thread;
 //use state::State;
+use ncurses::*;
 
 #[derive(Debug)]
 pub enum Event {
     Grid(i32,i32,Vec<u8>,Vec<i16>),
     Obj(i32,i32),
+    Input,
 }
 
 pub struct Render {
     tx: Sender<Event>,
 }
 
+impl Drop for Render {
+    fn drop(&mut self) {
+        endwin();
+    }
+}
+
 impl Render {
     pub fn new () -> Render {
         let (tx,rx) = channel();
+
+        initscr();
+
+        thread::spawn(move || {
+            use std::sync::mpsc::RecvError;
+            
+            let mut counter = 0;
+            let mut last_event = "NONE            ".to_string();
+            loop {
+                clear();
+                mvprintw(0, 0, &format!("counter: {} ", counter));
+                mvprintw(1, 0, &last_event);
+                refresh();
+                match rx.recv() {
+                    Ok(value) => {
+                        counter += 1;
+                        match value {
+                            Event::Grid(x,y,tiles,z) => {
+                                last_event = format!("GRID: {} {}              ", x, y);
+                            }
+                            Event::Obj(x,y) => {
+                                last_event = format!("OBJ: {} {}               ", x, y);
+                            }
+                            Event::Input => {
+                                last_event = format!("INPUT                       ");
+                            }
+                        }
+                    }
+                    Err(_) => {
+                        info!("render: disconnected");
+                        return;
+                    }
+                }
+            }
+        });
+
+        let input_tx = tx.clone();
+        thread::spawn(move || {
+            loop {
+                getch();
+                input_tx.send(Event::Input);
+            }
+        });
+
+/*
         thread::spawn(move || {
                 use ::glium::DisplayBuild;
                 use ::glium::Surface;
@@ -292,6 +345,7 @@ impl Render {
 
                 }
         });
+*/
         Render{tx:tx}
     }
 

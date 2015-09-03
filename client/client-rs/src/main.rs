@@ -118,10 +118,10 @@ nix::sys::socket::setsockopt(sock.as_raw_fd, SockLevel::Socket, BindToDevice::ne
 
 mod web;
 
-//mod render;
+mod render;
 
 struct Client<A:Ai> {
-    //render: render::Render,
+    render: render::Render,
     state: State,
     ai: A,
     driver: Driver,
@@ -133,7 +133,7 @@ impl<A:Ai> Client<A> {
         ai.init();
 
         Client {
-            //render: render::Render::new(),
+            render: render::Render::new(),
             state: State::new(),
             ai: ai,
             driver: Driver::new(ip, port).unwrap(),
@@ -249,19 +249,6 @@ impl<A:Ai> Client<A> {
         info!("connect {} / {}", login, cookie.to_hex());
         self.state.connect(login, cookie).unwrap();
 
-        /*
-        thread::spawn(move || {
-            use ncurses::*;
-            initscr();
-            mvprintw(0, 0, "Hello, world!");
-            mvprintw(1, 0, "Hello, world!");
-            mvprintw(2, 0, "Hello, world!");
-            refresh();
-            getch();
-            endwin();
-        });
-        */
-        
         while let None = self.state.start_point() {
             self.send_all_enqueued();
             self.dispatch_single_event();
@@ -275,16 +262,15 @@ impl<A:Ai> Client<A> {
 
         loop {
             while let Some(event) = self.state.next_event() {
-                /*
                 let event = match event {
                     state::Event::Grid(x,y,tiles,z) => render::Event::Grid(x * 1100 - start_x, y * 1100 - start_y, tiles, z),
-                    state::Event::Obj((x,y))          => render::Event::Obj(x - start_x, y - start_y),
+                    state::Event::Obj((x,y))        => render::Event::Obj(x - start_x, y - start_y),
                 };
+                //info!("event: {:?}", event);
                 if let Err(e) = self.render.update(event) {
                     info!("render.update ERROR: {:?}", e);
                     return None /*TODO Some(e)*/;
                 }
-                */
             }
             self.send_all_enqueued();
             self.dispatch_single_event();
@@ -342,11 +328,16 @@ fn main () {
         let host = ips.next().expect("ip.next").ok().expect("ip.next.ok");
         host.ip()
     };
+    
     info!("connect to {}", ip);
 
     match Client::<AiImpl>::authorize(ip, 1871, username, password) {
-        Ok((login, cookie)) => { Client::<AiImpl>::new(ip, 1870).run(&login, &cookie); }
-        Err(e) => { info!("ERROR: {:?}", e); }
+        Ok((login, cookie)) => {
+            Client::<AiImpl>::new(ip, 1870).run(&login, &cookie);
+        }
+        Err(e) => {
+            info!("ERROR: {:?}", e);
+        }
     }
 }
 

@@ -346,13 +346,15 @@ impl State {
             Err(err) => { info!("message parse error: {:?}", err); return Err(err); },
         };
 
+        info!("RX: {:?}", msg);
+        
         if let Some(remains) = remains {
             info!("                 REMAINS {} bytes", remains.len());
         }
 
         match msg {
             Message::S_SESS(sess) => {
-                info!("RX: S_SESS {:?}", sess.err);
+                //info!("RX: S_SESS {:?}", sess.err);
                 match sess.err {
                     SessError::OK => {},
                     _ => {
@@ -417,7 +419,7 @@ impl State {
                 }
             },
             Message::OBJDATA(objdata) => {
-                info!("RX: OBJDATA {:?}", objdata);
+                //info!("RX: OBJDATA {:?}", objdata);
                 try!(self.enqueue_to_send(Message::OBJACK(ObjAck::new(&objdata)))); // send OBJACKs
                 for o in objdata.obj.iter() {
                     //FIXME ??? do NOT add hero object
@@ -497,7 +499,7 @@ impl State {
             },
             Message::OBJACK(_)  => {},
             Message::CLOSE => {
-                info!("RX: CLOSE");
+                //info!("RX: CLOSE");
                 //TODO return Status::EndOfSession instead of Error
                 return Err(Error{source:"session closed",detail:None});
             },
@@ -772,7 +774,7 @@ impl State {
         let buf = self.tx_buf.pop_back();
         if let Some(ref buf) = buf {
             match Message::from_buf(buf.buf.as_slice(), MessageDirection::FromClient) {
-                Ok((/*msg*/_,_)) => /*info!("TX: {:?}", msg)*/(),
+                Ok((msg,_)) => info!("TX: {:?}", msg),
                 Err(e) => panic!("ERROR: malformed TX message: {:?}", e),
             }
         }

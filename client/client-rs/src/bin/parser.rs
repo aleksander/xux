@@ -189,7 +189,8 @@ fn main () {
             MessageDirection::FromServer => "SERVER",
             MessageDirection::FromClient => "CLIENT",
         };
-        
+
+        /*
         match parse(udp.payload(), dir) {
             IResult::Done(i, o) => {
                 println!("{}: {:?}", dir_str, o);
@@ -206,12 +207,12 @@ fn main () {
                 break;
             }
         }
+        */
 
-        /*
         println!("");
         match Message::from_buf(udp.payload(), dir) {
             Ok((msg,remains)) => {
-                println!("{:?}", msg);
+                println!("{}: {:?}", dir_str, msg);
                 if let Some(buf) = remains {
                     println!("REMAINS {} bytes", buf.len());
                 }
@@ -221,6 +222,5 @@ fn main () {
                 println!("BUF: {:?}", udp.payload());
             }
         }
-        */
     }
 }

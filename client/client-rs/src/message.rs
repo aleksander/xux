@@ -143,6 +143,7 @@ pub fn write_list (list:&[MsgList]) -> Result<Vec<u8>,Error> {
             MsgList::tSTR(ref s) => {
                 try!(w.write_u8(2));
                 try!(w.write(s.as_bytes()));
+                try!(w.write_u8(0)); //'\0'
             },
             MsgList::tCOORD((x,y)) => {
                 try!(w.write_u8(3));
