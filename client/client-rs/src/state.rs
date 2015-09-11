@@ -160,16 +160,11 @@ impl Map {
         };
         let mut len = 0;
         let mut buf: Vec<u8> = Vec::new();
-        loop {
-            match map.pieces.get(&len) {
-                Some(b) => {
-                    buf.extend(b);
-                    len += b.len() as u16;
-                    if len == map.total_len {
-                        break;
-                    }
-                }
-                None => { break; }
+        while let Some(b) = map.pieces.get(&len) {
+            buf.extend(b);
+            len += b.len() as u16;
+            if len == map.total_len {
+                break;
             }
         }
         if buf.len() as u16 != map.total_len {
@@ -180,7 +175,7 @@ impl Map {
     }
 
     //XXX ??? move to message ?
-    fn from_buf (&self, buf: Vec<u8>) -> Surface {
+    fn from_buf (buf: Vec<u8>) -> Surface {
         let mut r = Cursor::new(buf);
         let x = r.read_i32::<le>().unwrap();
         let y = r.read_i32::<le>().unwrap();
@@ -263,7 +258,7 @@ pub struct State {
 impl State {
     pub fn new () -> State {
         let mut widgets = HashMap::new();
-        widgets.insert(0, Widget{ id:0, typ:"root".to_string(), parent:0, name:None });
+        widgets.insert(0, Widget{ id:0, typ:"root".to_owned(), parent:0, name:None });
 
         State {
             widgets: widgets,
@@ -403,7 +398,7 @@ impl State {
                 if self.map.complete(pktid) {
                     //TODO let map = self.mapdata.assemble(pktid).to_map();
                     let map_buf = self.map.assemble(pktid);
-                    let map = self.map.from_buf(map_buf);
+                    let map = Map::from_buf(map_buf);
                     assert!(map.tiles.len() == 10_000);
                     assert!(map.z.len() == 10_000);
                     info!("MAP COMPLETE ({},{}) name='{}' id={}", map.x, map.y, map.name, map.id);
@@ -421,7 +416,7 @@ impl State {
             Message::OBJDATA(objdata) => {
                 //info!("RX: OBJDATA {:?}", objdata);
                 try!(self.enqueue_to_send(Message::OBJACK(ObjAck::new(&objdata)))); // send OBJACKs
-                for o in objdata.obj.iter() {
+                for o in &objdata.obj {
                     //FIXME ??? do NOT add hero object
                     //TODO  if o.id == self.hero.id {
                     //          ... do something with hero, not in objects ...
@@ -446,7 +441,7 @@ impl State {
 
                         obj.frame = Some(o.frame);
 
-                        for prop in o.prop.iter() {
+                        for prop in &o.prop {
                             match *prop {
                                 ObjProp::odREM => { to_remove = true; break; }
                                 ObjProp::odMOVE(xy,_) => { obj.xy = Some(xy); }
@@ -538,7 +533,7 @@ impl State {
     fn dispatch_rel (&mut self, rel: &Rel) {
         info!("dispatch REL {}-{}", rel.seq, rel.seq + ((rel.rel.len() as u16) - 1));
         //info!("RX: {:?}", rel);
-        for r in rel.rel.iter() {
+        for r in &rel.rel {
             match *r {
                 RelElem::NEWWDG(ref wdg) => {
                     //info!("      {:?}", wdg);
@@ -694,7 +689,7 @@ impl State {
     }
 
     pub fn widget_id (&self, typ: &str, name: Option<String>) -> Option<u16> {
-        for (id,w) in self.widgets.iter() {
+        for (id,w) in &self.widgets {
             if (w.typ == typ) && (w.name == name) {
                 return Some(*id)
             }
@@ -714,7 +709,7 @@ impl State {
         //TODO get username from server responce, not from auth username
         //let cookie = self.cookie.clone();
         //let user = self.user.clone();
-        try!(self.enqueue_to_send(Message::C_SESS(cSess{ login: login.to_string(), cookie: cookie.to_vec() })));
+        try!(self.enqueue_to_send(Message::C_SESS(cSess{ login: login.to_owned(), cookie: cookie.to_vec() })));
         Ok(())
     }
 
@@ -722,7 +717,7 @@ impl State {
         //TODO let mut rel = Rel::new(seq,id,name);
         let mut rel = Rel{seq:0, rel:Vec::new()};
         let id = self.widget_id("charlist", None).expect("charlist widget is not found");
-        let name = "play".to_string();
+        let name = "play".to_owned();
         let charname = self.charlist[i].clone();
         info!("send play '{}'", charname);
         let mut args : Vec<MsgList> = Vec::new();
@@ -804,7 +799,7 @@ impl State {
         //TODO let mut rel = Rel::new(seq,id,name);
         let mut rel = Rel{seq:0, rel:Vec::new()};
         let id = self.widget_id("mapview", None).expect("mapview widget is not found");
-        let name : String = "click".to_string();
+        let name : String = "click".to_owned();
         let mut args : Vec<MsgList> = Vec::new();
         args.push(MsgList::tCOORD((907, 755))); //TODO set some random coords in the center of screen
         args.push(MsgList::tCOORD((x, y)));
@@ -822,7 +817,7 @@ impl State {
         //TODO let mut rel = Rel::new(seq,id,name);
         let mut rel = Rel{seq:0, rel:Vec::new()};
         let id = self.widget_id("mapview", None).expect("mapview widget is not found");
-        let name = "click".to_string();
+        let name = "click".to_owned();
         let mut args = Vec::new();
         let (obj_x,obj_y) = {
             match self.objects.get(&obj_id) {
@@ -855,7 +850,7 @@ impl State {
         info!("GO");
         //TODO let mut rel = Rel::new(seq,id,name);
         let mut rel = Rel{seq:0, rel:Vec::new()};
-        let name = "cl".to_string();
+        let name = "cl".to_owned();
         let mut args = Vec::new();
         args.push(MsgList::tINT(0));
         args.push(MsgList::tINT(0));

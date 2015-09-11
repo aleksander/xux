@@ -37,7 +37,7 @@ impl Ai for DeclAi {
         //info!("AI: {:?}", self.state);
         match self.state {
             AiState::WaitForCharList => {
-                if state.charlist.len() > 0 {
+                if !state.charlist.is_empty() {
                     state.send_play(0).unwrap();
                     self.state = AiState::WaitForWorld;
                 }

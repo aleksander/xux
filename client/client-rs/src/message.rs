@@ -76,7 +76,7 @@ pub struct Tiles {
 impl Debug for Tiles {
     fn fmt(&self, f : &mut Formatter) -> ::std::fmt::Result {
         try!(writeln!(f, ""));
-        for tile in self.tiles.iter() {
+        for tile in &self.tiles {
             try!(writeln!(f, "      {:?}", tile));
         }
         Ok(())
@@ -429,7 +429,7 @@ impl Rel {
 impl Debug for Rel {
     fn fmt(&self, f : &mut Formatter) -> ::std::fmt::Result {
         try!(writeln!(f, "REL seq={}", self.seq));
-        for r in self.rel.iter() {
+        for r in &self.rel {
             try!(writeln!(f, "      {:?}", r));
         }
         Ok(())
@@ -464,7 +464,7 @@ pub struct ObjData {
 impl Debug for ObjData {
     fn fmt(&self, f : &mut Formatter) -> ::std::fmt::Result {
         try!(writeln!(f, "OBJDATA"));
-        for o in self.obj.iter() {
+        for o in &self.obj {
             try!(writeln!(f, "      {:?}", o));
         }
         Ok(())
@@ -484,7 +484,7 @@ pub struct ObjAck {
 impl ObjAck {
     pub fn new (objdata: &ObjData) -> ObjAck {
         let mut objack = ObjAck{ obj : Vec::new() };
-        for o in objdata.obj.iter() {
+        for o in &objdata.obj {
             objack.obj.push(ObjAckElem{ id : o.id, frame : o.frame});
         }
         objack
@@ -682,15 +682,13 @@ impl ObjProp {
             12  /*OD_OVERLAY*/ => {
                 let /*olid*/ _ = try!(r.read_i32::<le>());
                 let resid = try!(r.read_u16::<le>());
-                if resid != 65535 {
-                    if (resid & 0x8000) != 0 {
-                        let sdt_len = try!(r.read_u8()) as usize;
-                        let /*sdt*/ _ = {
-                            let mut tmp = vec![0; sdt_len as usize];
-                            r.read_exact(&mut tmp).unwrap();
-                            tmp
-                        };
-                    }
+                if (resid != 0xffff) && ((resid & 0x8000) != 0) {
+                    let sdt_len = try!(r.read_u8()) as usize;
+                    let /*sdt*/ _ = {
+                        let mut tmp = vec![0; sdt_len as usize];
+                        r.read_exact(&mut tmp).unwrap();
+                        tmp
+                    };
                 }
                 Ok(Some(ObjProp::odOVERLAY( resid&(!0x8000) )))
             },
@@ -706,7 +704,7 @@ impl ObjProp {
                 //XXX FIXME C string is not like Rust string, it has \0 at the end,
                 //          so this check is incorrect, I SUPPOSE.
                 //          MOST PROBABLY we will crash here because 2 more readings.
-                if name.len() == 0 {
+                if name.is_empty() {
                     Ok(Some(ObjProp::odBUDDY(odBUDDY::Delete)))
                 } else {
                     let group = try!(r.read_u8());
@@ -734,7 +732,7 @@ impl ObjProp {
                         }
                         ids.push(resid);
                     }
-                    if ids.len() > 0 {
+                    if !ids.is_empty() {
                         Some(ids)
                     } else {
                         None
@@ -760,7 +758,7 @@ impl ObjProp {
                         ids.push(resid);
                     }
                     let ttime = try!(r.read_u8());
-                    if ids.len() > 0 {
+                    if !ids.is_empty() {
                         Some((Some(ids),ttime))
                     } else {
                         Some((None,ttime))
@@ -781,11 +779,11 @@ impl ObjProp {
                         if resid == 65535 { break; }
                         ids.push(resid);
                     }
-                    if ids.len() > 0 {
+                    if !ids.is_empty() {
                         m.push(ids);
                     }
                 }
-                let mods = if m.len() > 0 {
+                let mods = if !m.is_empty() {
                     Some(m)
                 } else {
                     None
@@ -809,7 +807,7 @@ impl ObjProp {
                     };
                     e.push((h&0x7f,at,resid,off));
                 }
-                let equ = if e.len() > 0 {
+                let equ = if !e.is_empty() {
                     Some(e)
                 } else {
                     None
@@ -939,12 +937,7 @@ impl Message {
                     let id = try!(r.read_u32::<le>());
                     let frame = try!(r.read_i32::<le>());
                     let mut prop = Vec::new();
-                    loop {
-                        match try!(ObjProp::from_buf(&mut r)) {
-                            Some(p) => { prop.push(p) },
-                            None => { break },
-                        }
-                    }
+                    while let Some(p) = try!(ObjProp::from_buf(&mut r)) { prop.push(p) }
                     obj.push( ObjDataElem{ fl:fl, id:id, frame:frame, prop:prop } );
                 }
                 Ok( Message::OBJDATA( ObjData{ obj : obj } ) )
@@ -970,10 +963,10 @@ impl Message {
     }
 
     pub fn to_buf (&self) -> Result<Vec<u8>,Error> {
-        let mut w = vec![];
-        match self {
+        match *self {
             // !!! this is client session message, not server !!!
-            &Message::C_SESS(ref sess) => /*(name: &str, cookie: &[u8]) -> Vec<u8>*/ {
+            Message::C_SESS(ref sess) => /*(name: &str, cookie: &[u8]) -> Vec<u8>*/ {
+                let mut w = vec![];
                 try!(w.write_u8(0)); // SESS
                 try!(w.write_u16::<le>(2)); // unknown
                 try!(w.write("Salem".as_bytes())); // proto
@@ -985,19 +978,22 @@ impl Message {
                 try!(w.write(sess.cookie.as_slice())); // cookie
                 Ok(w)
             }
-            &Message::S_SESS(/*ref sess*/ _ ) => {
+            Message::S_SESS(/*ref sess*/ _ ) => {
                 Err( Error{ source:"sSess.to_buf is not implemented yet", detail:None } )
             }
-            &Message::ACK(ref ack) => /*ack (seq: u16) -> Vec<u8>*/ {
+            Message::ACK(ref ack) => /*ack (seq: u16) -> Vec<u8>*/ {
+                let mut w = vec![];
                 try!(w.write_u8(2)); //ACK
                 try!(w.write_u16::<le>(ack.seq));
                 Ok(w)
             }
-            &Message::BEAT => /* beat () -> Vec<u8> */ {
+            Message::BEAT => /* beat () -> Vec<u8> */ {
+                let mut w = vec![];
                 try!(w.write_u8(3)); //BEAT
                 Ok(w)
             }
-            &Message::REL(ref rel) => /* rel_wdgmsg_play (seq: u16, name: &str) -> Vec<u8> */ {
+            Message::REL(ref rel) => /* rel_wdgmsg_play (seq: u16, name: &str) -> Vec<u8> */ {
+                let mut w = vec![];
                 try!(w.write_u8(1)); // REL
                 try!(w.write_u16::<le>(rel.seq));// sequence
                 for i in 0 .. rel.rel.len() {
@@ -1008,22 +1004,24 @@ impl Message {
                 }
                 Ok(w)
             }
-            &Message::MAPREQ(ref mapreq) => /* mapreq (x:i32, y:i32) -> Vec<u8> */ {
+            Message::MAPREQ(ref mapreq) => /* mapreq (x:i32, y:i32) -> Vec<u8> */ {
+                let mut w = vec![];
                 try!(w.write_u8(4)); // MAPREQ
                 try!(w.write_i32::<le>(mapreq.x)); // x
                 try!(w.write_i32::<le>(mapreq.y)); // y
                 Ok(w)
             }
-            &Message::OBJACK(ref objack) => {
+            Message::OBJACK(ref objack) => {
                 let mut w = vec![];
                 w.write_u8(7).unwrap(); //OBJACK writer
-                for o in objack.obj.iter() {
+                for o in &objack.obj {
                     w.write_u32::<le>(o.id).unwrap();
                     w.write_i32::<le>(o.frame).unwrap();
                 }
                 Ok(w)
             }
-            &Message::CLOSE => {
+            Message::CLOSE => {
+                let mut w = vec![];
                 try!(w.write_u8(8)); //CLOSE
                 Ok(w)
             }

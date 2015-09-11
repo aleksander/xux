@@ -24,6 +24,7 @@ nom = "*"
 ncurses = "*"
 log = "*"
 fern = "*"
+#clippy = "*"
 
 #[dependencies.openssl]
 #openssl = "0.5.5"

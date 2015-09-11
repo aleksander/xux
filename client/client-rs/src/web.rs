@@ -7,9 +7,9 @@ pub fn responce (buf: &[u8], state: &State) -> String {
     if buf.starts_with("GET /") {
         let pattern: &[_] = &['\r','\n'];
         let crlf = buf.find(pattern).unwrap_or(buf.len());
-        _responce(state, &buf[5..crlf]).unwrap_or("HTTP/1.1 404 Not Found\r\n\r\n".to_string())
+        _responce(state, &buf[5..crlf]).unwrap_or("HTTP/1.1 404 Not Found\r\n\r\n".to_owned())
     } else {
-        "HTTP/1.1 404 Not Found\r\n\r\n".to_string()
+        "HTTP/1.1 404 Not Found\r\n\r\n".to_owned()
     }
 }
 
@@ -43,7 +43,7 @@ fn _responce (state: &State, buf: &str) -> Option<String> {
         //   map:[z,z,...,z]
         // }
 
-        let mut body = "{\"res\":[".to_string();
+        let mut body = "{\"res\":[".to_owned();
 
         let mut period = "";
         for (id,name) in &state.resources {
@@ -127,18 +127,18 @@ fn _responce (state: &State, buf: &str) -> Option<String> {
             };
             body = body + &format!("{{\"x\":{},\"y\":{},\"resid\":{},\"resname\":\"{}\"}},", x, y, resid, resname);
         }
-        body = "[ ".to_string() + &body[..body.len()-1] + " ]";
+        body = "[ ".to_owned() + &body[..body.len()-1] + " ]";
         Some(format!("HTTP/1.1 200 OK\r\nContent-Type: text/json\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\n\r\n", body.len()) + &body)
     } else if buf.starts_with("widgets ") {
         let mut body = String::new();
         for (id,w) in &state.widgets {
             body = body + &format!("{{\"id\":{},\"name\":\"{}\",\"parent\":\"{}\"}},", id, w.typ, w.parent);
         }
-        body = "[ ".to_string() + &body[..body.len()-1] + " ]";
+        body = "[ ".to_owned() + &body[..body.len()-1] + " ]";
         Some(format!("HTTP/1.1 200 OK\r\nContent-Type: text/json\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\n\r\n", body.len()) + &body)
     } else if buf.starts_with("resources ") {
         //TODO
-        Some("HTTP/1.1 404 Not Implemented\r\n\r\n".to_string())
+        Some("HTTP/1.1 404 Not Implemented\r\n\r\n".to_owned())
     } else if buf.starts_with("go/") {
         //FIXME should NOT be implemented for web. web is for view only
         //info!("GO: {} {}", x, y);
@@ -156,13 +156,13 @@ fn _responce (state: &State, buf: &str) -> Option<String> {
         } else {
             //self.url = Some(Url::Go(0,0));
         }
-        Some("HTTP/1.1 200 OK\r\n\r\n".to_string())
+        Some("HTTP/1.1 200 OK\r\n\r\n".to_owned())
     } else if buf.starts_with("quit ") {
         /*FIXME if let Err(e) = state.close() {
             info!("ERROR: client.close: {:?}", e);
         }*/
-        Some("HTTP/1.1 200 OK\r\n\r\n".to_string())
+        Some("HTTP/1.1 200 OK\r\n\r\n".to_owned())
     } else {
-        Some("HTTP/1.1 404 Not Found\r\n\r\n".to_string())
+        Some("HTTP/1.1 404 Not Found\r\n\r\n".to_owned())
     }
 }

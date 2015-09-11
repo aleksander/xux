@@ -30,10 +30,10 @@ impl Render {
         initscr();
 
         thread::spawn(move || {
-            use std::sync::mpsc::RecvError;
+            //use std::sync::mpsc::RecvError;
             
             let mut counter = 0;
-            let mut last_event = "NONE            ".to_string();
+            let mut last_event = "NONE            ".to_owned();
             loop {
                 clear();
                 mvprintw(0, 0, &format!("counter: {} ", counter));
@@ -43,7 +43,7 @@ impl Render {
                     Ok(value) => {
                         counter += 1;
                         match value {
-                            Event::Grid(x,y,tiles,z) => {
+                            Event::Grid(x,y,/*tiles*/_,/*z*/_) => {
                                 last_event = format!("GRID: {} {}              ", x, y);
                             }
                             Event::Obj(x,y) => {
@@ -66,7 +66,10 @@ impl Render {
         thread::spawn(move || {
             loop {
                 getch();
-                input_tx.send(Event::Input);
+                match input_tx.send(Event::Input) {
+                    Ok(()) => {}
+                    Err(_) => break
+                }
             }
         });
 

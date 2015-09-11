@@ -3,6 +3,8 @@
 #![feature(lookup_host)]
 #![feature(associated_consts)]
 #![feature(read_exact)]
+//#![feature(plugin)]
+//#![plugin(clippy)]
 
 use std::net::IpAddr;
 //use std::net::Ipv4Addr;
@@ -147,67 +149,55 @@ impl<A:Ai> Client<A> {
         let context = SslContext::new(SslMethod::Sslv23).unwrap();
         let mut stream = SslStream::new(&context, stream).unwrap();
 
-        // send 'pw' command
-        let user = user.as_bytes();
-        let buf_len = (3 + user.len() + 1 + 32) as u16;
-        let mut buf: Vec<u8> = Vec::with_capacity((2 + buf_len) as usize);
-        buf.write_u16::<be>(buf_len).unwrap();
-        buf.extend("pw".as_bytes());
-        buf.push(0);
-        buf.extend(user);
-        buf.push(0);
-        let pass_hash = hash(Type::SHA256, pass.as_bytes());
-        assert!(pass_hash.len() == 32);
-        buf.extend(pass_hash.as_slice());
-        stream.write(buf.as_slice()).unwrap();
-        stream.flush().unwrap();
-
-        let mut buf = vec![0,0];
-        let len = stream.read(buf.as_mut_slice()).ok().expect("read error");
-        if len != 2 { return Err(Error{source:"bytes read != 2",detail:None}); }
-        //TODO replace byteorder crate with endian crate ???
-        let mut rdr = Cursor::new(buf);
-        let len = rdr.read_u16::<be>().unwrap();
-
-        let mut msg = vec![0; len as usize];
-        let len2 = stream.read(msg.as_mut_slice()).ok().expect("read error");
-        if len2 != len as usize { return Err(Error{source:"len2 != len",detail:None}); }
-        info!("msg='{}'", str::from_utf8(msg.as_slice()).unwrap());
-        info!("msg='{}'", msg.as_slice().to_hex());
-        info!("msg='{:?}'", msg.as_slice());
-        if msg.len() < "ok\0\0".len() {
-            return Err(Error{source:"'pw' command unexpected answer", detail:Some(String::from_utf8(msg).unwrap())});
+        fn msg (buf: Vec<u8>) -> Vec<u8> {
+            let mut msg = Vec::new();
+            msg.write_u16::<be>(buf.len() as u16).unwrap();
+            msg.extend(buf);
+            msg
         }
-        let login = str::from_utf8(&msg[3..msg.len()-1]).unwrap().to_string();
 
-        // send 'cookie' command
-        if (msg[0] == ('o' as u8)) && (msg[1] == ('k' as u8)) {
-            // TODO tryio!(stream.write(Msg::cookie(params...)));
-            let buf_len = ("cookie".as_bytes().len() + 1) as u16;
-            let mut buf: Vec<u8> = Vec::with_capacity((2 + buf_len) as usize);
-            buf.write_u16::<be>(buf_len).unwrap();
-            buf.extend("cookie".as_bytes());
-            buf.push(0);
-            stream.write(buf.as_slice()).unwrap();
-            stream.flush().unwrap();
+        //TODO use closure instead (no need to pass stream)
+        fn command (stream: &mut SslStream<std::net::TcpStream>, cmd: Vec<u8>) -> Result<Vec<u8>,Error> {
+            try!(stream.write(msg(cmd).as_slice()));
+            try!(stream.flush());
 
-            let mut buf = vec![0,0];
-            let len = stream.read(buf.as_mut_slice()).ok().expect("read error");
-            if len != 2 { return Err(Error{source:"bytes read != 2",detail:None}); }
-            //TODO replace byteorder crate with endian crate ???
-            let mut rdr = Cursor::new(buf);
-            let len = rdr.read_u16::<be>().unwrap();
+            let len = {
+                let mut buf = vec![0; 2];
+                try!(stream.read_exact(&mut buf));
+                let mut rdr = Cursor::new(buf);
+                try!(rdr.read_u16::<be>())
+            };
 
             let mut msg = vec![0; len as usize];
-            let len2 = stream.read(msg.as_mut_slice()).ok().expect("read error");
-            if len2 != len as usize { return Err(Error{source:"len2 != len",detail:None}); }
-            //info!("msg='{}'", str::from_utf8(msg.as_slice()).unwrap());
-            info!("msg='{}'", msg.as_slice().to_hex());
-            //TODO check cookie length
-            let cookie = msg[3..].to_vec();
-            return Ok((login, cookie));
+            try!(stream.read_exact(msg.as_mut_slice()));
+            debug!("msg: {:?}", msg);
+            if (msg.len() < "ok\0".len()) || (msg[0] != b'o') || (msg[1] != b'k') || (msg[2] != 0) {
+                //FIXME return raw vec in details, not String
+                return Err(Error{source:"unexpected answer", detail:Some(String::from_utf8(msg).unwrap())});
+            }
+            Ok(msg[3..].to_vec())
         }
-        return Err(Error{source:"'cookie' command unexpected answer", detail:Some(String::from_utf8(msg).unwrap())});
+
+        let login = { 
+            let mut buf = Vec::new();
+            buf.extend("pw".as_bytes());
+            buf.push(0);
+            buf.extend(user.as_bytes());
+            buf.push(0);
+            buf.extend(hash(Type::SHA256, pass.as_bytes()).as_slice());
+            let msg = try!(command(&mut stream, buf));
+            //FIXME use read_strz analog
+            str::from_utf8(&msg[..msg.len()-1]).unwrap().to_string()
+        };
+
+        let cookie = { 
+            let mut buf = Vec::new();
+            buf.extend("cookie".as_bytes());
+            buf.push(0);
+            try!(command(&mut stream, buf))
+        };
+
+        Ok((login, cookie))
     }
 
     fn send_all_enqueued (&mut self) {
@@ -244,8 +234,6 @@ impl<A:Ai> Client<A> {
     }
 
     fn run (&mut self, login: &str, cookie: &[u8]) -> Option<Error> {
-        use std::thread;
-
         info!("connect {} / {}", login, cookie.to_hex());
         self.state.connect(login, cookie).unwrap();
 
