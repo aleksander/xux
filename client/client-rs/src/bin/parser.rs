@@ -23,11 +23,17 @@ use pnet::packet::ip::IpNextHeaderProtocols::Udp;
 use pnet::packet::udp::UdpPacket;
 
 fn main () {
+
     let args: Vec<_> = env::args().collect();
-    if args.len() != 2 {
-        println!("Usage: {} <foo.pcapng>", args[0]);
-        return;
-    }
+    let nom_parser =
+        if args.len() == 2 {
+            false
+        } else if args.len() == 3 {
+            true
+        } else {
+            println!("Usage: {} <foo.pcapng> [use_nom_parser]", args[0]);
+            return;
+        };
 
     let mut f = fs::File::open(&args[1]).unwrap();
     //let mut buf: Vec<u8> = Vec::new();
@@ -190,36 +196,36 @@ fn main () {
             MessageDirection::FromClient => "CLIENT",
         };
 
-        /*
-        match parse(udp.payload(), dir) {
-            IResult::Done(i, o) => {
-                println!("{}: {:?}", dir_str, o);
-                if i.len() > 0 {
-                    println!("REMAINS: {} bytes", i.len());
+        if nom_parser {
+            match parse(udp.payload(), dir) {
+                IResult::Done(i, o) => {
+                    println!("{}: {:?}", dir_str, o);
+                    if i.len() > 0 {
+                        println!("REMAINS: {} bytes", i.len());
+                    }
+                }
+                IResult::Error(e) => {
+                    println!("Error: {:?}", e);
+                    break;
+                }
+                IResult::Incomplete(n) => {
+                    println!("Incomplete: {:?}", n);
+                    break;
                 }
             }
-            IResult::Error(e) => {
-                println!("Error: {:?}", e);
-                break;
-            }
-            IResult::Incomplete(n) => {
-                println!("Incomplete: {:?}", n);
-                break;
-            }
-        }
-        */
-
-        println!("");
-        match Message::from_buf(udp.payload(), dir) {
-            Ok((msg,remains)) => {
-                println!("{}: {:?}", dir_str, msg);
-                if let Some(buf) = remains {
-                    println!("REMAINS {} bytes", buf.len());
+        } else {
+            println!("");
+            match Message::from_buf(udp.payload(), dir) {
+                Ok((msg,remains)) => {
+                    println!("{}: {:?}", dir_str, msg);
+                    if let Some(buf) = remains {
+                        println!("REMAINS {} bytes", buf.len());
+                    }
                 }
-            }
-            Err(e) => {
-                println!("FAILED TO PARSE! ERROR: {:?}", e);
-                println!("BUF: {:?}", udp.payload());
+                Err(e) => {
+                    println!("FAILED TO PARSE! ERROR: {:?}", e);
+                    println!("BUF: {:?}", udp.payload());
+                }
             }
         }
     }

@@ -835,6 +835,7 @@ impl ObjProp {
     }
 }
 
+#[derive(Clone,Copy)]
 pub enum MessageDirection {
     FromClient,
     FromServer,
