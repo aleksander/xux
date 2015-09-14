@@ -24,9 +24,10 @@ extern crate rustc_serialize;
 use rustc_serialize::hex::ToHex;
 
 use std::str;
+use std::u16;
 //use std::io::{Error, ErrorKind};
 //use std::io::Write;
-//use std::fs::File;
+use std::fs::File;
 
 mod state;
 use state::State;
@@ -51,12 +52,12 @@ use ai_decl::DeclAi;
 //#[cfg(ai = "decl")]
 type AiImpl = DeclAi;
 
-//extern crate image;
-//use image::GenericImage;
-//use image::ImageBuffer;
-//use image::Rgb;
-//use image::ImageRgb8;
-//use image::PNG;
+extern crate image;
+use image::GenericImage;
+use image::ImageBuffer;
+use image::Rgb;
+use image::ImageRgb8;
+use image::PNG;
 
 extern crate byteorder;
 use self::byteorder::{LittleEndian, BigEndian, ReadBytesExt, WriteBytesExt};
@@ -237,6 +238,46 @@ impl<A:Ai> Client<A> {
         info!("connect {} / {}", login, cookie.to_hex());
         self.state.connect(login, cookie).unwrap();
 
+        fn grid2png (x: i32, y: i32, t: &[u8], z: &[i16]) {
+            let mut f = File::create(format!("{} {}.png", x, y)).unwrap();
+            let mut img = ImageBuffer::new(100, 100);
+            //let grid = client.hero_grid();
+            for y in 0..100 {
+                for x in 0..100 {
+                    //let color = grid.tiles[y*100+x];
+                    let t = t[y*100+x];
+                    let z = z[y*100+x];
+                    let z = ((z as isize) + (u16::MAX/2) as isize + 1) as u16;
+                    let h = (z >> 8) as u8;
+                    let l = z as u8;
+                    img.put_pixel(x as u32, y as u32, Rgb([t,h,l]));
+                }
+            }
+            ImageRgb8(img).save(&mut f, PNG).unwrap();
+        }
+
+        loop {
+            while let Some(event) = self.state.next_event() {
+                let event = match event {
+                    state::Event::Grid(x,y,tiles,z) => {
+                        grid2png(x, y, &tiles, &z);
+                        render::Event::Grid(x,y,tiles,z)
+                    }
+                    state::Event::Obj((x,y)) => {
+                        render::Event::Obj(x,y)
+                    }
+                };
+                if let Err(e) = self.render.update(event) {
+                    info!("render.update ERROR: {:?}", e);
+                    return None /*TODO Some(e)*/;
+                }
+            }
+            self.send_all_enqueued();
+            self.dispatch_single_event();
+            self.ai.update(&mut self.state);
+        }
+
+        /*
         while let None = self.state.start_point() {
             self.send_all_enqueued();
             self.dispatch_single_event();
@@ -264,6 +305,7 @@ impl<A:Ai> Client<A> {
             self.dispatch_single_event();
             self.ai.update(&mut self.state);
         }
+        */
     }
 }
 

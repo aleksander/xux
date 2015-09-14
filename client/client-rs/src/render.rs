@@ -10,6 +10,12 @@ use ncurses::*;
 pub enum Event {
     Grid(i32,i32,Vec<u8>,Vec<i16>),
     Obj(i32,i32),
+    //NewObj(i32,i32),
+    //UpdObj(...),
+    //DelObj(id),
+    //AI(...ai desigions...),
+        // AI: going to pick obj (ID)
+        // AI: going by path (PATH CHAIN)
     Input,
 }
 
@@ -27,6 +33,23 @@ impl Render {
     pub fn new () -> Render {
         let (tx,rx) = channel();
 
+        thread::spawn(move || {
+            //use std::sync::mpsc::RecvError;
+            
+            loop {
+                match rx.recv() {
+                    Ok(value) => {
+                    }
+                    Err(_) => {
+                        info!("render: disconnected");
+                        return;
+                    }
+                }
+            }
+        });
+
+/* ncurses TUI
+FIXME: could alternatively use: rustbox, rustty
         initscr();
 
         thread::spawn(move || {
@@ -72,8 +95,9 @@ impl Render {
                 }
             }
         });
+*/
 
-/*
+/* 3D UI
         thread::spawn(move || {
                 use ::glium::DisplayBuild;
                 use ::glium::Surface;

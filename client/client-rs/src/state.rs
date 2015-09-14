@@ -234,7 +234,7 @@ impl Map {
 }
 
 pub enum Event {
-    Grid(i32,i32,Vec<u8>,Vec<i16>),
+    Grid(i32,i32,Vec<u8>,Vec<i16>), //TODO struct Grid { x: i32, y: i32, tiles: Vec<u8>, z: Vec<i16> }
     Obj((i32,i32)),
 }
 
