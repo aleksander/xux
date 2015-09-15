@@ -24,7 +24,7 @@ extern crate rustc_serialize;
 use rustc_serialize::hex::ToHex;
 
 use std::str;
-use std::u16;
+//use std::u16;
 //use std::io::{Error, ErrorKind};
 //use std::io::Write;
 use std::fs::File;
@@ -122,6 +122,9 @@ nix::sys::socket::setsockopt(sock.as_raw_fd, SockLevel::Socket, BindToDevice::ne
 mod web;
 
 mod render;
+
+mod to_unsigned;
+use to_unsigned::ToUnsigned;
 
 struct Client<A:Ai> {
     render: render::Render,
@@ -247,7 +250,7 @@ impl<A:Ai> Client<A> {
                     //let color = grid.tiles[y*100+x];
                     let t = t[y*100+x];
                     let z = z[y*100+x];
-                    let z = ((z as isize) + (u16::MAX/2) as isize + 1) as u16;
+                    let z = z.to_unsigned();
                     let h = (z >> 8) as u8;
                     let l = z as u8;
                     img.put_pixel(x as u32, y as u32, Rgb([t,h,l]));
