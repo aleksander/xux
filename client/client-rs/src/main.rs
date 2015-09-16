@@ -241,6 +241,8 @@ impl<A:Ai> Client<A> {
         info!("connect {} / {}", login, cookie.to_hex());
         self.state.connect(login, cookie).unwrap();
 
+        //TODO move to Grid
+        //TODO grid.to_png(Mapper::first())
         fn grid2png (x: i32, y: i32, t: &[u8], z: &[i16]) {
             let mut f = File::create(format!("{} {}.png", x, y)).unwrap();
             let mut img = ImageBuffer::new(100, 100);
@@ -343,7 +345,7 @@ impl<A:Ai> Client<A> {
 
         let (start_x, start_y) = match self.state.start_point() {
             Some(xy) => xy,
-            None => panic!("this can't be")
+            None => unreachable!() //panic!("this can't be")
         };
 
         loop {
