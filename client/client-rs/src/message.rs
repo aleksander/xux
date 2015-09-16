@@ -908,6 +908,12 @@ pub enum MessageDirection {
 }
 
 impl Message {
+    //TODO ADD fuzzing tests:
+    //        for i in range(0u8, 255) {
+    //            let mut v = Vec::new();
+    //            v.push(i);
+    //            info!("{}", Message::from_buf(v.as_slice()));
+    //        }
     //TODO
     // fn from_buf_checked (buf,dir) {
     //     if (this message can be received by this dir) {

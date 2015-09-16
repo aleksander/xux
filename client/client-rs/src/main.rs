@@ -244,16 +244,70 @@ impl<A:Ai> Client<A> {
         fn grid2png (x: i32, y: i32, t: &[u8], z: &[i16]) {
             let mut f = File::create(format!("{} {}.png", x, y)).unwrap();
             let mut img = ImageBuffer::new(100, 100);
-            //let grid = client.hero_grid();
             for y in 0..100 {
                 for x in 0..100 {
-                    //let color = grid.tiles[y*100+x];
                     let t = t[y*100+x];
                     let z = z[y*100+x];
                     let z = z.to_unsigned();
                     let h = (z >> 8) as u8;
                     let l = z as u8;
-                    img.put_pixel(x as u32, y as u32, Rgb([t,h,l]));
+                    let mut r = 0;
+                    r |= (t >> 0) & 1; r <<= 1;
+                    r |= (t >> 3) & 1; r <<= 1;
+                    r |= (t >> 6) & 1; r <<= 1;
+                    r |= (h >> 4) & 1; r <<= 1;
+                    r |= (h >> 1) & 1; r <<= 1;
+                    r |= (l >> 6) & 1; r <<= 1;
+                    r |= (l >> 3) & 1; r <<= 1;
+                    r |= (l >> 0) & 1;
+                    let mut g = 0;
+                    g |= (t >> 1) & 1; g <<= 1;
+                    g |= (t >> 4) & 1; g <<= 1;
+                    g |= (t >> 7) & 1; g <<= 1;
+                    g |= (h >> 5) & 1; g <<= 1;
+                    g |= (h >> 2) & 1; g <<= 1;
+                    g |= (l >> 7) & 1; g <<= 1;
+                    g |= (l >> 4) & 1; g <<= 1;
+                    g |= (l >> 1) & 1;
+                    let mut b = 0;
+                    b |= (t >> 2) & 1; b <<= 1;
+                    b |= (t >> 5) & 1; b <<= 1;
+                    b |= (h >> 7) & 1; b <<= 1;
+                    b |= (h >> 6) & 1; b <<= 1;
+                    b |= (h >> 3) & 1; b <<= 1;
+                    b |= (h >> 0) & 1; b <<= 1;
+                    b |= (l >> 5) & 1; b <<= 1;
+                    b |= (l >> 2) & 1;
+                    /*
+                    let mut r = 0;
+                    r |= (t >> 2) & 1; r <<= 1;
+                    r |= (t >> 3) & 1; r <<= 1;
+                    r |= (h >> 7) & 1; r <<= 1;
+                    r |= (h >> 6) & 1; r <<= 1;
+                    r |= (h >> 1) & 1; r <<= 1;
+                    r |= (h >> 0) & 1; r <<= 1;
+                    r |= (l >> 3) & 1; r <<= 1;
+                    r |= (l >> 2) & 1;
+                    let mut g = 0;
+                    g |= (t >> 1) & 1; g <<= 1;
+                    g |= (t >> 4) & 1; g <<= 1;
+                    g |= (t >> 7) & 1; g <<= 1;
+                    g |= (h >> 5) & 1; g <<= 1;
+                    g |= (h >> 2) & 1; g <<= 1;
+                    g |= (l >> 7) & 1; g <<= 1;
+                    g |= (l >> 4) & 1; g <<= 1;
+                    g |= (l >> 1) & 1;
+                    let mut b = 0;
+                    b |= (t >> 0) & 1; b <<= 1;
+                    b |= (t >> 5) & 1; b <<= 1;
+                    b |= (t >> 6) & 1; b <<= 1;
+                    b |= (h >> 4) & 1; b <<= 1;
+                    b |= (h >> 3) & 1; b <<= 1;
+                    b |= (l >> 6) & 1; b <<= 1;
+                    b |= (l >> 5) & 1; b <<= 1;
+                    b |= (l >> 2) & 1;
+                    */
+                    img.put_pixel(x as u32, y as u32, Rgb([g,r,b/*t,h,l*/]));
                 }
             }
             ImageRgb8(img).save(&mut f, PNG).unwrap();
@@ -313,12 +367,18 @@ impl<A:Ai> Client<A> {
 }
 
 fn main () {
+    let mut log_open_options = std::fs::OpenOptions::new();
+    let log_open_options = log_open_options.create(true).read(true).write(true).truncate(true);
     let logger_config = fern::DispatchConfig {
         format: Box::new( |msg: &str, level: &log::LogLevel, _location: &log::LogLocation| {
             //format!("[{}][{}] {}", time::now().strftime("%Y-%m-%d][%H:%M:%S").unwrap(), level, msg)
+            //TODO prefix logs with timestamp(absolute/relative), file name, line number, function name
             format!("[{}] {}", level, msg)
         }),
-        output: vec![/*fern::OutputConfig::stdout(),*/ fern::OutputConfig::file("log")],
+        output: vec![
+            //fern::OutputConfig::stdout(), //TODO colorize stdout output: ERROR is RED, WARN is YELLOW etc
+            fern::OutputConfig::file_with_options("log", &log_open_options)
+        ],
         level: log::LogLevelFilter::Trace,
     };
 
@@ -326,25 +386,15 @@ fn main () {
         panic!("Failed to initialize global logger: {}", e);
     }
     
-    //trace!("Trace message");
-    //debug!("Debug message");
-    //info!("Info message");
-    //warn!("Warning message");
-    //error!("Error message");
+    trace!("Starting...");
+    debug!("Starting...");
+    info!("Starting...");
+    warn!("Starting...");
+    error!("Starting...");
     
     //TODO handle keyboard interrupt
     //TODO replace all unwraps with normal error handling
-    //TODO ADD tests:
-    //        for i in range(0u8, 255) {
-    //            let mut v = Vec::new();
-    //            v.push(i);
-    //            info!("{}", Message::from_buf(v.as_slice()));
-    //        }
-    //TODO highlight ERRORs with RED console color
-    //TODO various formatters for Message and other structs output (full, short, type only)
-    //TODO print timestamps for all the printlns
-    //TODO FIXME use NOM (https://github.com/Geal/nom)
-    //TODO FIXME use rusty-tags (https://github.com/dan-t/rusty-tags)
+    //TODO various formatters for Message and other structs output (full "{:f}", short "{:s}", type only "{:t}")
 
     let args: Vec<String> = std::env::args().collect();
     if args.len() < 3 || args.len() > 3 {
