@@ -919,6 +919,7 @@ impl State {
         }
     }
 
+    #[allow(dead_code)]
     pub fn start_point (&self) -> Option<(i32,i32)> {
         self.hero.start_xy
     }

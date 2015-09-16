@@ -53,7 +53,22 @@ pub struct DstWdg {
 #[derive(Debug)]
 pub struct MapIv;
 #[derive(Debug)]
-pub struct GlobLob;
+pub enum Glob {
+    Time {
+        time: i32,
+        season: u8,
+        inc: u8
+    },
+    Light {
+        amb: (u8, u8, u8, u8), //TODO Color type
+        dif: (u8, u8, u8, u8), //TODO Color type
+        spc: (u8, u8, u8, u8), //TODO Color type
+        ang: i32,
+        ele: i32,
+        inc: u8
+    },
+    Sky ( Option<(u16,Option<(u16,i32)>)> ) // (resid1,resid2,blend)
+}
 #[derive(Debug)]
 pub struct Paginae;
 #[derive(Debug)]
@@ -100,7 +115,7 @@ pub enum RelElem {
     WDGMSG(WdgMsg),
     DSTWDG(DstWdg),
     MAPIV(MapIv),
-    GLOBLOB(GlobLob),
+    GLOBLOB(Vec<Glob>),
     PAGINAE(Paginae),
     RESID(ResId),
     PARTY(Party),
@@ -244,9 +259,9 @@ pub fn read_list (r : &mut Cursor<&[u8]>) -> Vec<MsgList> /*TODO return Result i
             },
             /*T_COLOR  */  6  => {
                 list[deep].push(MsgList::tCOLOR( (r.read_u8().unwrap(),
-                                            r.read_u8().unwrap(),
-                                            r.read_u8().unwrap(),
-                                            r.read_u8().unwrap()) ));
+                                                  r.read_u8().unwrap(),
+                                                  r.read_u8().unwrap(),
+                                                  r.read_u8().unwrap()) ));
             },
             /*T_INT8   */  9  => {
                 list[deep].push(MsgList::tINT8( r.read_i8().unwrap() ));
@@ -323,7 +338,60 @@ impl RelElem {
                 Ok( RelElem::DSTWDG( DstWdg{ id:id } ) )
             },
             3  /*MAPIV*/   => { Ok( RelElem::MAPIV(MapIv) ) },
-            4  /*GLOBLOB*/ => { Ok( RelElem::GLOBLOB(GlobLob) ) },
+            4  /*GLOBLOB*/ => {
+                let mut globs = Vec::new();
+                let inc = r.read_u8().unwrap();
+                loop {
+                    let t = match r.read_u8() {
+                        Ok(b) => b,
+                        Err(_) => break //TODO check error type
+                    };
+                    globs.push( match t {
+                        0 /*GMSG_TIME*/ => {
+                            Glob::Time {
+                                time: r.read_i32::<le>().unwrap(),
+                                season: r.read_u8().unwrap(),
+                                inc: inc
+                            }
+                        }
+                        /*1 /*GMSG_ASTRO*/ =>*/
+                        2 /*GMSG_LIGHT*/ => {
+                            Glob::Light { 
+                                amb: (r.read_u8().unwrap(), r.read_u8().unwrap(), r.read_u8().unwrap(), r.read_u8().unwrap()),
+                                dif: (r.read_u8().unwrap(), r.read_u8().unwrap(), r.read_u8().unwrap(), r.read_u8().unwrap()),
+                                spc: (r.read_u8().unwrap(), r.read_u8().unwrap(), r.read_u8().unwrap(), r.read_u8().unwrap()),
+                                ang: r.read_i32::<le>().unwrap(),
+                                ele: r.read_i32::<le>().unwrap(),
+                                inc: inc
+                            }
+                        }
+                        3 /*GMSG_SKY*/ => {
+                            use std::u16;
+                            let id1 = r.read_u16::<le>().unwrap();
+                            Glob::Sky(
+                                if id1 == u16::MAX {
+                                    None
+                                } else {
+                                    let id2 = r.read_u16::<le>().unwrap();
+                                    if id2 == u16::MAX {
+                                        Some((
+                                            id1, None
+                                        ))
+                                    } else {
+                                        Some((
+                                            id1, Some((
+                                                id2, r.read_i32::<le>().unwrap()
+                                            ))
+                                        ))
+                                    }
+                                }
+                            )
+                        }
+                        _ => return Err( Error{ source:"unknown GLOBLOB type", detail:None })
+                    });
+                }
+                Ok( RelElem::GLOBLOB( globs ))
+            },
             5  /*PAGINAE*/ => { Ok( RelElem::PAGINAE(Paginae) ) },
             6  /*RESID*/   => {
                 let id = try!(r.read_u16::<le>());
@@ -339,8 +407,8 @@ impl RelElem {
                 let mut tiles = Vec::new();
                 loop {
                     let id = match r.read_u8() {
-                        Ok(b) => {b}
-                        Err(_) => {break;}
+                        Ok(b) => b,
+                        Err(_) => break //TODO check error type
                     };
                     let name = r.read_strz().unwrap();
                     let ver = try!(r.read_u16::<le>());

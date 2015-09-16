@@ -16,7 +16,7 @@ pub enum Event {
     //AI(...ai desigions...),
         // AI: going to pick obj (ID)
         // AI: going by path (PATH CHAIN)
-    Input,
+    //Input,
 }
 
 pub struct Render {
@@ -38,7 +38,7 @@ impl Render {
             
             loop {
                 match rx.recv() {
-                    Ok(value) => {
+                    Ok(_) => {
                     }
                     Err(_) => {
                         info!("render: disconnected");
