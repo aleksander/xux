@@ -105,6 +105,7 @@ pub struct Hero {
     pub tmexp: Option<i32>,
     pub hearthfire: Option<(i32,i32)>, //TODO unify coords
     pub inventory: HashMap<(i32,i32),u16>, //TODO unify coords
+    pub equipment: HashMap<u8,u16>,
     pub start_xy: Option<(i32,i32)>,
 }
 
@@ -253,6 +254,7 @@ pub struct State {
     pub hero        : Hero,
     pub map         : Map,
         events      : LinkedList<Event>,
+        origin      : Option<(i32,i32)>
 }
 
 impl State {
@@ -278,10 +280,12 @@ impl State {
                 tmexp: None,
                 hearthfire: None,
                 inventory: HashMap::new(),
+                equipment: HashMap::new(),
                 start_xy: None,
             },
             map: Map{ partial: HashMap::new(), grids: HashMap::new() },
             events: LinkedList::new(),
+            origin: None
         }
     }
 
@@ -341,10 +345,10 @@ impl State {
             Err(err) => { info!("message parse error: {:?}", err); return Err(err); },
         };
 
-        info!("RX: {:?}", msg);
+        debug!("RX: {:?}", msg);
         
         if let Some(remains) = remains {
-            info!("                 REMAINS {} bytes", remains.len());
+            debug!("                 REMAINS {} bytes", remains.len());
         }
 
         match msg {
@@ -441,6 +445,14 @@ impl State {
 
                         obj.frame = Some(o.frame);
 
+                        //TODO:
+                        // let new_obj = props_to_object(&o.prop);
+                        // if new_obj == None {
+                        //     objects.remove(o.id)
+                        // } else {
+                        //     let old_obj = objects.get(o.id);
+                        //     old_obj.update(new_obj);
+                        // }
                         for prop in &o.prop {
                             match *prop {
                                 ObjProp::odREM => { to_remove = true; break; }
@@ -484,6 +496,10 @@ impl State {
 
                         if let Some(xy) = obj.xy {
                             self.events.push_front(Event::Obj(xy));
+                            
+                            if let Some(id) = self.hero.obj {
+                                //TODO request_any_new_grids()
+                            }
                         }
                     }
 
@@ -586,16 +602,32 @@ impl State {
                     self.update_grids_around();
                 }
             }
+            "mapview" => {
+                if let Some(&MsgList::tCOORD(xy)) = wdg.cargs.get(0) {
+                    self.origin = Some(xy);
+                    info!("origin = '{:?}'", self.origin);
+                }
+            }
             "item" => {
                 if let Some(parent) = self.widgets.get(&(wdg.parent)) {
-                    if parent.typ == "inv" {
-                        //8 "item", pargs: [tCOORD((2, 1))], cargs: [tUINT16(2529)] }
-                        if let Some(&MsgList::tCOORD((x,y))) = wdg.pargs.get(0) {
-                            if let Some(&MsgList::tUINT16(id)) = wdg.cargs.get(0) {
-                                self.hero.inventory.insert((x,y), id);
-                                info!("HERO: inventory: {:?}", self.hero.inventory);
+                    match &*parent.typ {
+                        "inv" => {
+                            if let Some(&MsgList::tCOORD((x,y))) = wdg.pargs.get(0) {
+                                if let Some(&MsgList::tUINT16(id)) = wdg.cargs.get(0) {
+                                    self.hero.inventory.insert((x,y), id);
+                                    info!("HERO: inventory: {:?}", self.hero.inventory);
+                                }
                             }
                         }
+                        "epry" => {
+                            if let Some(&MsgList::tUINT8(i)) = wdg.pargs.get(0) {
+                                if let Some(&MsgList::tUINT16(id)) = wdg.cargs.get(0) {
+                                    self.hero.equipment.insert(i, id);
+                                    info!("HERO: equipment: {:?}", self.hero.inventory);
+                                }
+                            }
+                        }
+                        _ => {}
                     }
                 }
             }

@@ -16,7 +16,7 @@ pub enum Event {
     //AI(...ai desigions...),
         // AI: going to pick obj (ID)
         // AI: going by path (PATH CHAIN)
-    //Input,
+    Input,
 }
 
 pub struct Render {
@@ -33,6 +33,7 @@ impl Render {
     pub fn new () -> Render {
         let (tx,rx) = channel();
 
+/* NO UI
         thread::spawn(move || {
             //use std::sync::mpsc::RecvError;
             
@@ -47,16 +48,19 @@ impl Render {
                 }
             }
         });
+*/
 
-/* ncurses TUI
-FIXME: could alternatively use: rustbox, rustty
+        /* ncurses TUI
+        FIXME: could alternatively use: rustbox, rustty */
         initscr();
+        //FIXME this is not working. cursor is still visible (probably bindings bug)
+        curs_set(CURSOR_VISIBILITY::CURSOR_INVISIBLE);
 
         thread::spawn(move || {
             //use std::sync::mpsc::RecvError;
             
             let mut counter = 0;
-            let mut last_event = "NONE            ".to_owned();
+            let mut last_event = "NONE".to_owned();
             loop {
                 clear();
                 mvprintw(0, 0, &format!("counter: {} ", counter));
@@ -67,13 +71,13 @@ FIXME: could alternatively use: rustbox, rustty
                         counter += 1;
                         match value {
                             Event::Grid(x,y,/*tiles*/_,/*z*/_) => {
-                                last_event = format!("GRID: {} {}              ", x, y);
+                                last_event = format!("GRID: {} {}", x, y);
                             }
                             Event::Obj(x,y) => {
-                                last_event = format!("OBJ: {} {}               ", x, y);
+                                last_event = format!("OBJ: {} {}", x, y);
                             }
                             Event::Input => {
-                                last_event = format!("INPUT                       ");
+                                last_event = format!("INPUT");
                             }
                         }
                     }
@@ -95,7 +99,6 @@ FIXME: could alternatively use: rustbox, rustty
                 }
             }
         });
-*/
 
 /* 3D UI
         thread::spawn(move || {
