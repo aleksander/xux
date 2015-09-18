@@ -626,6 +626,7 @@ impl State {
                 }
                 if let Some(&MsgList::tINT(obj)) = wdg.cargs.get(1) {
                     //FIXME BUG: object ID is uint32 but here it is int32 WHY??? XXX
+                    assert!(obj >= 0);
                     self.hero.obj = Some(obj as u32);
                     info!("HERO: obj = '{:?}'", self.hero.obj);
 
