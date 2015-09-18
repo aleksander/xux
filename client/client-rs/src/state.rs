@@ -35,7 +35,7 @@ use message::Message;
 use message::MessageDirection;
 use message::Error;
 use message::SessError;
-use message::ObjProp;
+use message::ObjDataElemProp;
 use message::MsgList;
 use message::Ack;
 use message::ObjAck;
@@ -52,20 +52,99 @@ extern crate flate2;
 //use std::io::prelude::*;
 use self::flate2::read::ZlibDecoder;
 
+pub type Resid = u16;
+pub type Coord = (i32,i32);
+
+struct ObjProp {
+    xy: Option<Coord>,
+    resid: Option<Resid>, //TODO replace with Vec<resid> for composite objects
+    line: Option<(Coord,Coord,i32)>, //TODO replace with struct LinearMovement
+    step: Option<i32>
+}
+
+impl ObjProp {
+    fn new () -> Self {
+        ObjProp { xy: None, resid: None, line: None, step: None }
+    }
+    
+    fn from_obj_data_elem_prop (odep: &[ObjDataElemProp]) -> Option<Self> {
+        let mut prop = Self::new();
+        for p in odep {
+            match *p {
+                ObjDataElemProp::odREM => { return None; }
+                ObjDataElemProp::odMOVE(xy,_) => { prop.xy = Some(xy); }
+                ObjDataElemProp::odRES(resid) => { prop.resid = Some(resid); }
+                ObjDataElemProp::odCOMPOSE(resid) => { prop.resid = Some(resid); }
+                ObjDataElemProp::odLINBEG(from,to,steps) => { prop.line = Some((from,to,steps)); }
+                ObjDataElemProp::odLINSTEP(step) => { prop.step = Some(step); }
+                _ => {}
+            }
+        }
+        Some(prop)
+    }
+}
+
+#[derive(Debug)]
 pub struct Obj {
     pub id : u32, //TODO maybe remove this? because this is also a key field in objects hashmap
-    pub resid : Option<u16>,
     pub frame : Option<i32>,
-    pub xy : Option<(i32,i32)>, //TODO unify coords
+    pub resid : Option<Resid>,
+    pub xy : Option<Coord>,
     pub movement : Option<Movement>,
 }
 
-#[derive(Clone,Copy)]
+impl Obj {
+    fn new (id: u32, frame: Option<i32>, resid: Option<Resid>, xy: Option<Coord>, movement: Option<Movement>) -> Obj {
+        Obj { id: id, frame: frame, resid: resid, xy: xy, movement: movement }
+    }
+
+    fn update (&mut self, prop: &ObjProp) {
+        if let Some(resid) = prop.resid {
+            self.resid = Some(resid);
+        }
+
+        if let Some(xy) = prop.xy {
+            self.xy = Some(xy);
+        }
+
+        if let Some((from,to,steps)) = prop.line {
+            self.movement = Some(Movement::new(from, to, steps, 0));
+        }
+
+        if let Some(step) = prop.step {
+            let movement = match self.movement {
+                Some(ref m) => {
+                    if (step > 0) && (step < m.steps) {
+                        if step <= m.step {
+                            warn!("odLINSTEP step <= m.step");
+                        }
+                        Some(Movement::new(m.from, m.to, m.steps, step))
+                    } else {
+                        None
+                    }
+                }
+                None => {
+                    warn!("odLINSTEP({}) while movement == None", step);
+                    None
+                }
+            };
+            self.movement = movement;
+        }
+    }
+}
+
+#[derive(Clone,Copy,Debug)]
 pub struct Movement {
-    pub from: (i32,i32), //TODO unify coords
-    pub to: (i32,i32), //TODO unify coords
+    pub from: Coord,
+    pub to: Coord,
     pub steps: i32,
     pub step: i32,
+}
+
+impl Movement {
+    fn new (from: Coord, to: Coord, steps: i32, step: i32) -> Movement {
+        Movement { from: from, to: to, steps: steps, step: step }
+    }
 }
 
 #[derive(Clone)]
@@ -103,10 +182,10 @@ pub struct Hero {
     pub obj: Option<u32>,
     pub weight: Option<u16>,
     pub tmexp: Option<i32>,
-    pub hearthfire: Option<(i32,i32)>, //TODO unify coords
-    pub inventory: HashMap<(i32,i32),u16>, //TODO unify coords
+    pub hearthfire: Option<Coord>,
+    pub inventory: HashMap<Coord,u16>,
     pub equipment: HashMap<u8,u16>,
-    pub start_xy: Option<(i32,i32)>,
+    pub start_xy: Option<Coord>,
 }
 
 pub struct MapPieces {
@@ -128,7 +207,7 @@ pub type PacketId = i32;
 
 pub struct Map {
     pub partial: HashMap<PacketId,MapPieces>, //TODO somehow clean up from old pieces (periodically or whatever)
-    pub grids: HashMap<(i32,i32)/*TODO struct Coord*/,(String,i64)/*TODO struct GridHint*/>,
+    pub grids: HashMap<Coord,(String,i64)/*TODO struct GridHint*/>,
 }
 
 impl Map {
@@ -236,7 +315,7 @@ impl Map {
 
 pub enum Event {
     Grid(i32,i32,Vec<u8>,Vec<i16>), //TODO struct Grid { x: i32, y: i32, tiles: Vec<u8>, z: Vec<i16> }
-    Obj((i32,i32)),
+    Obj(Coord),
 }
 
 pub struct State {
@@ -254,7 +333,7 @@ pub struct State {
     pub hero        : Hero,
     pub map         : Map,
         events      : LinkedList<Event>,
-        origin      : Option<(i32,i32)>
+        origin      : Option<Coord>
 }
 
 impl State {
@@ -431,80 +510,36 @@ impl State {
                     //          }
                     //      }
 
-                    let mut to_remove = false;
+                    match ObjProp::from_obj_data_elem_prop(&o.prop) {
+                        Some(new_obj_prop) => {
+                            let obj = self.objects.entry(o.id).or_insert(Obj::new(o.id, None, None, None, None));
 
-                    {
-                        let obj = self.objects.entry(o.id).or_insert(Obj{id:o.id, frame:None, resid:None, xy:None, movement:None});
-
-                        //FIXME consider o.frame overflow !!!
-                        if let Some(frame) = obj.frame {
-                            if o.frame <= frame {
-                                continue;
-                            }
-                        }
-
-                        obj.frame = Some(o.frame);
-
-                        //TODO:
-                        // let new_obj = props_to_object(&o.prop);
-                        // if new_obj == None {
-                        //     objects.remove(o.id)
-                        // } else {
-                        //     let old_obj = objects.get(o.id);
-                        //     old_obj.update(new_obj);
-                        // }
-                        for prop in &o.prop {
-                            match *prop {
-                                ObjProp::odREM => { to_remove = true; break; }
-                                ObjProp::odMOVE(xy,_) => { obj.xy = Some(xy); }
-                                ObjProp::odRES(resid) => { obj.resid = Some(resid); }
-                                ObjProp::odCOMPOSE(resid) => { obj.resid = Some(resid); }
-                                ObjProp::odLINBEG(xy1,xy2,steps) => {
-                                    obj.movement = Some(Movement{
-                                        from: xy1,
-                                        to: xy2,
-                                        steps: steps,
-                                        step: 0
-                                    })
+                            //FIXME consider o.frame overflow !!!
+                            if let Some(frame) = obj.frame {
+                                if o.frame <= frame {
+                                    continue;
                                 }
-                                ObjProp::odLINSTEP(step) => {
-                                    let movement = match obj.movement {
-                                        Some(ref m) => {
-                                            if (step > 0) && (step < m.steps) {
-                                                if step <= m.step {
-                                                    info!("WARNING: odLINSTEP step <= m.step");
-                                                }
-                                                Some(Movement{
-                                                    from: m.from,
-                                                    to: m.to,
-                                                    steps: m.steps,
-                                                    step: step })
-                                            } else {
-                                                None
-                                            }
-                                        }
-                                        None => {
-                                            info!("WARNING: odLINSTEP({}) while movement == None", step);
-                                            None
-                                        }
-                                    };
-                                    obj.movement = movement;
+                            }
+
+                            obj.frame = Some(o.frame);
+                            obj.update(&new_obj_prop);
+
+                            if let Some(xy) = obj.xy {
+                                self.events.push_front(Event::Obj(xy));
+
+                                if let Some(_) = self.hero.obj {
+                                    //TODO request_any_new_grids()
                                 }
-                                _ => {}
                             }
-                        }
 
-                        if let Some(xy) = obj.xy {
-                            self.events.push_front(Event::Obj(xy));
-                            
-                            if let Some(id) = self.hero.obj {
-                                //TODO request_any_new_grids()
-                            }
+                            info!("OBJ: {:?}", obj);
                         }
-                    }
+                        None => {
+                            self.objects.remove(&o.id);
+                            //TODO send Event::ObjRemove(id)
 
-                    if to_remove {
-                        self.objects.remove(&o.id);
+                            info!("OBJ: {} removed", o.id);
+                        }
                     }
                 }
             },
@@ -623,7 +658,7 @@ impl State {
                             if let Some(&MsgList::tUINT8(i)) = wdg.pargs.get(0) {
                                 if let Some(&MsgList::tUINT16(id)) = wdg.cargs.get(0) {
                                     self.hero.equipment.insert(i, id);
-                                    info!("HERO: equipment: {:?}", self.hero.inventory);
+                                    info!("HERO: equipment: {:?}", self.hero.equipment);
                                 }
                             }
                         }
@@ -902,14 +937,14 @@ impl State {
         }
     }
 
-    pub fn hero_xy (&self) -> Option<(i32,i32)> {
+    pub fn hero_xy (&self) -> Option<Coord> {
         match self.hero_obj() {
             Some(hero) => hero.xy,
             None => None
         }
     }
 
-    pub fn hero_grid_xy (&self) -> Option<(i32,i32)> {
+    pub fn hero_grid_xy (&self) -> Option<Coord> {
         match self.hero_xy() {
             Some(xy) => Some(grid(xy)),
             None => None
@@ -952,7 +987,7 @@ impl State {
     }
 
     #[allow(dead_code)]
-    pub fn start_point (&self) -> Option<(i32,i32)> {
+    pub fn start_point (&self) -> Option<Coord> {
         self.hero.start_xy
     }
 
@@ -961,7 +996,7 @@ impl State {
     }
 }
 
-pub fn grid ((x,y): (i32,i32)) -> (i32,i32) {
+pub fn grid ((x,y): Coord) -> Coord {
     let mut gx = x / 1100; if x < 0 { gx -= 1; }
     let mut gy = y / 1100; if y < 0 { gy -= 1; }
     (gx,gy)

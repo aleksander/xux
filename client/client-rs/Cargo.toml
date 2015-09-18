@@ -26,6 +26,9 @@ log = "*"
 fern = "*"
 #clippy = "*"
 
+#[dependencies.ncurses]
+#path = "../../../ncurses-rs"
+
 #[dependencies.openssl]
 #openssl = "0.5.5"
 #git = "git://github.com/sfackler/rust-openssl"

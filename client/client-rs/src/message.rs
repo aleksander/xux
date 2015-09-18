@@ -543,7 +543,7 @@ pub struct ObjDataElem {
     pub fl    : u8,
     pub id    : u32,
     pub frame : i32,
-    pub prop  : Vec<ObjProp>,
+    pub prop  : Vec<ObjDataElemProp>,
 }
 #[derive(Debug)]
 pub struct ObjAck {
@@ -606,7 +606,7 @@ pub enum ServerMessage {
 #[allow(non_camel_case_types)]
 #[derive(Debug)]
 //TODO replace with plain struct variants
-pub enum ObjProp {
+pub enum ObjDataElemProp {
     odREM,
     odMOVE((i32,i32),u16),
     odRES(u16),
@@ -654,17 +654,17 @@ pub enum odICON {
     Del,
 }
 
-impl ObjProp {
-    pub fn from_buf (r : &mut Cursor<&[u8]>) -> Result<Option<ObjProp>,Error> {
+impl ObjDataElemProp {
+    pub fn from_buf (r : &mut Cursor<&[u8]>) -> Result<Option<ObjDataElemProp>,Error> {
         let t = try!(r.read_u8()) as usize;
         match t {
             0   /*OD_REM*/ => {
-                Ok(Some(ObjProp::odREM))
+                Ok(Some(ObjDataElemProp::odREM))
             },
             1   /*OD_MOVE*/ => {
                 let xy = (try!(r.read_i32::<le>()), try!(r.read_i32::<le>()));
                 let ia = try!(r.read_u16::<le>());
-                Ok(Some(ObjProp::odMOVE(xy,ia)))
+                Ok(Some(ObjDataElemProp::odMOVE(xy,ia)))
             },
             2   /*OD_RES*/ => {
                 let mut resid = try!(r.read_u16::<le>());
@@ -677,36 +677,36 @@ impl ObjProp {
                         tmp
                     };
                 }
-                Ok(Some(ObjProp::odRES(resid)))
+                Ok(Some(ObjDataElemProp::odRES(resid)))
             },
             3   /*OD_LINBEG*/ => {
                 let s = (try!(r.read_i32::<le>()), try!(r.read_i32::<le>()));
                 let t = (try!(r.read_i32::<le>()), try!(r.read_i32::<le>()));
                 let c = try!(r.read_i32::<le>());
-                Ok(Some(ObjProp::odLINBEG(s,t,c)))
+                Ok(Some(ObjDataElemProp::odLINBEG(s,t,c)))
             },
             4   /*OD_LINSTEP*/ => {
                 let l = try!(r.read_i32::<le>());
-                Ok(Some(ObjProp::odLINSTEP(l)))
+                Ok(Some(ObjDataElemProp::odLINSTEP(l)))
             },
             5   /*OD_SPEECH*/ => {
                 let zo = try!(r.read_u16::<le>());
                 let text = r.read_strz().unwrap();
-                Ok(Some(ObjProp::odSPEECH(zo,text)))
+                Ok(Some(ObjDataElemProp::odSPEECH(zo,text)))
             },
             6   /*OD_COMPOSE*/ => {
                 let resid = try!(r.read_u16::<le>());
-                Ok(Some(ObjProp::odCOMPOSE(resid)))
+                Ok(Some(ObjDataElemProp::odCOMPOSE(resid)))
             },
             7   /*OD_DRAWOFF*/ => {
                 let off = (try!(r.read_i32::<le>()), try!(r.read_i32::<le>()));
-                Ok(Some(ObjProp::odDRAWOFF(off)))
+                Ok(Some(ObjDataElemProp::odDRAWOFF(off)))
             },
             8   /*OD_LUMIN*/ => {
                 let off = (try!(r.read_i32::<le>()), try!(r.read_i32::<le>()));
                 let sz = try!(r.read_u16::<le>());
                 let str_ = try!(r.read_u8());
-                Ok(Some(ObjProp::odLUMIN(off,sz,str_)))
+                Ok(Some(ObjDataElemProp::odLUMIN(off,sz,str_)))
             },
             9   /*OD_AVATAR*/ => {
                 let mut layers = Vec::new();
@@ -717,33 +717,33 @@ impl ObjProp {
                     }
                     layers.push(layer);
                 }
-                Ok(Some(ObjProp::odAVATAR(layers)))
+                Ok(Some(ObjDataElemProp::odAVATAR(layers)))
             },
             10  /*OD_FOLLOW*/ => {
                 let oid = try!(r.read_u32::<le>());
                 if oid == 0xff_ff_ff_ff {
-                    Ok(Some(ObjProp::odFOLLOW(odFOLLOW::Stop)))
+                    Ok(Some(ObjDataElemProp::odFOLLOW(odFOLLOW::Stop)))
                 } else {
                     let xfres = try!(r.read_u16::<le>());
                     let xfname = r.read_strz().unwrap();
-                    Ok(Some(ObjProp::odFOLLOW(odFOLLOW::To(oid,xfres,xfname))))
+                    Ok(Some(ObjDataElemProp::odFOLLOW(odFOLLOW::To(oid,xfres,xfname))))
                 }
             },
             11  /*OD_HOMING*/ => {
                 let oid = try!(r.read_u32::<le>());
                 match oid {
                     0xff_ff_ff_ff => {
-                        Ok(Some(ObjProp::odHOMING(odHOMING::Delete)))
+                        Ok(Some(ObjDataElemProp::odHOMING(odHOMING::Delete)))
                     },
                     0xff_ff_ff_fe => {
                         let tgtc = (try!(r.read_i32::<le>()), try!(r.read_i32::<le>()));
                         let v = try!(r.read_u16::<le>());
-                        Ok(Some(ObjProp::odHOMING(odHOMING::Change(tgtc,v))))
+                        Ok(Some(ObjDataElemProp::odHOMING(odHOMING::Change(tgtc,v))))
                     },
                     _             => {
                         let tgtc = (try!(r.read_i32::<le>()), try!(r.read_i32::<le>()));
                         let v = try!(r.read_u16::<le>());
-                        Ok(Some(ObjProp::odHOMING(odHOMING::New(tgtc,v))))
+                        Ok(Some(ObjDataElemProp::odHOMING(odHOMING::New(tgtc,v))))
                     }
                 }
             },
@@ -758,14 +758,14 @@ impl ObjProp {
                         tmp
                     };
                 }
-                Ok(Some(ObjProp::odOVERLAY( resid&(!0x8000) )))
+                Ok(Some(ObjDataElemProp::odOVERLAY( resid&(!0x8000) )))
             },
             13  /*OD_AUTH*/   => {
-                Ok(Some(ObjProp::odAUTH)) // Removed
+                Ok(Some(ObjDataElemProp::odAUTH)) // Removed
             },
             14  /*OD_HEALTH*/ => {
                 let hp = try!(r.read_u8());
-                Ok(Some(ObjProp::odHEALTH(hp)))
+                Ok(Some(ObjDataElemProp::odHEALTH(hp)))
             },
             15  /*OD_BUDDY*/ => {
                 let name = r.read_strz().unwrap();
@@ -773,11 +773,11 @@ impl ObjProp {
                 //          so this check is incorrect, I SUPPOSE.
                 //          MOST PROBABLY we will crash here because 2 more readings.
                 if name.is_empty() {
-                    Ok(Some(ObjProp::odBUDDY(odBUDDY::Delete)))
+                    Ok(Some(ObjDataElemProp::odBUDDY(odBUDDY::Delete)))
                 } else {
                     let group = try!(r.read_u8());
                     let btype = try!(r.read_u8());
-                    Ok(Some(ObjProp::odBUDDY(odBUDDY::Update(name,group,btype))))
+                    Ok(Some(ObjDataElemProp::odBUDDY(odBUDDY::Update(name,group,btype))))
                 }
             },
             16  /*OD_CMPPOSE*/ => {
@@ -834,7 +834,7 @@ impl ObjProp {
                 } else {
                     None
                 };
-                Ok(Some(ObjProp::odCMPPOSE(seq,ids1,ids2)))
+                Ok(Some(ObjDataElemProp::odCMPPOSE(seq,ids1,ids2)))
             },
             17  /*OD_CMPMOD*/ => {
                 let mut m = Vec::new();
@@ -856,7 +856,7 @@ impl ObjProp {
                 } else {
                     None
                 };
-                Ok(Some(ObjProp::odCMPMOD(mods)))
+                Ok(Some(ObjDataElemProp::odCMPMOD(mods)))
             },
             18  /*OD_CMPEQU*/ => {
                 let mut e = Vec::new();
@@ -880,15 +880,15 @@ impl ObjProp {
                 } else {
                     None
                 };
-                Ok(Some(ObjProp::odCMPEQU(equ)))
+                Ok(Some(ObjDataElemProp::odCMPEQU(equ)))
             },
             19  /*OD_ICON*/ => {
                 let resid = try!(r.read_u16::<le>());
                 if resid == 65535 {
-                    Ok(Some(ObjProp::odICON(odICON::Del)))
+                    Ok(Some(ObjDataElemProp::odICON(odICON::Del)))
                 } else {
                     let /*ifl*/ _ = try!(r.read_u8());
-                    Ok(Some(ObjProp::odICON(odICON::Set(resid))))
+                    Ok(Some(ObjDataElemProp::odICON(odICON::Set(resid))))
                 }
             },
             255 /*OD_END*/ => {
@@ -1011,7 +1011,7 @@ impl Message {
                     let id = try!(r.read_u32::<le>());
                     let frame = try!(r.read_i32::<le>());
                     let mut prop = Vec::new();
-                    while let Some(p) = try!(ObjProp::from_buf(&mut r)) { prop.push(p) }
+                    while let Some(p) = try!(ObjDataElemProp::from_buf(&mut r)) { prop.push(p) }
                     obj.push( ObjDataElem{ fl:fl, id:id, frame:frame, prop:prop } );
                 }
                 Ok( Message::OBJDATA( ObjData{ obj : obj } ) )

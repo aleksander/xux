@@ -50,15 +50,15 @@ impl Render {
         });
 */
 
-        /* ncurses TUI
-        FIXME: could alternatively use: rustbox, rustty */
+/* ncurses TUI */
+        //FIXME: could alternatively use: rustbox, rustty
         initscr();
-        //FIXME this is not working. cursor is still visible (probably bindings bug)
-        curs_set(CURSOR_VISIBILITY::CURSOR_INVISIBLE);
+
+        if let None = curs_set(CURSOR_VISIBILITY::CURSOR_INVISIBLE) {
+            warn!("set cursor failed");
+        };
 
         thread::spawn(move || {
-            //use std::sync::mpsc::RecvError;
-            
             let mut counter = 0;
             let mut last_event = "NONE".to_owned();
             loop {
