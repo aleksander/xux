@@ -1,36 +1,36 @@
 use std::{u8, u16, u32, u64, usize};
 
-pub trait ToUnsigned<A> {
-    fn to_unsigned (&self) -> A;
+pub trait ShiftToUnsigned<A> {
+    fn shift_to_unsigned (self) -> A;
 }
 
-impl ToUnsigned<u8> for i8 {
-    fn to_unsigned (&self) -> u8 {
-        *self as u8 ^ (u8::MAX / 2 + 1)
+impl ShiftToUnsigned<u8> for i8 {
+    fn shift_to_unsigned (self) -> u8 {
+        self as u8 ^ (u8::MAX / 2 + 1)
     }
 }
 
-impl ToUnsigned<u16> for i16 {
-    fn to_unsigned (&self) -> u16 {
-        *self as u16 ^ (u16::MAX / 2 + 1)
+impl ShiftToUnsigned<u16> for i16 {
+    fn shift_to_unsigned (self) -> u16 {
+        self as u16 ^ (u16::MAX / 2 + 1)
     }
 }
 
-impl ToUnsigned<u32> for i32 {
-    fn to_unsigned (&self) -> u32 {
-        *self as u32 ^ (u32::MAX / 2 + 1)
+impl ShiftToUnsigned<u32> for i32 {
+    fn shift_to_unsigned (self) -> u32 {
+        self as u32 ^ (u32::MAX / 2 + 1)
     }
 }
 
-impl ToUnsigned<u64> for i64 {
-    fn to_unsigned (&self) -> u64 {
-        *self as u64 ^ (u64::MAX / 2 + 1)
+impl ShiftToUnsigned<u64> for i64 {
+    fn shift_to_unsigned (self) -> u64 {
+        self as u64 ^ (u64::MAX / 2 + 1)
     }
 }
 
-impl ToUnsigned<usize> for isize {
-    fn to_unsigned (&self) -> usize {
-        *self as usize ^ (usize::MAX / 2 + 1)
+impl ShiftToUnsigned<usize> for isize {
+    fn shift_to_unsigned (self) -> usize {
+        self as usize ^ (usize::MAX / 2 + 1)
     }
 }
 

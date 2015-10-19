@@ -123,8 +123,8 @@ mod web;
 
 mod render;
 
-mod to_unsigned;
-use to_unsigned::ToUnsigned;
+mod shift_to_unsigned;
+use shift_to_unsigned::ShiftToUnsigned;
 
 struct Client<A:Ai> {
     render: render::Render,
@@ -213,7 +213,7 @@ impl<A:Ai> Client<A> {
             for x in 0..100 {
                 let t = t[y*100+x];
                 let z = z[y*100+x];
-                let z = z.to_unsigned();
+                let z = z.shift_to_unsigned();
                 let h = (z >> 8) as u8;
                 let l = z as u8;
                 let mut r = 0;
