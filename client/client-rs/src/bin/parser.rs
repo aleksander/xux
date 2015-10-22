@@ -35,7 +35,7 @@ fn main () {
             return;
         };
 
-    let mut f = fs::File::open(&args[1]).unwrap();
+    let mut f = fs::File::open(&args[1]).expect("file::open");
     //let mut buf: Vec<u8> = Vec::new();
     //let _ = fh.read_to_end(&mut buf);
     let mut r = pcapng::SimpleReader::new(&mut f);
@@ -59,21 +59,21 @@ fn main () {
             continue
         }
 
-        let eth = EthernetPacket::new(&packet.data[..]).unwrap();
+        let eth = EthernetPacket::new(&packet.data[..]).expect("eth_pkt::new");
 
         if eth.get_ethertype() != Ipv4 {
             println!("not ipv4 packet");
             continue
         }
 
-        let ip = Ipv4Packet::new(eth.payload()).unwrap();
+        let ip = Ipv4Packet::new(eth.payload()).expect("ipv4_pkt::new");
 
         if ip.get_next_level_protocol() != Udp {
             println!("not udp packet");
             continue
         }
 
-        let udp = UdpPacket::new(ip.payload()).unwrap();
+        let udp = UdpPacket::new(ip.payload()).expect("udp_pkt::new");
 
         let dir = if udp.get_destination() == 1870 {
             MessageDirection::FromClient

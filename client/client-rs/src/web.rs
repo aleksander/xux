@@ -2,7 +2,7 @@ use state::State;
 use std::str;
 
 pub fn responce (buf: &[u8], state: &State) -> String {
-    let buf = str::from_utf8(buf).unwrap();
+    let buf = str::from_utf8(buf).expect("responce.from_utf8");
     info!("render: {:?}", buf);
     if buf.starts_with("GET /") {
         let pattern: &[_] = &['\r','\n'];

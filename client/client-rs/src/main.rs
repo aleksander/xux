@@ -38,18 +38,22 @@ use message::Error;
 mod ai;
 use ai::Ai;
 
-#[cfg(ai = "lua")]
+//TODO #[cfg(ai = "lua")]
+
+#[cfg(ai_lua)]
 mod ai_lua;
-#[cfg(ai = "lua")]
+#[cfg(ai_lua)]
 use ai_lua::LuaAi;
-#[cfg(ai = "lua")]
+#[cfg(ai_lua)]
 type AiImpl = LuaAi;
 
-//#[cfg(ai = "decl")]
+//TODO #[cfg(ai = "decl")]
+
+#[cfg(feature = "ai_decl")]
 mod ai_decl;
-//#[cfg(ai = "decl")]
+#[cfg(feature = "ai_decl")]
 use ai_decl::DeclAi;
-//#[cfg(ai = "decl")]
+#[cfg(feature = "ai_decl")]
 type AiImpl = DeclAi;
 
 extern crate image;
@@ -76,12 +80,18 @@ use std::io::Read;
 use std::io::Write;
 //use std::u16;
 
-#[cfg(driver = "mio")]
+//TODO #[cfg(driver = "mio")]
+
+#[cfg(driver_mio)]
 mod driver_mio;
 
 //TODO #[cfg(driver = "std")]
+
+#[cfg(feature = "driver_std")]
 mod driver_std;
+#[cfg(feature = "driver_std")]
 use driver_std::Driver;
+#[cfg(feature = "driver_std")]
 use driver_std::Event;
 
 //extern crate cgmath;
@@ -142,20 +152,20 @@ impl<A:Ai> Client<A> {
             render: render::Render::new(),
             state: State::new(),
             ai: ai,
-            driver: Driver::new(ip, port).unwrap(),
+            driver: Driver::new(ip, port).expect("driver::new"),
         }
     }
 
     pub fn authorize (ip: IpAddr, port: u16, user: String, pass: String) -> Result<(String,Vec<u8>),Error> {
         let auth_addr = SocketAddr::new(ip, port);
         info!("authorize {} @ {}", user, auth_addr);
-        let stream = std::net::TcpStream::connect(&auth_addr).unwrap();
-        let context = SslContext::new(SslMethod::Sslv23).unwrap();
-        let mut stream = SslStream::new(&context, stream).unwrap();
+        let stream = std::net::TcpStream::connect(&auth_addr).expect("tcpstream::connect");
+        let context = SslContext::new(SslMethod::Sslv23).expect("sslsocket::new");
+        let mut stream = SslStream::new(&context, stream).expect("sslstream::new");
 
         fn msg (buf: Vec<u8>) -> Vec<u8> {
             let mut msg = Vec::new();
-            msg.write_u16::<be>(buf.len() as u16).unwrap();
+            msg.write_u16::<be>(buf.len() as u16).expect("authorize.msg.write(buf.len)");
             msg.extend(buf);
             msg
         }
@@ -177,7 +187,7 @@ impl<A:Ai> Client<A> {
             debug!("msg: {:?}", msg);
             if (msg.len() < "ok\0".len()) || (msg[0] != b'o') || (msg[1] != b'k') || (msg[2] != 0) {
                 //FIXME return raw vec in details, not String
-                return Err(Error{source:"unexpected answer", detail:Some(String::from_utf8(msg).unwrap())});
+                return Err(Error{source:"unexpected answer", detail:Some(String::from_utf8(msg).expect("authorize.command.from_utf8(msg)"))});
             }
             Ok(msg[3..].to_vec())
         }
@@ -191,7 +201,7 @@ impl<A:Ai> Client<A> {
             buf.extend(hash(Type::SHA256, pass.as_bytes()).as_slice());
             let msg = try!(command(&mut stream, buf));
             //FIXME use read_strz analog
-            str::from_utf8(&msg[..msg.len()-1]).unwrap().to_string()
+            str::from_utf8(&msg[..msg.len()-1]).expect("authorize.login.from_utf8()").to_string()
         };
 
         let cookie = { 
@@ -207,7 +217,7 @@ impl<A:Ai> Client<A> {
     //TODO move to Grid
     //TODO grid.to_png(Mapper::first())
     fn grid2png (x: i32, y: i32, t: &[u8], z: &[i16]) {
-        let mut f = File::create(format!("{} {}.png", x, y)).unwrap();
+        let mut f = File::create(format!("{} {}.png", x, y)).expect("grid2png.file.create");
         let mut img = ImageBuffer::new(100, 100);
         for y in 0..100 {
             for x in 0..100 {
@@ -275,13 +285,13 @@ impl<A:Ai> Client<A> {
                 img.put_pixel(x as u32, y as u32, Rgb([g,r,b/*t,h,l*/]));
             }
         }
-        ImageRgb8(img).save(&mut f, PNG).unwrap();
+        ImageRgb8(img).save(&mut f, PNG).expect("grid2png.image.save");
     }
 
     fn send_all_enqueued (&mut self) {
         //TODO use iterator
         while let Some(ebuf) = self.state.tx() {
-            self.driver.tx(&ebuf.buf).unwrap();
+            self.driver.tx(&ebuf.buf).expect("send_all_enqueued");
             if let Some(timeout) = ebuf.timeout {
                 self.driver.timeout(timeout.seq, timeout.ms);
             }
@@ -289,10 +299,10 @@ impl<A:Ai> Client<A> {
     }
 
     fn dispatch_single_event (&mut self) {
-        match self.driver.event().unwrap() {
+        match self.driver.event().expect("dispatch_single_event.event") {
             Event::Rx(buf) => {
                 //info!("event::rx: {} bytes", buf.len());
-                self.state.rx(&buf).unwrap();
+                self.state.rx(&buf).expect("dispatch_single_event.rx");
             }
             Event::Timeout(seq) => {
                 //info!("event::timeout: {} seq", seq);
@@ -300,7 +310,7 @@ impl<A:Ai> Client<A> {
             }
             Event::Tcp((tx,buf)) => {
                 let reply = web::responce(&buf, &self.state);
-                tx.send(reply).unwrap();
+                tx.send(reply).expect("dispatch_single_event.send");
                 //self.driver.reply(reply);
             }
             /*TODO:
@@ -313,7 +323,7 @@ impl<A:Ai> Client<A> {
 
     fn run (&mut self, login: &str, cookie: &[u8]) -> Option<Error> {
         info!("connect {} / {}", login, cookie.to_hex());
-        self.state.connect(login, cookie).unwrap();
+        self.state.connect(login, cookie).expect("run.connect");
 
         loop {
             while let Some(event) = self.state.next_event() {
@@ -395,7 +405,7 @@ fn main () {
     error!("Starting...");
     
     //TODO handle keyboard interrupt
-    //TODO replace all unwraps with normal error handling
+    //TODO replace all unwraps and expects with normal error handling
     //TODO various formatters for Message and other structs output (full "{:f}", short "{:s}", type only "{:t}")
 
     let args: Vec<String> = std::env::args().collect();

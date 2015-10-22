@@ -22,25 +22,25 @@ impl Driver {
         let dst = std::net::SocketAddr::new(ip, port);
 
         let _tx = tx.clone();
-        let _sock = sock.try_clone().unwrap();
+        let _sock = sock.try_clone().expect("driver::new.try_clone(sock)");
         let serv = dst;
         thread::spawn(move || {
             let mut buf = vec![0; 65535];
             loop {
                 //FIXME check the sender ip:port
-                let (len, src) = _sock.recv_from(&mut buf).unwrap();
+                let (len, src) = _sock.recv_from(&mut buf).expect("driver::recv_from(sock)");
                 if src != serv {
                     info!("WARNING: datagram not from serv");
                     continue;
                 }
                 //TODO zero-copy data processing
-                _tx.send(Event::Rx(buf[..len].to_vec())).unwrap();
+                _tx.send(Event::Rx(buf[..len].to_vec())).expect("driver::send(event::rx)");
             }
         });
 
         let _tx = tx.clone();
         thread::spawn(move || {
-            let listener = std::net::TcpListener::bind("127.0.0.1:8080").unwrap();
+            let listener = std::net::TcpListener::bind("127.0.0.1:8080").expect("driver::new.tcp_new");
             for stream in listener.incoming() {
                 match stream {
                     Ok(mut stream) => {
@@ -49,11 +49,11 @@ impl Driver {
                             let mut buf = vec![0; 1024];
                             let (reply_tx, reply_rx) = channel();
                             loop {
-                                let len = stream.read(&mut buf).unwrap();
-                                _tx.send(Event::Tcp( (reply_tx.clone(), buf[..len].to_vec()) )).unwrap();
-                                let reply = reply_rx.recv().unwrap();
+                                let len = stream.read(&mut buf).expect("driver::tcp_stream.read");
+                                _tx.send(Event::Tcp( (reply_tx.clone(), buf[..len].to_vec()) )).expect("driver::send(event::tcp)");
+                                let reply = reply_rx.recv().expect("driver::recv_rx");
                                 //info!("RENDERRED REPLY: {:?}", reply);
-                                let /*len*/_ = stream.write(reply.as_bytes()).unwrap();
+                                let /*len*/_ = stream.write(reply.as_bytes()).expect("strem.write");
                             }
                         });
                     }
@@ -83,7 +83,7 @@ impl Driver {
         let tx = self.tx.clone();
         thread::spawn(move || {
             thread::sleep_ms(ms as u32);
-            tx.send(Event::Timeout(seq)).unwrap();
+            tx.send(Event::Timeout(seq)).expect("driver::timeout.send");
         });
     }
 

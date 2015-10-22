@@ -41,8 +41,8 @@ impl Driver {
         eloop.register_opt(&sock, UDP, Interest::readable() | Interest::writable(), PollOpt::level()).ok().expect("eloop.register(udp)");
 
         let addr: std::net::SocketAddr = str::FromStr::from_str("127.0.0.1:33000").ok().expect("any.from_str");
-        let tcp_listener = TcpListener::bind(&addr).unwrap();
-        eloop.register_opt(&tcp_listener, TCP, Interest::readable(), PollOpt::edge()).unwrap();
+        let tcp_listener = TcpListener::bind(&addr).expect("driver::init.tcp_listener.bind");
+        eloop.register_opt(&tcp_listener, TCP, Interest::readable(), PollOpt::edge()).expect("driver::init.eloop.reg");
 
         let ip = /*client.*/serv_ip;
         
@@ -102,7 +102,7 @@ impl ControlConn {
                         info!("client flushing buf; WOULDBLOCK");
                         //self.buf = Some(buf);
                         //self.interest.insert(Interest::writable());
-                        if let Err(e) = eloop.reregister(&self.sock, self.token.unwrap(), Interest::writable(), PollOpt::edge() | PollOpt::oneshot()) {
+                        if let Err(e) = eloop.reregister(&self.sock, self.token.expect("token.unwrap1"), Interest::writable(), PollOpt::edge() | PollOpt::oneshot()) {
                             info!("ERROR: failed to re-reg for write: {}", e);
                         }
                     }
@@ -113,7 +113,7 @@ impl ControlConn {
                         //self.interest.remove(Interest::writable());
                         //FIXME check that we wrote same byte count as self.responce.len()
                         //FIXME self.responce = None;
-                        if let Err(e) = eloop.reregister(&self.sock, self.token.unwrap(), Interest::readable(), PollOpt::edge() | PollOpt::oneshot()) {
+                        if let Err(e) = eloop.reregister(&self.sock, self.token.expect("token.unwrap2"), Interest::readable(), PollOpt::edge() | PollOpt::oneshot()) {
                             info!("ERROR: failed to re-reg for read: {}", e);
                         }
                     }
@@ -479,7 +479,7 @@ impl ControlConn {
                 }
                 //self.interest.remove(Interest::readable());
                 //self.interest.insert(Interest::writable());
-                eloop.reregister(&self.sock, self.token.unwrap(), Interest::writable(), PollOpt::edge()).unwrap();
+                eloop.reregister(&self.sock, self.token.expect("token.unwrap3"), Interest::writable(), PollOpt::edge()).expect("readable.eloop.reregister");
             }
             Err(e) => {
                 info!("not implemented; client err={:?}", e);
@@ -522,7 +522,7 @@ impl/*<'a>*/ AnyHandler/*<'a>*/ {
 
     fn accept (&mut self, eloop: &mut EventLoop<AnyHandler>) -> std::io::Result<()> {
         info!("TCP: new connection");
-        let tcp_stream = self.tcp_listener.accept().unwrap().unwrap();
+        let tcp_stream = self.tcp_listener.accept().expect("tcp.accept").expect("tcp.accept.unwrap");
         let conn = ControlConn::new(tcp_stream);
         let tok = self.conns.insert(conn).ok().expect("could not add connection to slab");
         self.conns[tok].token = Some(tok);
@@ -572,7 +572,7 @@ impl/*<'a>*/ Handler for AnyHandler/*<'a>*/ {
                 self.accept(eloop).ok().expect("TCP.accept");
             }
             i => {
-                self.conn_readable(eloop, i).unwrap();
+                self.conn_readable(eloop, i).expect("tcp.conn.readable");
             }
         }
 
