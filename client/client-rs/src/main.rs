@@ -5,6 +5,15 @@
 #![feature(read_exact)]
 //#![feature(plugin)]
 //#![plugin(clippy)]
+#![deny(//missing_docs,
+        missing_debug_implementations,
+        missing_copy_implementations,
+        trivial_casts,
+        trivial_numeric_casts,
+        //unsafe_code,
+        //unstable_features,
+        unused_import_braces,
+        unused_qualifications)]
 
 use std::net::IpAddr;
 //use std::net::Ipv4Addr;
@@ -407,6 +416,7 @@ fn main () {
     //TODO handle keyboard interrupt
     //TODO replace all unwraps and expects with normal error handling
     //TODO various formatters for Message and other structs output (full "{:f}", short "{:s}", type only "{:t}")
+    //TODO use rustfmt precommit hook
 
     let args: Vec<String> = std::env::args().collect();
     if args.len() < 3 || args.len() > 3 {

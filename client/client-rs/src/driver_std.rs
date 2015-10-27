@@ -87,7 +87,7 @@ impl Driver {
         });
     }
 
-    pub fn event (&mut self) -> std::result::Result<Event, std::sync::mpsc::RecvError> {
+    pub fn event (&mut self) -> Result<Event, std::sync::mpsc::RecvError> {
         self.rx.recv()
     }
 

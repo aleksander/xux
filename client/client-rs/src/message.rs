@@ -302,7 +302,7 @@ pub fn read_list (r : &mut Cursor<&[u8]>) -> Vec<MsgList> /*TODO return Result i
 
 use std::io;
 
-pub trait ReadExtExt: io::BufRead {
+pub trait ReadExtExt: BufRead {
     #[inline]
     fn read_strz (&mut self) -> io::Result<String> {
         let mut tmp = Vec::new();
@@ -312,7 +312,7 @@ pub trait ReadExtExt: io::BufRead {
     }
 }
 
-impl<R: io::BufRead + ?Sized> ReadExtExt for R {}
+impl<R: BufRead + ?Sized> ReadExtExt for R {}
 
 impl RelElem {
     pub fn from_buf (kind:u8, buf:&[u8]) -> Result<RelElem,Error> {
@@ -753,7 +753,7 @@ impl ObjDataElemProp {
                 if (resid != 0xffff) && ((resid & 0x8000) != 0) {
                     let sdt_len = try!(r.read_u8()) as usize;
                     let /*sdt*/ _ = {
-                        let mut tmp = vec![0; sdt_len as usize];
+                        let mut tmp = vec![0; sdt_len];
                         r.read_exact(&mut tmp).unwrap();
                         tmp
                     };
@@ -793,7 +793,7 @@ impl ObjDataElemProp {
                             resid &= !0x8000;
                             let sdt_len = try!(r.read_u8()) as usize;
                             let /*sdt*/ _ = {
-                                let mut tmp = vec![0; sdt_len as usize];
+                                let mut tmp = vec![0; sdt_len];
                                 r.read_exact(&mut tmp).unwrap();
                                 tmp
                             };
@@ -818,7 +818,7 @@ impl ObjDataElemProp {
                             resid &= !0x8000;
                             let sdt_len = try!(r.read_u8()) as usize;
                             let /*sdt*/ _ = {
-                                let mut tmp = vec![0; sdt_len as usize];
+                                let mut tmp = vec![0; sdt_len];
                                 r.read_exact(&mut tmp).unwrap();
                                 tmp
                             };
