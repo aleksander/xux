@@ -1,5 +1,6 @@
 #![feature(convert)]
 #![feature(read_exact)]
+#![feature(zero_one)]
 
 #[macro_use]
 extern crate log;

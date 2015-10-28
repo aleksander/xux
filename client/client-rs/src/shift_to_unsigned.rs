@@ -34,32 +34,106 @@ impl ShiftToUnsigned<usize> for isize {
     }
 }
 
-/* TODO transmute this to tests
-fn main () {
-    for i in (i8::MIN as isize)..(i8::MAX as isize + 1) {
-        let a = i as i8;
-        let r1 = (a as isize + 128) as u8;
-        let r2 = if a < 0 { (a + 127 + 1) as u8 } else { a as u8 + 128 };
-        let r3 = if a < 0 { a as u8 & 127 } else { a as u8 | 128 };
-        //let r4 = a as u8 ^ 128;
-        let r4: u8 = a.to_unsigned();
-        println!("{:5} {:08b} > {:4} {:4} {:4} {:4} {:08b}", a, a, r1, r2, r3, r4, r1);
-        assert!(r1 == r2 && r2 == r3 && r3 == r4);
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+    use std::ops::Add;
+    use std::num::One;
+
+    trait MinMax {
+        fn min () -> Self;
+        fn max () -> Self;
     }
 
-    println!("{} > {}", i8::MIN, i8::MIN.to_unsigned());
-    println!("{} > {}", i8::MAX, i8::MAX.to_unsigned());
-    println!("");
-    println!("{} > {}", i16::MIN, i16::MIN.to_unsigned());
-    println!("{} > {}", i16::MAX, i16::MAX.to_unsigned());
-    println!("");
-    println!("{} > {}", i32::MIN, i32::MIN.to_unsigned());
-    println!("{} > {}", i32::MAX, i32::MAX.to_unsigned());
-    println!("");
-    println!("{} > {}", i64::MIN, i64::MIN.to_unsigned());
-    println!("{} > {}", i64::MAX, i64::MAX.to_unsigned());
-    println!("");
-    println!("{} > {}", isize::MIN, isize::MIN.to_unsigned());
-    println!("{} > {}", isize::MAX, isize::MAX.to_unsigned());
+    impl MinMax for i8 {
+        fn min () -> i8 { use std::i8; i8::MIN }
+        fn max () -> i8 { use std::i8; i8::MAX }
+    }
+
+    impl MinMax for u8 {
+        fn min () -> u8 { use std::u8; u8::MIN }
+        fn max () -> u8 { use std::u8; u8::MAX }
+    }
+
+    impl MinMax for i16 {
+        fn min () -> i16 { use std::i16; i16::MIN }
+        fn max () -> i16 { use std::i16; i16::MAX }
+    }
+
+    impl MinMax for u16 {
+        fn min () -> u16 { use std::u16; u16::MIN }
+        fn max () -> u16 { use std::u16; u16::MAX }
+    }
+
+    impl MinMax for i32 {
+        fn min () -> i32 { use std::i32; i32::MIN }
+        fn max () -> i32 { use std::i32; i32::MAX }
+    }
+
+    impl MinMax for u32 {
+        fn min () -> u32 { use std::u32; u32::MIN }
+        fn max () -> u32 { use std::u32; u32::MAX }
+    }
+
+    impl MinMax for i64 {
+        fn min () -> i64 { use std::i64; i64::MIN }
+        fn max () -> i64 { use std::i64; i64::MAX }
+    }
+
+    impl MinMax for u64 {
+        fn min () -> u64 { use std::u64; u64::MIN }
+        fn max () -> u64 { use std::u64; u64::MAX }
+    }
+
+    impl MinMax for isize {
+        fn min () -> isize { use std::isize; isize::MIN }
+        fn max () -> isize { use std::isize; isize::MAX }
+    }
+
+    impl MinMax for usize {
+        fn min () -> usize { use std::usize; usize::MIN }
+        fn max () -> usize { use std::usize; usize::MAX }
+    }
+
+    fn shift_test <A: MinMax + ShiftToUnsigned<B> + PartialEq + Add<Output = A> + One + Copy, B: MinMax + PartialEq + Add<Output = B> + One> () {
+        let mut a = A::min();
+        let mut b = B::min();
+        loop {
+            let c = a.shift_to_unsigned();
+            if b != c { panic!(); }
+            if a == A::max() { break; }
+            a = a + A::one();
+            b = b + B::one();
+        }
+    }
+
+    #[test]
+    fn shift_test_i8 () {
+        shift_test::<i8,u8>();
+    }
+
+    #[test]
+    fn shift_test_i16 () {
+        shift_test::<i16,u16>();
+    }
+
+    #[test]
+    //TODO #[cfg(profile = "release")]
+    fn shift_test_i32 () {
+        shift_test::<i32,u32>();
+    }
+
+    #[test]
+    //TODO #[cfg(profile = "release")]
+    fn shift_test_i64 () {
+        shift_test::<i64,u64>();
+    }
+
+    #[test]
+    //TODO #[cfg(profile = "release")]
+    fn shift_test_isize () {
+        shift_test::<isize,usize>();
+    }
 }
-*/
+

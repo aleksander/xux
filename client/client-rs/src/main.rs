@@ -14,6 +14,7 @@
         //unstable_features,
         unused_import_braces,
         unused_qualifications)]
+#![feature(zero_one)]
 
 use std::net::IpAddr;
 //use std::net::Ipv4Addr;
