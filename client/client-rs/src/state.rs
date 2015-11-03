@@ -512,6 +512,11 @@ impl State {
 
                     match ObjProp::from_obj_data_elem_prop(&o.prop) {
                         Some(new_obj_prop) => {
+                            //TODO use Entry API:
+                            //let obj = match self.objects.entry(o.id) {
+                            //   Occupied(obj) { if obj.frame > o.frame { obj.update(o); } }
+                            //   Vacant(obj) { obj.insert(Obj::new(o.id, None, None, None, None)); }
+                            //}
                             let obj = self.objects.entry(o.id).or_insert(Obj::new(o.id, None, None, None, None));
 
                             //FIXME consider o.frame overflow !!!
