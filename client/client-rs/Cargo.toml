@@ -47,7 +47,8 @@ fern = "*"
 git = "https://github.com/kornholi/pcapng.git"
 
 [dependencies.pnet]
-git = "https://github.com/libpnet/libpnet.git"
+path = "../../../libpnet"
+#git = "https://github.com/libpnet/libpnet.git"
 
 [features]
 driver_std = []

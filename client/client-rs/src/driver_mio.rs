@@ -1,32 +1,39 @@
 extern crate mio;
-use mio::Handler;
-use mio::Token;
-use mio::EventLoop;
-use mio::Interest;
-use mio::PollOpt;
-use mio::ReadHint;
-use mio::TryRead;
-use mio::TryWrite;
-use mio::buf::Buf;
-use mio::buf::ByteBuf;
-use mio::buf::RingBuf;
-use mio::buf::SliceBuf;
-use mio::tcp::TcpListener;
-use mio::tcp::TcpStream;
-use mio::udp::UdpSocket;
-use mio::util::Slab;
+use self::mio::Handler;
+use self::mio::Token;
+use self::mio::EventLoop;
+use self::mio::EventSet;
+use self::mio::PollOpt;
+//use self::mio::ReadHint;
+use self::mio::TryRead;
+use self::mio::TryWrite;
+use self::mio::buf::Buf;
+use self::mio::buf::ByteBuf;
+use self::mio::buf::RingBuf;
+use self::mio::buf::SliceBuf;
+use self::mio::tcp::TcpListener;
+use self::mio::tcp::TcpStream;
+use self::mio::udp::UdpSocket;
+use self::mio::util::Slab;
 
+use std;
+use std::net::IpAddr;
+use driver::Driver;
+use state::State;
+use ai::Ai;
+use std::io::{Error, ErrorKind};
 
 //TODO use PollOpt::edge() | PollOpt::oneshot() for UDP connection and not PollOpt::level() (see how this is doing for TCP conns)
 
-#[cfg(driver = "mio")]
-struct Driver {
+impl Driver for DriverMio {
+}
+
+struct DriverMio {
     useless: u32,
     handler: AnyHandler,
 }
 
-#[cfg(driver = "mio")]
-impl Driver {
+impl DriverMio {
     fn new () {
     }
     
@@ -38,11 +45,11 @@ impl Driver {
         //FIXME sock.set_reuseaddr(true).ok().expect("set_reuseaddr");
 
         let mut eloop = EventLoop::new().ok().expect("eloop.new");
-        eloop.register_opt(&sock, UDP, Interest::readable() | Interest::writable(), PollOpt::level()).ok().expect("eloop.register(udp)");
+        eloop.register_opt(&sock, UDP, EventSet::readable() | EventSet::writable(), PollOpt::level()).ok().expect("eloop.register(udp)");
 
         let addr: std::net::SocketAddr = str::FromStr::from_str("127.0.0.1:33000").ok().expect("any.from_str");
         let tcp_listener = TcpListener::bind(&addr).expect("driver::init.tcp_listener.bind");
-        eloop.register_opt(&tcp_listener, TCP, Interest::readable(), PollOpt::edge()).expect("driver::init.eloop.reg");
+        eloop.register_opt(&tcp_listener, TCP, EventSet::readable(), PollOpt::edge()).expect("driver::init.eloop.reg");
 
         let ip = /*client.*/serv_ip;
         
@@ -57,20 +64,18 @@ impl Driver {
 const UDP: Token = Token(0);
 const TCP: Token = Token(1);
 
-#[cfg(driver = "mio")]
 struct ControlConn {
     sock: TcpStream,
     //buf: Option<ByteBuf>,
     //mut_buf: Option<MutByteBuf>,
     token: Option<Token>,
-    //interest: Interest,
+    //interest: EventSet,
     //url: Option<Url>,
     //text: Option<String>,
     responce: Option<String>
 }
 
 
-#[cfg(driver = "mio")]
 impl ControlConn {
     fn new(sock: TcpStream) -> ControlConn {
         ControlConn {
@@ -78,7 +83,7 @@ impl ControlConn {
             //buf: None,
             //mut_buf: Some(ByteBuf::mut_with_capacity(2048)),
             token: None,
-            //interest: Interest::hup(),
+            //interest: EventSet::hup(),
             //url: None,
             //text: None,
             responce: None,
@@ -101,19 +106,19 @@ impl ControlConn {
                     Ok(None) => {
                         info!("client flushing buf; WOULDBLOCK");
                         //self.buf = Some(buf);
-                        //self.interest.insert(Interest::writable());
-                        if let Err(e) = eloop.reregister(&self.sock, self.token.expect("token.unwrap1"), Interest::writable(), PollOpt::edge() | PollOpt::oneshot()) {
+                        //self.interest.insert(EventSet::writable());
+                        if let Err(e) = eloop.reregister(&self.sock, self.token.expect("token.unwrap1"), EventSet::writable(), PollOpt::edge() | PollOpt::oneshot()) {
                             info!("ERROR: failed to re-reg for write: {}", e);
                         }
                     }
                     Ok(Some(/*r*/_)) => {
                         //info!("CONN: we wrote {} bytes!", r);
                         //self.mut_buf = Some(buf.flip());
-                        //self.interest.insert(Interest::readable());
-                        //self.interest.remove(Interest::writable());
+                        //self.interest.insert(EventSet::readable());
+                        //self.interest.remove(EventSet::writable());
                         //FIXME check that we wrote same byte count as self.responce.len()
                         //FIXME self.responce = None;
-                        if let Err(e) = eloop.reregister(&self.sock, self.token.expect("token.unwrap2"), Interest::readable(), PollOpt::edge() | PollOpt::oneshot()) {
+                        if let Err(e) = eloop.reregister(&self.sock, self.token.expect("token.unwrap2"), EventSet::readable(), PollOpt::edge() | PollOpt::oneshot()) {
                             info!("ERROR: failed to re-reg for read: {}", e);
                         }
                     }
@@ -477,13 +482,13 @@ impl ControlConn {
                         self.text = Some("ok\n".to_string());
                     } */
                 }
-                //self.interest.remove(Interest::readable());
-                //self.interest.insert(Interest::writable());
-                eloop.reregister(&self.sock, self.token.expect("token.unwrap3"), Interest::writable(), PollOpt::edge()).expect("readable.eloop.reregister");
+                //self.interest.remove(EventSet::readable());
+                //self.interest.insert(EventSet::writable());
+                eloop.reregister(&self.sock, self.token.expect("token.unwrap3"), EventSet::writable(), PollOpt::edge()).expect("readable.eloop.reregister");
             }
             Err(e) => {
                 info!("not implemented; client err={:?}", e);
-                //self.interest.remove(Interest::readable());
+                //self.interest.remove(EventSet::readable());
                 eloop.shutdown();
             }
 
@@ -495,7 +500,6 @@ impl ControlConn {
     }
 }
 
-#[cfg(driver = "mio")]
 struct AnyHandler/*<'a>*/ {
     sock: UdpSocket,
     addr: std::net::SocketAddr,
@@ -506,7 +510,6 @@ struct AnyHandler/*<'a>*/ {
     //ai: &'a mut Ai,
 }
 
-#[cfg(driver = "mio")]
 impl/*<'a>*/ AnyHandler/*<'a>*/ {
     fn new(sock: UdpSocket, tcp_listener: TcpListener, addr: std::net::SocketAddr/*, client: &'a mut Client, ai: &'a mut Ai*/) -> AnyHandler/*<'a>*/ {
         AnyHandler {
@@ -526,7 +529,7 @@ impl/*<'a>*/ AnyHandler/*<'a>*/ {
         let conn = ControlConn::new(tcp_stream);
         let tok = self.conns.insert(conn).ok().expect("could not add connection to slab");
         self.conns[tok].token = Some(tok);
-        eloop.register_opt(&self.conns[tok].sock, tok, Interest::readable(), PollOpt::edge() | PollOpt::oneshot()).ok().expect("could not reg IO for new conn");
+        eloop.register_opt(&self.conns[tok].sock, tok, EventSet::readable(), PollOpt::edge() | PollOpt::oneshot()).ok().expect("could not reg IO for new conn");
         Ok(())
     }
     
@@ -552,7 +555,6 @@ impl/*<'a>*/ AnyHandler/*<'a>*/ {
     */
 }
 
-#[cfg(driver = "mio")]
 impl/*<'a>*/ Handler for AnyHandler/*<'a>*/ {
     type Timeout = usize;
     type Message = ();

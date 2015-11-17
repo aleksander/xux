@@ -16,15 +16,15 @@ enum Step {
     A, B, C, D
 }
 
-pub struct DeclAi {
+pub struct AiDecl {
     state: AiState,
     step: Step,
     cycle: usize,
 }
 
-impl DeclAi {
-    fn new () -> DeclAi {
-        DeclAi {
+impl AiDecl {
+    pub fn new () -> AiDecl {
+        AiDecl {
             state: AiState::WaitForCharList,
             step: Step::A,
             cycle: 0,
@@ -32,7 +32,7 @@ impl DeclAi {
     }
 }
 
-impl Ai for DeclAi {
+impl Ai for AiDecl {
     fn update (&mut self, state: &mut State) {
         //info!("AI: {:?}", self.state);
         match self.state {
@@ -102,7 +102,7 @@ impl Ai for DeclAi {
         info!("AI: INIT");
     }
 
-    fn new () -> DeclAi {
+    fn new () -> AiDecl {
         Self::new()
     }
 }

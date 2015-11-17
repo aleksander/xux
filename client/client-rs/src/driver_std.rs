@@ -7,7 +7,22 @@ use std::sync::mpsc::Sender;
 use std::io::Read;
 use std::io::Write;
 
-pub struct Driver {
+use driver::{Driver, Event};
+
+impl Driver for DriverStd {
+    //fn new (ip: std::net::IpAddr, port: u16) -> std::io::Result<&'a Driver>;
+    fn tx (&self, buf: &[u8]) -> std::io::Result<()> {
+        self.tx(buf)
+    }
+    fn timeout (&self, seq: usize, ms: u64) {
+        self.timeout(seq, ms);
+    }
+    fn event (&mut self) -> Result<Event, std::sync::mpsc::RecvError> {
+        self.event()
+    }
+}
+
+pub struct DriverStd {
     sock: std::net::UdpSocket,
     //buf: Vec<u8>,
     dst: std::net::SocketAddr,
@@ -15,8 +30,8 @@ pub struct Driver {
     rx: Receiver<Event>,
 }
 
-impl Driver {
-    pub fn new (ip: std::net::IpAddr, port: u16) -> std::io::Result<Driver> {
+impl DriverStd {
+    pub fn new (ip: std::net::IpAddr, port: u16) -> std::io::Result<DriverStd> {
         let sock = try!(std::net::UdpSocket::bind("0.0.0.0:0"));
         let (tx, rx) = channel();
         let dst = std::net::SocketAddr::new(ip, port);
@@ -62,7 +77,7 @@ impl Driver {
             }
         });
 
-        Ok(Driver{
+        Ok(DriverStd{
             sock: sock,
             //buf: vec![0; 65535],
             dst: dst,
@@ -95,9 +110,3 @@ impl Driver {
     //}
 }
 
-//TODO move to driver trait module
-pub enum Event {
-    Rx(Vec<u8>),
-    Timeout(usize),
-    Tcp( (Sender<String>,Vec<u8>) ),
-}
