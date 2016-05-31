@@ -3,11 +3,10 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::io::Cursor;
 use std::io::Read;
-use std::io::BufRead;
 use std::io::Write;
+use std::io::BufRead;
 
-extern crate byteorder;
-use self::byteorder::{LittleEndian, BigEndian, ReadBytesExt, WriteBytesExt};
+use ::byteorder::{LittleEndian, BigEndian, ReadBytesExt, WriteBytesExt};
 #[allow(non_camel_case_types)]
 type le = LittleEndian;
 #[allow(non_camel_case_types)]
@@ -18,10 +17,6 @@ type be = BigEndian;
 pub struct Error {
     pub source: &'static str,
     pub detail: Option<String>,
-}
-
-impl From<byteorder::Error> for Error {
-    fn from (_:byteorder::Error) -> Error { Error {source:"TODO: ByteOrder error", detail:None} }
 }
 
 impl From<::std::io::Error> for Error {

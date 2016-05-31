@@ -7,6 +7,7 @@ use std::sync::mpsc::Sender;
 use std::io::Read;
 use std::io::Write;
 
+/*
 use driver::{Driver, Event};
 
 impl Driver for DriverStd {
@@ -21,6 +22,7 @@ impl Driver for DriverStd {
         self.event()
     }
 }
+*/
 
 pub struct DriverStd {
     sock: std::net::UdpSocket,
@@ -94,10 +96,12 @@ impl DriverStd {
     }
 
     pub fn timeout (&self, seq: usize, ms: u64) {
+        use std::time::Duration;
+
         //info!("driver.timeout: {} {}ms", seq, ms);
         let tx = self.tx.clone();
         thread::spawn(move || {
-            thread::sleep_ms(ms as u32);
+            thread::sleep(Duration::from_millis(ms));
             tx.send(Event::Timeout(seq)).expect("driver::timeout.send");
         });
     }

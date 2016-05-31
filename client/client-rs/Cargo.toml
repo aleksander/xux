@@ -25,6 +25,8 @@ ncurses = "*"
 log = "*"
 fern = "*"
 #clippy = "*"
+pnet = "*"
+pcapng = "*"
 
 #[dependencies.ncurses]
 #path = "../../../ncurses-rs"
@@ -42,12 +44,12 @@ fern = "*"
 #git = "https://github.com/aleksander/mio.git"
 #branch = "fixups"
 
-[dependencies.pcapng]
+#[dependencies.pcapng]
 #git = "https://github.com/richo/pcapng-rs.git"
-git = "https://github.com/kornholi/pcapng.git"
+#git = "https://github.com/kornholi/pcapng.git"
 
-[dependencies.pnet]
-path = "../../../libpnet"
+#[dependencies.pnet]
+#path = "../../../libpnet"
 #git = "https://github.com/libpnet/libpnet.git"
 
 [features]

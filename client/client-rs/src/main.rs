@@ -1,23 +1,23 @@
-#![feature(convert)]
-#![feature(ip_addr)]
 #![feature(lookup_host)]
 #![feature(associated_consts)]
-#![feature(read_exact)]
+//<<<<<<< 4b4fc349b887fbcbfa197fe2b798f0d378433edf
+//#![feature(read_exact)]
 //#![feature(plugin)]
 //#![plugin(clippy)]
-#![deny(//missing_docs,
-        missing_debug_implementations,
-        missing_copy_implementations,
-        trivial_casts,
-        trivial_numeric_casts,
-        //unsafe_code,
-        //unstable_features,
-        unused_import_braces,
-        unused_qualifications)]
+//#![deny(//missing_docs,
+//        missing_debug_implementations,
+//        missing_copy_implementations,
+//        trivial_casts,
+//        trivial_numeric_casts,
+//        //unsafe_code,
+//        //unstable_features,
+//        unused_import_braces,
+//        unused_qualifications)]
 //#![feature(zero_one)]
+//=======
+//>>>>>>> compilation fix
 
 use std::net::IpAddr;
-//use std::net::Ipv4Addr;
 use std::net::SocketAddr;
 
 #[macro_use]
@@ -31,13 +31,17 @@ use self::openssl::crypto::hash::hash;
 use self::openssl::ssl::{SslMethod, SslContext, SslStream};
 
 extern crate rustc_serialize;
+extern crate byteorder;
 use rustc_serialize::hex::ToHex;
 
 use std::str;
+//<<<<<<< 4b4fc349b887fbcbfa197fe2b798f0d378433edf
 //use std::u16;
 //use std::io::{Error, ErrorKind};
 //use std::io::Write;
-use std::fs::File;
+//use std::fs::File;
+//=======
+//>>>>>>> compilation fix
 
 mod state;
 use state::State;
@@ -73,8 +77,7 @@ use image::Rgb;
 use image::ImageRgb8;
 use image::PNG;
 
-extern crate byteorder;
-use self::byteorder::{LittleEndian, BigEndian, ReadBytesExt, WriteBytesExt};
+use byteorder::{LittleEndian, BigEndian, ReadBytesExt, WriteBytesExt};
 #[allow(non_camel_case_types)]
 type le = LittleEndian;
 #[allow(non_camel_case_types)]
@@ -162,10 +165,26 @@ pub fn authorize (ip: IpAddr, port: u16, user: String, pass: String) -> Result<(
         msg
     }
 
-    //TODO use closure instead (no need to pass stream)
-    fn command (stream: &mut SslStream<std::net::TcpStream>, cmd: Vec<u8>) -> Result<Vec<u8>,Error> {
-        try!(stream.write(msg(cmd).as_slice()));
-        try!(stream.flush());
+//<<<<<<< 4b4fc349b887fbcbfa197fe2b798f0d378433edf
+//    //TODO use closure instead (no need to pass stream)
+//    fn command (stream: &mut SslStream<std::net::TcpStream>, cmd: Vec<u8>) -> Result<Vec<u8>,Error> {
+//        try!(stream.write(msg(cmd).as_slice()));
+//        try!(stream.flush());
+//=======
+    pub fn authorize (ip: IpAddr, port: u16, user: String, pass: String) -> Result<(String,Vec<u8>),Error> {
+        let auth_addr = SocketAddr::new(ip, port);
+        info!("authorize {} @ {}", user, auth_addr);
+        let stream = std::net::TcpStream::connect(&auth_addr).unwrap();
+        let context = SslContext::new(SslMethod::Sslv23).unwrap();
+        let mut stream = SslStream::connect(&context, stream).unwrap();
+
+        fn msg (buf: Vec<u8>) -> Vec<u8> {
+            let mut msg = Vec::new();
+            msg.write_u16::<be>(buf.len() as u16).unwrap();
+            msg.extend(buf);
+            msg
+        }
+//>>>>>>> compilation fix
 
         let len = {
             let mut buf = vec![0; 2];
