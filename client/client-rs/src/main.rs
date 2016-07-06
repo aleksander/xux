@@ -1,21 +1,5 @@
 #![feature(lookup_host)]
 #![feature(associated_consts)]
-//<<<<<<< 4b4fc349b887fbcbfa197fe2b798f0d378433edf
-//#![feature(read_exact)]
-//#![feature(plugin)]
-//#![plugin(clippy)]
-//#![deny(//missing_docs,
-//        missing_debug_implementations,
-//        missing_copy_implementations,
-//        trivial_casts,
-//        trivial_numeric_casts,
-//        //unsafe_code,
-//        //unstable_features,
-//        unused_import_braces,
-//        unused_qualifications)]
-//#![feature(zero_one)]
-//=======
-//>>>>>>> compilation fix
 
 use std::net::IpAddr;
 use std::net::SocketAddr;
@@ -35,13 +19,7 @@ extern crate byteorder;
 use rustc_serialize::hex::ToHex;
 
 use std::str;
-//<<<<<<< 4b4fc349b887fbcbfa197fe2b798f0d378433edf
-//use std::u16;
-//use std::io::{Error, ErrorKind};
-//use std::io::Write;
-//use std::fs::File;
-//=======
-//>>>>>>> compilation fix
+use std::fs::File;
 
 mod state;
 use state::State;
@@ -71,7 +49,6 @@ use ai_decl::AiDecl;
 //type AiImpl = AiDecl;
 
 extern crate image;
-use image::GenericImage;
 use image::ImageBuffer;
 use image::Rgb;
 use image::ImageRgb8;
@@ -156,7 +133,7 @@ pub fn authorize (ip: IpAddr, port: u16, user: String, pass: String) -> Result<(
     info!("authorize {} @ {}", user, auth_addr);
     let stream = std::net::TcpStream::connect(&auth_addr).expect("tcpstream::connect");
     let context = SslContext::new(SslMethod::Sslv23).expect("sslsocket::new");
-    let mut stream = SslStream::new(&context, stream).expect("sslstream::new");
+    let mut stream = SslStream::connect(&context, stream).expect("sslstream::connect");
 
     fn msg (buf: Vec<u8>) -> Vec<u8> {
         let mut msg = Vec::new();
@@ -165,26 +142,10 @@ pub fn authorize (ip: IpAddr, port: u16, user: String, pass: String) -> Result<(
         msg
     }
 
-//<<<<<<< 4b4fc349b887fbcbfa197fe2b798f0d378433edf
-//    //TODO use closure instead (no need to pass stream)
-//    fn command (stream: &mut SslStream<std::net::TcpStream>, cmd: Vec<u8>) -> Result<Vec<u8>,Error> {
-//        try!(stream.write(msg(cmd).as_slice()));
-//        try!(stream.flush());
-//=======
-    pub fn authorize (ip: IpAddr, port: u16, user: String, pass: String) -> Result<(String,Vec<u8>),Error> {
-        let auth_addr = SocketAddr::new(ip, port);
-        info!("authorize {} @ {}", user, auth_addr);
-        let stream = std::net::TcpStream::connect(&auth_addr).unwrap();
-        let context = SslContext::new(SslMethod::Sslv23).unwrap();
-        let mut stream = SslStream::connect(&context, stream).unwrap();
-
-        fn msg (buf: Vec<u8>) -> Vec<u8> {
-            let mut msg = Vec::new();
-            msg.write_u16::<be>(buf.len() as u16).unwrap();
-            msg.extend(buf);
-            msg
-        }
-//>>>>>>> compilation fix
+    //TODO use closure instead (no need to pass stream)
+    fn command (stream: &mut SslStream<std::net::TcpStream>, cmd: Vec<u8>) -> Result<Vec<u8>,Error> {
+        try!(stream.write(msg(cmd).as_slice()));
+        try!(stream.flush());
 
         let len = {
             let mut buf = vec![0; 2];
@@ -203,7 +164,6 @@ pub fn authorize (ip: IpAddr, port: u16, user: String, pass: String) -> Result<(
         Ok(msg[3..].to_vec())
     }
 
-//<<<<<<< 54bbe1d118f2dbdd7e3a8c483fa9d874350af4f8
     let login = { 
         let mut buf = Vec::new();
         buf.extend("pw".as_bytes());
@@ -225,26 +185,6 @@ pub fn authorize (ip: IpAddr, port: u16, user: String, pass: String) -> Result<(
 
     Ok((login, cookie))
 }
-//=======
-//        let login = {
-//            let mut buf = Vec::new();
-//            buf.extend("pw".as_bytes());
-//            buf.push(0);
-//            buf.extend(user.as_bytes());
-//            buf.push(0);
-//            buf.extend(hash(Type::SHA256, pass.as_bytes()).as_slice());
-//            let msg = try!(command(&mut stream, buf));
-//            //FIXME use read_strz analog
-//            str::from_utf8(&msg[..msg.len()-1]).unwrap().to_string()
-//        };
-//
-//        let cookie = {
-//            let mut buf = Vec::new();
-//            buf.extend("cookie".as_bytes());
-//            buf.push(0);
-//            try!(command(&mut stream, buf))
-//        };
-//>>>>>>> minor
 
 //TODO move to Grid
 //TODO grid.to_png(Mapper::first())
@@ -447,8 +387,8 @@ fn run(ip: IpAddr, username: String, password: String) {
 }
 
 fn main () {
-    let mut log_open_options = std::fs::OpenOptions::new();
-    let log_open_options = log_open_options.create(true).read(true).write(true).truncate(true);
+    //let mut log_open_options = std::fs::OpenOptions::new();
+    //let log_open_options = log_open_options.create(true).read(true).write(true).truncate(true);
     let logger_config = fern::DispatchConfig {
         format: Box::new( |msg: &str, level: &log::LogLevel, _location: &log::LogLocation| {
             //format!("[{}][{}] {}", time::now().strftime("%Y-%m-%d][%H:%M:%S").unwrap(), level, msg)

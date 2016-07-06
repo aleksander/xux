@@ -7,7 +7,6 @@ extern crate nom;
 use nom::IResult;
 use nom::be_u8;
 use nom::Err;
-use nom::ErrorKind;
 
 extern crate pcapng;
 //use pcapng::block::parse_blocks;
@@ -157,15 +156,6 @@ fn main () {
                         0 => parse_ssess(i),
                         1 => parse_rel(i),
                         2 => parse_ack(i),
-//<<<<<<< 4b4fc349b887fbcbfa197fe2b798f0d378433edf
-//                        3 => IResult::Error(Err::Code(ErrorKind::Custom(1)))/*parse_beat(i)*/,
-//                        4 => IResult::Error(Err::Code(ErrorKind::Custom(1)))/*parse_mapreq(i)*/,
-//                        5 => parse_mapdata(i),
-//                        6 => parse_objdata(i),
-//                        7 => IResult::Error(Err::Code(ErrorKind::Custom(1)))/*parse_objack(i)*/,
-//                        8 => parse_close(i),
-//                        _ => IResult::Error(Err::Code(ErrorKind::Custom(1)))
-//=======
                         3 => IResult::Error(Err::Code(nom::ErrorKind::Tag))/*parse_beat(i)*/,
                         4 => IResult::Error(Err::Code(nom::ErrorKind::Tag))/*parse_mapreq(i)*/,
                         5 => parse_mapdata(i),
@@ -173,7 +163,6 @@ fn main () {
                         7 => IResult::Error(Err::Code(nom::ErrorKind::Tag))/*parse_objack(i)*/,
                         8 => parse_close(i),
                         _ => IResult::Error(Err::Code(nom::ErrorKind::Tag))
-//>>>>>>> compilation fix
                     }
                 }
                 IResult::Error(e) => IResult::Error(e),
@@ -190,19 +179,11 @@ fn main () {
                         2 => parse_ack(i),
                         3 => parse_beat(i),
                         4 => parse_mapreq(i),
-//<<<<<<< 4b4fc349b887fbcbfa197fe2b798f0d378433edf
-//                        5 => IResult::Error(Err::Code(ErrorKind::Custom(1)))/*parse_mapdata(i)*/,
-//                        6 => IResult::Error(Err::Code(ErrorKind::Custom(1)))/*parse_objdata(i)*/,
-//                        7 => parse_objack(i),
-//                        8 => parse_close(i),
-//                        _ => IResult::Error(Err::Code(ErrorKind::Custom(1)))
-//=======
                         5 => IResult::Error(Err::Code(nom::ErrorKind::Tag))/*parse_mapdata(i)*/,
                         6 => IResult::Error(Err::Code(nom::ErrorKind::Tag))/*parse_objdata(i)*/,
                         7 => parse_objack(i),
                         8 => parse_close(i),
                         _ => IResult::Error(Err::Code(nom::ErrorKind::Tag))
-//>>>>>>> compilation fix
                     }
                 }
                 IResult::Error(e) => IResult::Error(e),

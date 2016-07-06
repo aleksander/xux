@@ -3,13 +3,12 @@ use std::thread;
 use std::sync::mpsc::channel;
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::Sender;
-//use std::sync::mpsc;
+use std::sync::mpsc::RecvError;
 use std::io::Read;
 use std::io::Write;
 
 use driver::{Driver, Event};
 
-/*
 impl Driver for DriverStd {
     //fn new (ip: std::net::IpAddr, port: u16) -> std::io::Result<&'a Driver>;
     fn tx (&self, buf: &[u8]) -> std::io::Result<()> {
@@ -18,11 +17,10 @@ impl Driver for DriverStd {
     fn timeout (&self, seq: usize, ms: u64) {
         self.timeout(seq, ms);
     }
-    fn event (&mut self) -> Result<Event, std::sync::mpsc::RecvError> {
+    fn event (&mut self) -> Result<Event, RecvError> {
         self.event()
     }
 }
-*/
 
 pub struct DriverStd {
     sock: std::net::UdpSocket,
