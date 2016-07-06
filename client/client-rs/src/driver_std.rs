@@ -7,9 +7,9 @@ use std::sync::mpsc::Sender;
 use std::io::Read;
 use std::io::Write;
 
-/*
 use driver::{Driver, Event};
 
+/*
 impl Driver for DriverStd {
     //fn new (ip: std::net::IpAddr, port: u16) -> std::io::Result<&'a Driver>;
     fn tx (&self, buf: &[u8]) -> std::io::Result<()> {

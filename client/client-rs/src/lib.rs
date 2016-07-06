@@ -13,7 +13,7 @@ extern crate byteorder;
 pub mod message;
 pub mod state;
 
-//pub mod driver;
+pub mod driver;
 pub mod driver_std;
 //FIXME pub mod driver_mio;
 

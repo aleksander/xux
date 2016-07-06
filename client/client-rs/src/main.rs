@@ -203,6 +203,7 @@ pub fn authorize (ip: IpAddr, port: u16, user: String, pass: String) -> Result<(
         Ok(msg[3..].to_vec())
     }
 
+//<<<<<<< 54bbe1d118f2dbdd7e3a8c483fa9d874350af4f8
     let login = { 
         let mut buf = Vec::new();
         buf.extend("pw".as_bytes());
@@ -224,6 +225,26 @@ pub fn authorize (ip: IpAddr, port: u16, user: String, pass: String) -> Result<(
 
     Ok((login, cookie))
 }
+//=======
+//        let login = {
+//            let mut buf = Vec::new();
+//            buf.extend("pw".as_bytes());
+//            buf.push(0);
+//            buf.extend(user.as_bytes());
+//            buf.push(0);
+//            buf.extend(hash(Type::SHA256, pass.as_bytes()).as_slice());
+//            let msg = try!(command(&mut stream, buf));
+//            //FIXME use read_strz analog
+//            str::from_utf8(&msg[..msg.len()-1]).unwrap().to_string()
+//        };
+//
+//        let cookie = {
+//            let mut buf = Vec::new();
+//            buf.extend("cookie".as_bytes());
+//            buf.push(0);
+//            try!(command(&mut stream, buf))
+//        };
+//>>>>>>> minor
 
 //TODO move to Grid
 //TODO grid.to_png(Mapper::first())
@@ -435,8 +456,8 @@ fn main () {
             format!("[{}] {}", level, msg)
         }),
         output: vec![
-            //fern::OutputConfig::stdout(), //TODO colorize stdout output: ERROR is RED, WARN is YELLOW etc
-            fern::OutputConfig::file_with_options("log", &log_open_options)
+            fern::OutputConfig::stdout(), //TODO colorize stdout output: ERROR is RED, WARN is YELLOW etc
+            //fern::OutputConfig::file_with_options("log", &log_open_options)
         ],
         level: log::LogLevelFilter::Trace,
     };
@@ -467,14 +488,13 @@ fn main () {
     let password = args[2].clone();
 
     let ip = {
-        let mut ips = std::net::lookup_host("game.salemthegame.com").ok().expect("lookup_host");
-        let host = ips.next().expect("ip.next").ok().expect("ip.next.ok");
+        let mut ips = ::std::net::lookup_host("game.salemthegame.com").expect("lookup_host");
+        let host = ips.next().expect("ip.next");
         host.ip()
     };
-    
+
     info!("connect to {}", ip);
     
     //run::<DriverMio,AiLua>(ip, username, password);
     run(ip, username, password);
 }
-

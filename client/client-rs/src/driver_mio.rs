@@ -36,28 +36,28 @@ struct DriverMio {
 impl DriverMio {
     fn new () {
     }
-    
+
     fn init (serv_ip: IpAddr) -> Driver {
-        let any = str::FromStr::from_str("0.0.0.0:0").ok().expect("any.from_str");
-        let sock = UdpSocket::bound(&any).ok().expect("udp::bound");
+        let any = str::FromStr::from_str("0.0.0.0:0").expect("any.from_str");
+        let sock = UdpSocket::bound(&any).expect("udp::bound");
 
         //FIXME sock.connect(&addr);
-        //FIXME sock.set_reuseaddr(true).ok().expect("set_reuseaddr");
+        //FIXME sock.set_reuseaddr(true).expect("set_reuseaddr");
 
-        let mut eloop = EventLoop::new().ok().expect("eloop.new");
-        eloop.register_opt(&sock, UDP, EventSet::readable() | EventSet::writable(), PollOpt::level()).ok().expect("eloop.register(udp)");
+        let mut eloop = EventLoop::new().expect("eloop.new");
+        eloop.register_opt(&sock, UDP, Interest::readable() | Interest::writable(), PollOpt::level()).expect("eloop.register(udp)");
 
-        let addr: std::net::SocketAddr = str::FromStr::from_str("127.0.0.1:33000").ok().expect("any.from_str");
+        let addr: std::net::SocketAddr = str::FromStr::from_str("127.0.0.1:33000").expect("any.from_str");
         let tcp_listener = TcpListener::bind(&addr).expect("driver::init.tcp_listener.bind");
-        eloop.register_opt(&tcp_listener, TCP, EventSet::readable(), PollOpt::edge()).expect("driver::init.eloop.reg");
+        eloop.register_opt(&tcp_listener, TCP, Interest::readable(), PollOpt::edge()).expect("driver::init.eloop.reg");
 
         let ip = /*client.*/serv_ip;
-        
+
         let mut handler = AnyHandler::new(sock, tcp_listener, std::net::SocketAddr::new(ip, 1870)/*, &mut client, &mut ai*/);
-        handler.client.connect().ok().expect("client.connect()");
+        handler.client.connect().expect("client.connect()");
 
         info!("run event loop");
-        eloop.run(&mut handler).ok().expect("Failed to run the event loop");
+        eloop.run(&mut handler).expect("Failed to run the event loop");
     }
 }
 
@@ -170,7 +170,7 @@ impl ControlConn {
                 body = body + &format!("\r\n{}{{\"id\":{},\"name\":\"{}\"}}", period, id, name);
                 period = ",";
             }
-            
+
             body = body + "],\"obj\":[";
 
             period = "";
@@ -527,12 +527,13 @@ impl/*<'a>*/ AnyHandler/*<'a>*/ {
         info!("TCP: new connection");
         let tcp_stream = self.tcp_listener.accept().expect("tcp.accept").expect("tcp.accept.unwrap");
         let conn = ControlConn::new(tcp_stream);
-        let tok = self.conns.insert(conn).ok().expect("could not add connection to slab");
+        let tok = self.conns.insert(conn).expect("could not add connection to slab");
         self.conns[tok].token = Some(tok);
-        eloop.register_opt(&self.conns[tok].sock, tok, EventSet::readable(), PollOpt::edge() | PollOpt::oneshot()).ok().expect("could not reg IO for new conn");
+        //eloop.register_opt(&self.conns[tok].sock, tok, EventSet::readable(), PollOpt::edge() | PollOpt::oneshot()).ok().expect("could not reg IO for new conn");
+        eloop.register_opt(&self.conns[tok].sock, tok, Interest::readable(), PollOpt::edge() | PollOpt::oneshot()).expect("could not reg IO for new conn");
         Ok(())
     }
-    
+
     fn conn_readable (&mut self, eloop: &mut EventLoop<AnyHandler>, tok: Token) -> std::io::Result<()> {
         //info!("conn readable; tok={:?}", tok);
         //if let Err(e) = self.conn(tok).readable(eloop) {
@@ -563,7 +564,7 @@ impl/*<'a>*/ Handler for AnyHandler/*<'a>*/ {
         match token {
             UDP => {
                 let mut rx_buf = RingBuf::new(65535);
-                self.sock.recv_from(&mut rx_buf).ok().expect("sock.recv");
+                self.sock.recv_from(&mut rx_buf).expect("sock.recv");
                 let buf: &[u8] = Buf::bytes(&rx_buf);
                 if let Err(e) = self.client.state.rx(buf) {
                     info!("ERROR: client.rx: {:?}", e);
@@ -571,7 +572,7 @@ impl/*<'a>*/ Handler for AnyHandler/*<'a>*/ {
                 }
             },
             TCP => {
-                self.accept(eloop).ok().expect("TCP.accept");
+                self.accept(eloop).expect("TCP.accept");
             }
             i => {
                 self.conn_readable(eloop, i).expect("tcp.conn.readable");
@@ -596,7 +597,7 @@ impl/*<'a>*/ Handler for AnyHandler/*<'a>*/ {
                         //} else {
                         //    info!("DROPPED!");
                         //}
-                        
+
                         if let Some(timeout) = ebuf.timeout {
                             //TODO use returned timeout handle to cancel timeout
                             //info!("set {} timeout {} ms", timeout.seq, timeout.ms);
@@ -625,4 +626,3 @@ impl/*<'a>*/ Handler for AnyHandler/*<'a>*/ {
         self.client.state.timeout(timeout);
     }
 }
-
