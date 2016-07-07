@@ -8,12 +8,15 @@ enum AiState {
     Walking,
     Walking1,
     Walking2,
-    WaitForEnd
+    WaitForEnd,
 }
 
 #[derive(Debug)]
 enum Step {
-    A, B, C, D
+    A,
+    B,
+    C,
+    D,
 }
 
 pub struct AiDecl {
@@ -23,7 +26,7 @@ pub struct AiDecl {
 }
 
 impl AiDecl {
-    pub fn new () -> AiDecl {
+    pub fn new() -> AiDecl {
         AiDecl {
             state: AiState::WaitForCharList,
             step: Step::A,
@@ -33,8 +36,8 @@ impl AiDecl {
 }
 
 impl Ai for AiDecl {
-    fn update (&mut self, state: &mut State) {
-        //info!("AI: {:?}", self.state);
+    fn update(&mut self, state: &mut State) {
+        // info!("AI: {:?}", self.state);
         match self.state {
             AiState::WaitForCharList => {
                 if !state.charlist.is_empty() {
@@ -43,21 +46,19 @@ impl Ai for AiDecl {
                 }
             }
             AiState::WaitForWorld => {
-                if state.widget_exists("mapview", None) &&
-                   state.hero_exists() &&
-                   state.hero_grid_exists() &&
-                  !state.hero_is_moving() {
+                if state.widget_exists("mapview", None) && state.hero_exists() && state.hero_grid_exists() &&
+                   !state.hero_is_moving() {
                     self.state = AiState::Walking;
                 }
             }
             AiState::Walking => {
                 match state.hero_xy() {
-                    Some((x,y)) => {
-                        let (dx,dy) = match self.step {
-                            Step::A => (100,0),
-                            Step::B => (0,100),
-                            Step::C => (-100,0),
-                            Step::D => (0,-100),
+                    Some((x, y)) => {
+                        let (dx, dy) = match self.step {
+                            Step::A => (100, 0),
+                            Step::B => (0, 100),
+                            Step::C => (-100, 0),
+                            Step::D => (0, -100),
                         };
                         if let Step::D = self.step {
                             self.cycle += 1;
@@ -89,20 +90,19 @@ impl Ai for AiDecl {
                     }
                 }
             }
-            AiState::WaitForEnd => {
-            }
+            AiState::WaitForEnd => {}
         }
     }
 
-    fn exec (&mut self, s: &str) {
+    fn exec(&mut self, s: &str) {
         info!("AI: EXEC: {}", s);
     }
 
-    fn init (&mut self) {
+    fn init(&mut self) {
         info!("AI: INIT");
     }
 
-    fn new () -> AiDecl {
+    fn new() -> AiDecl {
         Self::new()
     }
 }

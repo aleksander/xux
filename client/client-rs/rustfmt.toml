@@ -1,0 +1,6 @@
+use_try_shorthand = true
+#fn_args_paren_newline = false
+fn_call_width = 120
+ideal_width = 120
+max_width = 120
+format_strings = false

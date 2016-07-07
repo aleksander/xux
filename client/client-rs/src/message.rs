@@ -12,7 +12,7 @@ type le = LittleEndian;
 #[allow(non_camel_case_types)]
 type be = BigEndian;
 
-//TODO move to salem::error mod
+// TODO move to salem::error mod
 #[derive(Debug)]
 pub struct Error {
     pub source: &'static str,
@@ -20,30 +20,40 @@ pub struct Error {
 }
 
 impl From<::std::io::Error> for Error {
-    fn from (_: ::std::io::Error) -> Error { Error {source:"TODO: Io error", detail:None} }
+    fn from(_: ::std::io::Error) -> Error {
+        Error {
+            source: "TODO: Io error",
+            detail: None,
+        }
+    }
 }
 
 impl From<::std::string::FromUtf8Error> for Error {
-    fn from (_: ::std::string::FromUtf8Error) -> Error { Error {source:"TODO: FromUtf8 error", detail:None} }
+    fn from(_: ::std::string::FromUtf8Error) -> Error {
+        Error {
+            source: "TODO: FromUtf8 error",
+            detail: None,
+        }
+    }
 }
 
 #[derive(Debug)]
 pub struct NewWdg {
-    pub id : u16,
-    pub name : String,
-    pub parent : u16,
-    pub pargs : Vec<MsgList>,
-    pub cargs : Vec<MsgList>,
+    pub id: u16,
+    pub name: String,
+    pub parent: u16,
+    pub pargs: Vec<MsgList>,
+    pub cargs: Vec<MsgList>,
 }
 #[derive(Debug)]
 pub struct WdgMsg {
-    pub id : u16,
-    pub name : String,
-    pub args : Vec<MsgList>,
+    pub id: u16,
+    pub name: String,
+    pub args: Vec<MsgList>,
 }
 #[derive(Debug)]
 pub struct DstWdg {
-    pub id : u16,
+    pub id: u16,
 }
 #[derive(Debug)]
 pub struct MapIv;
@@ -52,25 +62,25 @@ pub enum Glob {
     Time {
         time: i32,
         season: u8,
-        inc: u8
+        inc: u8,
     },
     Light {
-        amb: (u8, u8, u8, u8), //TODO Color type
-        dif: (u8, u8, u8, u8), //TODO Color type
-        spc: (u8, u8, u8, u8), //TODO Color type
+        amb: (u8, u8, u8, u8), // TODO Color type
+        dif: (u8, u8, u8, u8), // TODO Color type
+        spc: (u8, u8, u8, u8), // TODO Color type
         ang: i32,
         ele: i32,
-        inc: u8
+        inc: u8,
     },
-    Sky ( Option<(u16,Option<(u16,i32)>)> ) // (resid1,resid2,blend)
+    Sky(Option<(u16, Option<(u16, i32)>)>), // (resid1,resid2,blend)
 }
 #[derive(Debug)]
 pub struct Paginae;
 #[derive(Debug)]
 pub struct ResId {
-    pub id : u16,
-    pub name : String,
-    pub ver : u16,
+    pub id: u16,
+    pub name: String,
+    pub ver: u16,
 }
 #[derive(Debug)]
 pub struct Party;
@@ -81,22 +91,22 @@ pub struct Cattr;
 #[derive(Debug)]
 pub struct Music;
 pub struct Tiles {
-    pub tiles : Vec<TilesElem>
+    pub tiles: Vec<TilesElem>,
 }
 impl Debug for Tiles {
-    fn fmt(&self, f : &mut Formatter) -> ::std::fmt::Result {
-        try!(writeln!(f, ""));
+    fn fmt(&self, f: &mut Formatter) -> ::std::fmt::Result {
+        writeln!(f, "")?;
         for tile in &self.tiles {
-            try!(writeln!(f, "      {:?}", tile));
+            writeln!(f, "      {:?}", tile)?;
         }
         Ok(())
     }
 }
 #[derive(Debug)]
 pub struct TilesElem {
-    pub id : u8,
-    pub name : String,
-    pub ver : u16,
+    pub id: u8,
+    pub name: String,
+    pub ver: u16,
 }
 #[derive(Debug)]
 pub struct Buff;
@@ -104,7 +114,7 @@ pub struct Buff;
 pub struct SessKey;
 
 #[derive(Debug)]
-//TODO replace with plain struct variants
+// TODO replace with plain struct variants
 pub enum RelElem {
     NEWWDG(NewWdg),
     WDGMSG(WdgMsg),
@@ -119,100 +129,106 @@ pub enum RelElem {
     MUSIC(Music),
     TILES(Tiles),
     BUFF(Buff),
-    SESSKEY(SessKey)
+    SESSKEY(SessKey),
 }
 
 #[allow(non_camel_case_types)]
 #[derive(Debug)]
-//TODO replace with plain struct variants
+// TODO replace with plain struct variants
 pub enum MsgList {
-    tINT    (i32),
-    tSTR    (String),
-    tCOORD  ((i32,i32)),
-    tUINT8  (u8),
-    tUINT16 (u16),
-    tCOLOR  ((u8,u8,u8,u8)),
-    tTTOL   (Vec<MsgList>),
-    tINT8   (i8),
-    tINT16  (i16),
-    tNIL    /*(this is null)*/,
-    tBYTES  (Vec<u8>),
+    tINT(i32),
+    tSTR(String),
+    tCOORD((i32, i32)),
+    tUINT8(u8),
+    tUINT16(u16),
+    tCOLOR((u8, u8, u8, u8)),
+    tTTOL(Vec<MsgList>),
+    tINT8(i8),
+    tINT16(i16),
+    tNIL, // (this is null)
+    tBYTES(Vec<u8>),
     tFLOAT32(f32),
     tFLOAT64(f64),
 }
 
-pub fn write_list (list:&[MsgList]) -> Result<Vec<u8>,Error> {
+pub fn write_list(list: &[MsgList]) -> Result<Vec<u8>, Error> {
     let mut w = vec![];
     for l in list {
         let tmp = l;
         match *tmp {
             MsgList::tINT(i) => {
-                try!(w.write_u8(1));
-                try!(w.write_i32::<le>(i));
-            },
+                w.write_u8(1)?;
+                w.write_i32::<le>(i)?;
+            }
             MsgList::tSTR(ref s) => {
-                try!(w.write_u8(2));
-                try!(w.write(s.as_bytes()));
-                try!(w.write_u8(0)); //'\0'
-            },
-            MsgList::tCOORD((x,y)) => {
-                try!(w.write_u8(3));
-                try!(w.write_i32::<le>(x));
-                try!(w.write_i32::<le>(y));
-            },
+                w.write_u8(2)?;
+                w.write(s.as_bytes())?;
+                w.write_u8(0)?; //'\0'
+            }
+            MsgList::tCOORD((x, y)) => {
+                w.write_u8(3)?;
+                w.write_i32::<le>(x)?;
+                w.write_i32::<le>(y)?;
+            }
             MsgList::tUINT8(u) => {
-                try!(w.write_u8(4));
-                try!(w.write_u8(u));
-            },
+                w.write_u8(4)?;
+                w.write_u8(u)?;
+            }
             MsgList::tUINT16(u) => {
-                try!(w.write_u8(5));
-                try!(w.write_u16::<le>(u));
-            },
-            MsgList::tCOLOR((r,g,b,a)) => {
-                try!(w.write_u8(6));
-                try!(w.write_u8(r));
-                try!(w.write_u8(g));
-                try!(w.write_u8(b));
-                try!(w.write_u8(a));
-            },
+                w.write_u8(5)?;
+                w.write_u16::<le>(u)?;
+            }
+            MsgList::tCOLOR((r, g, b, a)) => {
+                w.write_u8(6)?;
+                w.write_u8(r)?;
+                w.write_u8(g)?;
+                w.write_u8(b)?;
+                w.write_u8(a)?;
+            }
             MsgList::tTTOL(_) => {
-                return Err(Error{source:"write_list is NOT implemented for tTTOL",detail:None});
-            },
+                return Err(Error {
+                    source: "write_list is NOT implemented for tTTOL",
+                    detail: None,
+                });
+            }
             MsgList::tINT8(i) => {
-                try!(w.write_u8(9));
-                try!(w.write_i8(i));
-            },
+                w.write_u8(9)?;
+                w.write_i8(i)?;
+            }
             MsgList::tINT16(i) => {
-                try!(w.write_u8(10));
-                try!(w.write_i16::<le>(i));
-            },
+                w.write_u8(10)?;
+                w.write_i16::<le>(i)?;
+            }
             MsgList::tNIL => {
-                try!(w.write_u8(12));
-            },
+                w.write_u8(12)?;
+            }
             MsgList::tBYTES(_) => {
-                return Err(Error{source:"write_list is NOT implemented for tBYTES",detail:None});
-            },
+                return Err(Error {
+                    source: "write_list is NOT implemented for tBYTES",
+                    detail: None,
+                });
+            }
             MsgList::tFLOAT32(f) => {
-                try!(w.write_u8(15));
-                try!(w.write_f32::<le>(f));
-            },
+                w.write_u8(15)?;
+                w.write_f32::<le>(f)?;
+            }
             MsgList::tFLOAT64(f) => {
-                try!(w.write_u8(16));
-                try!(w.write_f64::<le>(f));
-            },
+                w.write_u8(16)?;
+                w.write_f64::<le>(f)?;
+            }
         }
     }
-    try!(w.write_u8(0)); /* T_END */
+    w.write_u8(0)?; /* T_END */
     Ok(w)
 }
 
-pub fn read_list (r : &mut Cursor<&[u8]>) -> Vec<MsgList> /*TODO return Result instead*/ {
+pub fn read_list(r: &mut Cursor<&[u8]>) -> Vec<MsgList> /*TODO return Result instead*/ {
     let mut deep = 0;
     let mut list: Vec<Vec<MsgList>> = Vec::new();
     list.push(Vec::new());
     loop {
         let t = match r.read_u8() {
-            Ok(b) => { b }
+            Ok(b) => b,
             Err(_) => {
                 while deep > 0 {
                     let tmp = list.remove(deep);
@@ -223,7 +239,8 @@ pub fn read_list (r : &mut Cursor<&[u8]>) -> Vec<MsgList> /*TODO return Result i
             }
         };
         match t {
-            /*T_END    */  0  => {
+            // T_END
+            0 => {
                 if deep > 0 {
                     let tmp = list.remove(deep);
                     deep -= 1;
@@ -231,66 +248,80 @@ pub fn read_list (r : &mut Cursor<&[u8]>) -> Vec<MsgList> /*TODO return Result i
                 } else {
                     return list.remove(0);
                 }
-            },
-            /*T_TTOL   */  8  => {
+            }
+            // T_TTOL
+            8 => {
                 list.push(Vec::new());
                 deep += 1;
-            },
-            /*T_INT    */  1  => {
-                list[deep].push(MsgList::tINT( r.read_i32::<le>().unwrap() ));
-            },
-            /*T_STR    */  2  => {
+            }
+            // T_INT
+            1 => {
+                list[deep].push(MsgList::tINT(r.read_i32::<le>().unwrap()));
+            }
+            // T_STR
+            2 => {
                 let tmp = r.read_strz().unwrap();
                 list[deep].push(MsgList::tSTR(tmp));
-            },
-            /*T_COORD  */  3  => {
-                list[deep].push(MsgList::tCOORD( (r.read_i32::<le>().unwrap(),r.read_i32::<le>().unwrap()) ));
-            },
-            /*T_UINT8  */  4  => {
-                list[deep].push(MsgList::tUINT8( r.read_u8().unwrap() ));
-            },
-            /*T_UINT16 */  5  => {
-                list[deep].push(MsgList::tUINT16( r.read_u16::<le>().unwrap() ));
-            },
-            /*T_COLOR  */  6  => {
-                list[deep].push(MsgList::tCOLOR( (r.read_u8().unwrap(),
-                                                  r.read_u8().unwrap(),
-                                                  r.read_u8().unwrap(),
-                                                  r.read_u8().unwrap()) ));
-            },
-            /*T_INT8   */  9  => {
-                list[deep].push(MsgList::tINT8( r.read_i8().unwrap() ));
-            },
-            /*T_INT16  */  10 => {
-                list[deep].push(MsgList::tINT16( r.read_i16::<le>().unwrap() ));
-            },
-            /*T_NIL    */  12 => {
+            }
+            // T_COORD
+            3 => {
+                list[deep].push(MsgList::tCOORD((r.read_i32::<le>().unwrap(), r.read_i32::<le>().unwrap())));
+            }
+            // T_UINT8
+            4 => {
+                list[deep].push(MsgList::tUINT8(r.read_u8().unwrap()));
+            }
+            // T_UINT16
+            5 => {
+                list[deep].push(MsgList::tUINT16(r.read_u16::<le>().unwrap()));
+            }
+            // T_COLOR
+            6 => {
+                list[deep].push(MsgList::tCOLOR((r.read_u8().unwrap(),
+                                                 r.read_u8().unwrap(),
+                                                 r.read_u8().unwrap(),
+                                                 r.read_u8().unwrap())));
+            }
+            // T_INT8
+            9 => {
+                list[deep].push(MsgList::tINT8(r.read_i8().unwrap()));
+            }
+            // T_INT16
+            10 => {
+                list[deep].push(MsgList::tINT16(r.read_i16::<le>().unwrap()));
+            }
+            // T_NIL
+            12 => {
                 list[deep].push(MsgList::tNIL);
-            },
-            /*T_BYTES  */  14 => {
+            }
+            // T_BYTES
+            14 => {
                 let len = r.read_u8().unwrap();
                 if (len & 128) != 0 {
                     let len = r.read_i32::<le>().unwrap();
                     assert!(len > 0);
                     let mut bytes = vec![0; len as usize];
                     r.read_exact(&mut bytes).unwrap();
-                    list[deep].push(MsgList::tBYTES( bytes ));
+                    list[deep].push(MsgList::tBYTES(bytes));
                 } else {
                     let mut bytes = vec![0; len as usize];
                     r.read_exact(&mut bytes).unwrap();
-                    list[deep].push(MsgList::tBYTES( bytes ));
+                    list[deep].push(MsgList::tBYTES(bytes));
                 }
-            },
-            /*T_FLOAT32*/  15 => {
-                list[deep].push(MsgList::tFLOAT32( r.read_f32::<le>().unwrap() ));
-            },
-            /*T_FLOAT64*/  16 => {
-                list[deep].push(MsgList::tFLOAT64( r.read_f64::<le>().unwrap() ));
-            },
-            /*UNKNOWN*/    _  => {
+            }
+            // T_FLOAT32
+            15 => {
+                list[deep].push(MsgList::tFLOAT32(r.read_f32::<le>().unwrap()));
+            }
+            // T_FLOAT64
+            16 => {
+                list[deep].push(MsgList::tFLOAT64(r.read_f64::<le>().unwrap()));
+            }
+            // UNKNOWN
+            _ => {
                 info!("    !!! UNKNOWN LIST ELEMENT !!!");
                 return list.remove(0); /*TODO return Error instead*/
-            },
+            }
         }
     }
 }
@@ -299,9 +330,9 @@ use std::io;
 
 pub trait ReadExtExt: BufRead {
     #[inline]
-    fn read_strz (&mut self) -> io::Result<String> {
+    fn read_strz(&mut self) -> io::Result<String> {
         let mut tmp = Vec::new();
-        try!(self.read_until(0, &mut tmp));
+        self.read_until(0, &mut tmp)?;
         tmp.pop();
         Ok(String::from_utf8(tmp).unwrap())
     }
@@ -310,9 +341,9 @@ pub trait ReadExtExt: BufRead {
 impl<R: BufRead + ?Sized> ReadExtExt for R {}
 
 impl RelElem {
-    pub fn from_buf (kind:u8, buf:&[u8]) -> Result<RelElem,Error> {
+    pub fn from_buf(kind: u8, buf: &[u8]) -> Result<RelElem, Error> {
         let mut r = Cursor::new(buf);
-        //XXX RemoteUI.java +53
+        // XXX RemoteUI.java +53
         match kind {
             0  /*NEWWDG*/  => {
                 let id = try!(r.read_u16::<le>());
@@ -417,27 +448,32 @@ impl RelElem {
         }
     }
 
-    pub fn to_buf (&self, last:bool) -> Result<Vec<u8>,Error> {
+    pub fn to_buf(&self, last: bool) -> Result<Vec<u8>, Error> {
         let mut w = vec![];
         match *self {
             RelElem::WDGMSG(ref msg) => {
                 let mut tmp = vec![];
-                try!(tmp.write_u16::<le>(msg.id)); // widget ID
-                try!(tmp.write(msg.name.as_bytes())); // message name
-                try!(tmp.write_u8(0)); // \0
-                let args_buf = try!(write_list(&msg.args));
-                try!(tmp.write(&args_buf));
+                tmp.write_u16::<le>(msg.id)?; // widget ID
+                tmp.write(msg.name.as_bytes())?; // message name
+                tmp.write_u8(0)?; // \0
+                let args_buf = write_list(&msg.args)?;
+                tmp.write(&args_buf)?;
                 if last {
-                    try!(w.write_u8(1)); // type WDGMSG
+                    w.write_u8(1)?; // type WDGMSG
                 } else {
-                    try!(w.write_u8(1 & 0x80)); // type WDGMSG & more rels attached bit
-                    try!(w.write_u16::<le>(tmp.len() as u16)); // rel length
+                    w.write_u8(1 & 0x80)?; // type WDGMSG & more rels attached bit
+                    w.write_u16::<le>(tmp.len() as u16)?; // rel length
                 }
-                try!(w.write(&tmp));
+                w.write(&tmp)?;
 
                 Ok(w)
             }
-            _ => {Err(Error{source:"RelElem.to_buf is not implemented for that elem type",detail:None})}
+            _ => {
+                Err(Error {
+                    source: "RelElem.to_buf is not implemented for that elem type",
+                    detail: None,
+                })
+            }
         }
     }
 }
@@ -450,167 +486,172 @@ pub enum SessError {
     CONN,
     PVER,
     EXPR,
-    UNKNOWN(u8)
+    UNKNOWN(u8),
 }
 impl SessError {
-    pub fn new(t:u8) -> SessError {
+    pub fn new(t: u8) -> SessError {
         match t {
-            0 => { SessError::OK },
-            1 => { SessError::AUTH },
-            2 => { SessError::BUSY },
-            3 => { SessError::CONN },
-            4 => { SessError::PVER },
-            5 => { SessError::EXPR },
-            _ => { SessError::UNKNOWN(t) },
+            0 => SessError::OK,
+            1 => SessError::AUTH,
+            2 => SessError::BUSY,
+            3 => SessError::CONN,
+            4 => SessError::PVER,
+            5 => SessError::EXPR,
+            _ => SessError::UNKNOWN(t),
         }
     }
 }
 #[allow(non_camel_case_types)]
 #[derive(Debug)]
 pub struct sSess {
-    pub err : SessError,
+    pub err: SessError,
 }
 #[allow(non_camel_case_types)]
 #[derive(Debug)]
 pub struct cSess {
-    pub login : String,
-    pub cookie : Vec<u8>
+    pub login: String,
+    pub cookie: Vec<u8>,
 }
 pub struct Rel {
-    pub seq : u16,
-    pub rel : Vec<RelElem>
+    pub seq: u16,
+    pub rel: Vec<RelElem>,
 }
 #[allow(dead_code)]
 impl Rel {
-    fn new (seq:u16) -> Rel {
-        Rel{ seq:seq, rel:Vec::new() }
+    fn new(seq: u16) -> Rel {
+        Rel {
+            seq: seq,
+            rel: Vec::new(),
+        }
     }
-    fn append (&mut self, elem:RelElem) {
+    fn append(&mut self, elem: RelElem) {
         self.rel.push(elem);
     }
 }
 impl Debug for Rel {
-    fn fmt(&self, f : &mut Formatter) -> ::std::fmt::Result {
-        try!(writeln!(f, "REL seq={}", self.seq));
+    fn fmt(&self, f: &mut Formatter) -> ::std::fmt::Result {
+        writeln!(f, "REL seq={}", self.seq)?;
         for r in &self.rel {
-            try!(writeln!(f, "      {:?}", r));
+            writeln!(f, "      {:?}", r)?;
         }
         Ok(())
     }
 }
 #[derive(Debug)]
 pub struct Ack {
-    pub seq : u16,
+    pub seq: u16,
 }
 #[allow(dead_code)]
 #[derive(Debug)]
 pub struct Beat;
 #[derive(Debug)]
 pub struct MapReq {
-    pub x : i32,
-    pub y : i32,
+    pub x: i32,
+    pub y: i32,
 }
 pub struct MapData {
-    pub pktid : i32,
-    pub off   : u16,
-    pub len   : u16,
-    pub buf   : Vec<u8>,
+    pub pktid: i32,
+    pub off: u16,
+    pub len: u16,
+    pub buf: Vec<u8>,
 }
 impl Debug for MapData {
-    fn fmt(&self, f : &mut Formatter) -> ::std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> ::std::fmt::Result {
         write!(f, "MAPDATA pktid:{} offset:{} len:{} buf:[..{}]", self.pktid, self.off, self.len, self.buf.len())
     }
 }
 pub struct ObjData {
-    pub obj : Vec<ObjDataElem>,
+    pub obj: Vec<ObjDataElem>,
 }
 impl Debug for ObjData {
-    fn fmt(&self, f : &mut Formatter) -> ::std::fmt::Result {
-        try!(writeln!(f, "OBJDATA"));
+    fn fmt(&self, f: &mut Formatter) -> ::std::fmt::Result {
+        writeln!(f, "OBJDATA")?;
         for o in &self.obj {
-            try!(writeln!(f, "      {:?}", o));
+            writeln!(f, "      {:?}", o)?;
         }
         Ok(())
     }
 }
 #[derive(Debug)]
 pub struct ObjDataElem {
-    pub fl    : u8,
-    pub id    : u32,
-    pub frame : i32,
-    pub prop  : Vec<ObjDataElemProp>,
+    pub fl: u8,
+    pub id: u32,
+    pub frame: i32,
+    pub prop: Vec<ObjDataElemProp>,
 }
 #[derive(Debug)]
 pub struct ObjAck {
-    pub obj : Vec<ObjAckElem>,
+    pub obj: Vec<ObjAckElem>,
 }
 impl ObjAck {
-    pub fn new (objdata: &ObjData) -> ObjAck {
-        let mut objack = ObjAck{ obj : Vec::new() };
+    pub fn new(objdata: &ObjData) -> ObjAck {
+        let mut objack = ObjAck { obj: Vec::new() };
         for o in &objdata.obj {
-            objack.obj.push(ObjAckElem{ id : o.id, frame : o.frame});
+            objack.obj.push(ObjAckElem {
+                id: o.id,
+                frame: o.frame,
+            });
         }
         objack
     }
 }
 #[derive(Debug)]
 pub struct ObjAckElem {
-    pub id : u32,
-    pub frame : i32,
+    pub id: u32,
+    pub frame: i32,
 }
 
-//#[derive(Debug)]
-//pub struct Close;
+// #[derive(Debug)]
+// pub struct Close;
 
 #[allow(non_camel_case_types)]
 #[derive(Debug)]
-//TODO replace with plain struct variants
+// TODO replace with plain struct variants
 pub enum Message {
-    C_SESS( cSess ),
-    S_SESS( sSess ),
-    REL( Rel ),
-    ACK( Ack ),
+    C_SESS(cSess),
+    S_SESS(sSess),
+    REL(Rel),
+    ACK(Ack),
     BEAT,
-    MAPREQ( MapReq ),
-    MAPDATA( MapData ),
-    OBJDATA( ObjData ),
-    OBJACK( ObjAck ),
-    CLOSE/*( Close )*/,
+    MAPREQ(MapReq),
+    MAPDATA(MapData),
+    OBJDATA(ObjData),
+    OBJACK(ObjAck),
+    CLOSE, // ( Close )
 }
 
-/*TODO maybe:
-pub enum ClientMessage {
-    C_SESS( cSess ),
-    REL( Rel ),
-    ACK( Ack ),
-    BEAT,
-    MAPREQ( MapReq ),
-    OBJACK( ObjAck ),
-    CLOSE/*( Close )*/,
-}
-pub enum ServerMessage {
-    S_SESS( sSess ),
-    REL( Rel ),
-    ACK( Ack ),
-    MAPDATA( MapData ),
-    OBJDATA( ObjData ),
-    CLOSE/*( Close )*/,
-}
-*/
+// TODO maybe:
+// pub enum ClientMessage {
+//    C_SESS( cSess ),
+//    REL( Rel ),
+//    ACK( Ack ),
+//    BEAT,
+//    MAPREQ( MapReq ),
+//    OBJACK( ObjAck ),
+//    CLOSE/*( Close )*/,
+// }
+// pub enum ServerMessage {
+//    S_SESS( sSess ),
+//    REL( Rel ),
+//    ACK( Ack ),
+//    MAPDATA( MapData ),
+//    OBJDATA( ObjData ),
+//    CLOSE/*( Close )*/,
+// }
 
 #[allow(non_camel_case_types)]
 #[derive(Debug)]
-//TODO replace with plain struct variants
+// TODO replace with plain struct variants
 pub enum ObjDataElemProp {
     odREM,
-    odMOVE((i32,i32),u16),
+    odMOVE((i32, i32), u16),
     odRES(u16),
-    odLINBEG((i32,i32),(i32,i32),i32),
+    odLINBEG((i32, i32), (i32, i32), i32),
     odLINSTEP(i32),
-    odSPEECH(u16,String),
+    odSPEECH(u16, String),
     odCOMPOSE(u16),
-    odDRAWOFF((i32,i32)),
-    odLUMIN((i32,i32),u16,u8),
+    odDRAWOFF((i32, i32)),
+    odLUMIN((i32, i32), u16, u8),
     odAVATAR(Vec<u16>),
     odFOLLOW(odFOLLOW),
     odHOMING(odHOMING),
@@ -627,19 +668,19 @@ pub enum ObjDataElemProp {
 #[derive(Debug)]
 pub enum odFOLLOW {
     Stop,
-    To(u32,u16,String),
+    To(u32, u16, String),
 }
 #[allow(non_camel_case_types)]
 #[derive(Debug)]
 pub enum odHOMING {
-    New((i32,i32),u16),
-    Change((i32,i32),u16),
+    New((i32, i32), u16),
+    Change((i32, i32), u16),
     Delete,
 }
 #[allow(non_camel_case_types)]
 #[derive(Debug)]
 pub enum odBUDDY {
-    Update(String,u8,u8),
+    Update(String, u8, u8),
     Delete,
 }
 #[allow(non_camel_case_types)]
@@ -650,8 +691,8 @@ pub enum odICON {
 }
 
 impl ObjDataElemProp {
-    pub fn from_buf (r : &mut Cursor<&[u8]>) -> Result<Option<ObjDataElemProp>,Error> {
-        let t = try!(r.read_u8()) as usize;
+    pub fn from_buf(r: &mut Cursor<&[u8]>) -> Result<Option<ObjDataElemProp>, Error> {
+        let t = r.read_u8()? as usize;
         match t {
             0   /*OD_REM*/ => {
                 Ok(Some(ObjDataElemProp::odREM))
@@ -903,24 +944,24 @@ pub enum MessageDirection {
 }
 
 impl Message {
-    //TODO ADD fuzzing tests:
+    // TODO ADD fuzzing tests:
     //        for i in range(0u8, 255) {
     //            let mut v = Vec::new();
     //            v.push(i);
     //            info!("{}", Message::from_buf(v.as_slice()));
     //        }
-    //TODO
+    // TODO
     // fn from_buf_checked (buf,dir) {
     //     if (this message can be received by this dir) {
     //         return Ok(buf.from_buf)
     //     else
     //         return Err("this king of message can't be received by this side")
     // }
-    //TODO return Error with stack trace on Err instead of String
-    //TODO get Vec not &[]. return Vec in the case of error
-    pub fn from_buf (buf : &[u8], dir : MessageDirection) -> Result<(Message,Option<Vec<u8>>),Error> {
+    // TODO return Error with stack trace on Err instead of String
+    // TODO get Vec not &[]. return Vec in the case of error
+    pub fn from_buf(buf: &[u8], dir: MessageDirection) -> Result<(Message, Option<Vec<u8>>), Error> {
         let mut r = Cursor::new(buf);
-        let mtype = try!(r.read_u8());
+        let mtype = r.read_u8()?;
         let res = match mtype {
             0 /*SESS*/ => {
                 //TODO ??? Ok(Message::sess(err))
@@ -1022,16 +1063,20 @@ impl Message {
         };
 
         let mut tmp = Vec::new();
-        try!(r.read_to_end(&mut tmp));
-        let remains = if tmp.is_empty() { None } else { Some(tmp) };
+        r.read_to_end(&mut tmp)?;
+        let remains = if tmp.is_empty() {
+            None
+        } else {
+            Some(tmp)
+        };
 
         match res {
-            Ok(msg) => {Ok((msg,remains))}
-            Err(e) => {Err(e)}
+            Ok(msg) => Ok((msg, remains)),
+            Err(e) => Err(e),
         }
     }
 
-    pub fn to_buf (&self) -> Result<Vec<u8>,Error> {
+    pub fn to_buf(&self) -> Result<Vec<u8>, Error> {
         match *self {
             // !!! this is client session message, not server !!!
             Message::C_SESS(ref sess) => /*(name: &str, cookie: &[u8]) -> Vec<u8>*/ {

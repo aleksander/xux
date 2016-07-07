@@ -357,11 +357,11 @@ impl ControlConn {
                         self.text = Some(s);
                     } else if buf.starts_with("export z") { // export current grid z coordinates to .OBJ
                         //TODO move to fn client.current_map
-                        let mut f = try!(File::create("z.obj"));
+                        let mut f = File::create("z.obj")?;
                         let grid = client.hero_grid();
                         for y in 0..100 {
                             for x in 0..100 {
-                                try!(f.write_all(format!("v {} {} {}\n", (y as f32)/50., (grid.z[x+y*100] as f32)/200., (x as f32)/50.).as_bytes()));
+                                f.write_all(format!("v {} {} {}\n", (y as f32)/50., (grid.z[x+y*100] as f32)/200., (x as f32)/50.).as_bytes())?;
                             }
                         }
                         for y in 0..99 {
@@ -370,13 +370,13 @@ impl ControlConn {
                                 let b = a+1;
                                 let c = b+100;
                                 let d = c-1;
-                                try!(f.write_all(format!("f {} {} {} {}\n", a, b, c, d).as_bytes()));
+                                f.write_all(format!("f {} {} {} {}\n", a, b, c, d).as_bytes())?;
                             }
                         }
                         self.text = Some("ok\n".to_string());
                     } else if buf.starts_with("export tiles") { // export current grid tiles to .PNG
                         //TODO move to fn client.current_map
-                        let mut f = try!(File::create("tiles.png"));
+                        let mut f = File::create("tiles.png")?;
                         let mut img = ImageBuffer::new(100, 100);
                         let grid = client.hero_grid();
                         for y in 0..100 {
@@ -459,7 +459,7 @@ impl ControlConn {
                         self.text = Some(s);
                     }*/ /*else if buf.starts_with("export ol") { // export current grid ol to .txt
                         //TODO move to fn client.current_map
-                        let mut f = try!(File::create("ol.txt"));
+                        let mut f = File::create("ol.txt")?;
                         let hero_obj: &Obj = client.objects.get(&client.hero.obj.unwrap()).unwrap();
                         let mx:i32 = hero_obj.x / 1100;
                         let my:i32 = hero_obj.y / 1100;
@@ -475,9 +475,9 @@ impl ControlConn {
                                     16 => b"!",
                                     _ => b"~",
                                 };
-                                try!(f.write_all(symbol));
+                                f.write_all(symbol)?;
                             }
-                            try!(f.write_all(b"\n"));
+                            f.write_all(b"\n")?;
                         }
                         self.text = Some("ok\n".to_string());
                     } */
