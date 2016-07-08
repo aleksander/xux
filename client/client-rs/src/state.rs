@@ -549,8 +549,7 @@ impl State {
                 } else {
                     let cur = self.rx_rel_seq;
                     let new = rel.seq;
-                    let future = ((new > cur) && ((new - cur) < (u16::MAX / 2))) ||
-                                 ((new < cur) && ((cur - new) > (u16::MAX / 2)));
+                    let future = ((new > cur) && ((new - cur) < (u16::MAX / 2))) || ((new < cur) && ((cur - new) > (u16::MAX / 2)));
                     if future {
                         // future REL
                         self.cache_rel(rel);
@@ -617,7 +616,9 @@ impl State {
                             //   Occupied(obj) { if obj.frame > o.frame { obj.update(o); } }
                             //   Vacant(obj) { obj.insert(Obj::new(o.id, None, None, None, None)); }
                             // }
-                            let obj = self.objects.entry(o.id).or_insert(Obj::new(o.id, None, None, None, None));
+                            let obj = self.objects
+                                .entry(o.id)
+                                .or_insert(Obj::new(o.id, None, None, None, None));
 
                             // FIXME consider o.frame overflow !!!
                             if let Some(frame) = obj.frame {

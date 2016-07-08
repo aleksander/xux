@@ -151,35 +151,50 @@ pub enum MsgList {
     tFLOAT64(f64),
 }
 
+const T_END: u8 = 0;
+const T_TTOL: u8 = 8;
+const T_INT: u8 = 1;
+const T_STR: u8 = 2;
+const T_COORD: u8 = 3;
+const T_UINT8: u8 = 4;
+const T_UINT16: u8 = 5;
+const T_COLOR: u8 = 6;
+const T_INT8: u8 = 9;
+const T_INT16: u8 = 10;
+const T_NIL: u8 = 12;
+const T_BYTES: u8 = 14;
+const T_FLOAT32: u8 = 15;
+const T_FLOAT64: u8 = 16;
+
 pub fn write_list(list: &[MsgList]) -> Result<Vec<u8>, Error> {
     let mut w = vec![];
     for l in list {
         let tmp = l;
         match *tmp {
             MsgList::tINT(i) => {
-                w.write_u8(1)?;
+                w.write_u8(T_INT)?;
                 w.write_i32::<le>(i)?;
             }
             MsgList::tSTR(ref s) => {
-                w.write_u8(2)?;
+                w.write_u8(T_STR)?;
                 w.write(s.as_bytes())?;
                 w.write_u8(0)?; //'\0'
             }
             MsgList::tCOORD((x, y)) => {
-                w.write_u8(3)?;
+                w.write_u8(T_COORD)?;
                 w.write_i32::<le>(x)?;
                 w.write_i32::<le>(y)?;
             }
             MsgList::tUINT8(u) => {
-                w.write_u8(4)?;
+                w.write_u8(T_UINT8)?;
                 w.write_u8(u)?;
             }
             MsgList::tUINT16(u) => {
-                w.write_u8(5)?;
+                w.write_u8(T_UINT16)?;
                 w.write_u16::<le>(u)?;
             }
             MsgList::tCOLOR((r, g, b, a)) => {
-                w.write_u8(6)?;
+                w.write_u8(T_COLOR)?;
                 w.write_u8(r)?;
                 w.write_u8(g)?;
                 w.write_u8(b)?;
@@ -192,15 +207,15 @@ pub fn write_list(list: &[MsgList]) -> Result<Vec<u8>, Error> {
                 });
             }
             MsgList::tINT8(i) => {
-                w.write_u8(9)?;
+                w.write_u8(T_INT8)?;
                 w.write_i8(i)?;
             }
             MsgList::tINT16(i) => {
-                w.write_u8(10)?;
+                w.write_u8(T_INT16)?;
                 w.write_i16::<le>(i)?;
             }
             MsgList::tNIL => {
-                w.write_u8(12)?;
+                w.write_u8(T_NIL)?;
             }
             MsgList::tBYTES(_) => {
                 return Err(Error {
@@ -209,16 +224,16 @@ pub fn write_list(list: &[MsgList]) -> Result<Vec<u8>, Error> {
                 });
             }
             MsgList::tFLOAT32(f) => {
-                w.write_u8(15)?;
+                w.write_u8(T_FLOAT32)?;
                 w.write_f32::<le>(f)?;
             }
             MsgList::tFLOAT64(f) => {
-                w.write_u8(16)?;
+                w.write_u8(T_FLOAT64)?;
                 w.write_f64::<le>(f)?;
             }
         }
     }
-    w.write_u8(0)?; /* T_END */
+    w.write_u8(T_END)?;
     Ok(w)
 }
 
@@ -239,8 +254,7 @@ pub fn read_list(r: &mut Cursor<&[u8]>) -> Vec<MsgList> /*TODO return Result ins
             }
         };
         match t {
-            // T_END
-            0 => {
+            T_END => {
                 if deep > 0 {
                     let tmp = list.remove(deep);
                     deep -= 1;
@@ -249,53 +263,39 @@ pub fn read_list(r: &mut Cursor<&[u8]>) -> Vec<MsgList> /*TODO return Result ins
                     return list.remove(0);
                 }
             }
-            // T_TTOL
-            8 => {
+            T_TTOL => {
                 list.push(Vec::new());
                 deep += 1;
             }
-            // T_INT
-            1 => {
+            T_INT => {
                 list[deep].push(MsgList::tINT(r.read_i32::<le>().unwrap()));
             }
-            // T_STR
-            2 => {
+            T_STR => {
                 let tmp = r.read_strz().unwrap();
                 list[deep].push(MsgList::tSTR(tmp));
             }
-            // T_COORD
-            3 => {
+            T_COORD => {
                 list[deep].push(MsgList::tCOORD((r.read_i32::<le>().unwrap(), r.read_i32::<le>().unwrap())));
             }
-            // T_UINT8
-            4 => {
+            T_UINT8 => {
                 list[deep].push(MsgList::tUINT8(r.read_u8().unwrap()));
             }
-            // T_UINT16
-            5 => {
+            T_UINT16 => {
                 list[deep].push(MsgList::tUINT16(r.read_u16::<le>().unwrap()));
             }
-            // T_COLOR
-            6 => {
-                list[deep].push(MsgList::tCOLOR((r.read_u8().unwrap(),
-                                                 r.read_u8().unwrap(),
-                                                 r.read_u8().unwrap(),
-                                                 r.read_u8().unwrap())));
+            T_COLOR => {
+                list[deep].push(MsgList::tCOLOR((r.read_u8().unwrap(), r.read_u8().unwrap(), r.read_u8().unwrap(), r.read_u8().unwrap())));
             }
-            // T_INT8
-            9 => {
+            T_INT8 => {
                 list[deep].push(MsgList::tINT8(r.read_i8().unwrap()));
             }
-            // T_INT16
-            10 => {
+            T_INT16 => {
                 list[deep].push(MsgList::tINT16(r.read_i16::<le>().unwrap()));
             }
-            // T_NIL
-            12 => {
+            T_NIL => {
                 list[deep].push(MsgList::tNIL);
             }
-            // T_BYTES
-            14 => {
+            T_BYTES => {
                 let len = r.read_u8().unwrap();
                 if (len & 128) != 0 {
                     let len = r.read_i32::<le>().unwrap();
@@ -309,15 +309,12 @@ pub fn read_list(r: &mut Cursor<&[u8]>) -> Vec<MsgList> /*TODO return Result ins
                     list[deep].push(MsgList::tBYTES(bytes));
                 }
             }
-            // T_FLOAT32
-            15 => {
+            T_FLOAT32 => {
                 list[deep].push(MsgList::tFLOAT32(r.read_f32::<le>().unwrap()));
             }
-            // T_FLOAT64
-            16 => {
+            T_FLOAT64 => {
                 list[deep].push(MsgList::tFLOAT64(r.read_f64::<le>().unwrap()));
             }
-            // UNKNOWN
             _ => {
                 info!("    !!! UNKNOWN LIST ELEMENT !!!");
                 return list.remove(0); /*TODO return Error instead*/
@@ -340,111 +337,153 @@ pub trait ReadExtExt: BufRead {
 
 impl<R: BufRead + ?Sized> ReadExtExt for R {}
 
+const NEWWDG: u8 = 0;
+const WDGMSG: u8 = 1;
+const DSTWDG: u8 = 2;
+const MAPIV: u8 = 3;
+const GLOBLOB: u8 = 4;
+const PAGINAE: u8 = 5;
+const RESID: u8 = 6;
+const PARTY: u8 = 7;
+const SFX: u8 = 8;
+const CATTR: u8 = 9;
+const MUSIC: u8 = 10;
+const TILES: u8 = 11;
+const BUFF: u8 = 12;
+const SESSKEY: u8 = 13;
+
+const GMSG_TIME: u8 = 0;
+const GMSG_ASTRO: u8 = 1;
+const GMSG_LIGHT: u8 = 2;
+const GMSG_SKY: u8 = 3;
+
+const MORE_RELS_ATTACHED_BIT: u8 = 0x80;
+
 impl RelElem {
     pub fn from_buf(kind: u8, buf: &[u8]) -> Result<RelElem, Error> {
         let mut r = Cursor::new(buf);
         // XXX RemoteUI.java +53
         match kind {
-            0  /*NEWWDG*/  => {
-                let id = try!(r.read_u16::<le>());
+            NEWWDG => {
+                let id = r.read_u16::<le>()?;
                 let name = r.read_strz().unwrap();
-                let parent = try!(r.read_u16::<le>());
+                let parent = r.read_u16::<le>()?;
                 let pargs = read_list(&mut r);
                 let cargs = read_list(&mut r);
-                Ok( RelElem::NEWWDG( NewWdg{ id:id, name:name, parent:parent, pargs:pargs, cargs:cargs } ) )
-            },
-            1  /*WDGMSG*/  => {
-                let id = try!(r.read_u16::<le>());
+                Ok(RelElem::NEWWDG(NewWdg {
+                    id: id,
+                    name: name,
+                    parent: parent,
+                    pargs: pargs,
+                    cargs: cargs,
+                }))
+            }
+            WDGMSG => {
+                let id = r.read_u16::<le>()?;
                 let name = r.read_strz().unwrap();
                 let args = read_list(&mut r);
-                Ok( RelElem::WDGMSG( WdgMsg{ id:id, name:name, args:args } ) )
-            },
-            2  /*DSTWDG*/  => {
-                let id = try!(r.read_u16::<le>());
-                Ok( RelElem::DSTWDG( DstWdg{ id:id } ) )
-            },
-            3  /*MAPIV*/   => { Ok( RelElem::MAPIV(MapIv) ) },
-            4  /*GLOBLOB*/ => {
+                Ok(RelElem::WDGMSG(WdgMsg {
+                    id: id,
+                    name: name,
+                    args: args,
+                }))
+            }
+            DSTWDG => {
+                let id = r.read_u16::<le>()?;
+                Ok(RelElem::DSTWDG(DstWdg { id: id }))
+            }
+            MAPIV => Ok(RelElem::MAPIV(MapIv)),
+            GLOBLOB => {
                 let mut globs = Vec::new();
                 let inc = r.read_u8().unwrap();
                 loop {
                     let t = match r.read_u8() {
                         Ok(b) => b,
-                        Err(_) => break //TODO check error type
+                        Err(_) => break, //TODO check error type
                     };
-                    globs.push( match t {
-                        0 /*GMSG_TIME*/ => {
+                    globs.push(match t {
+                        GMSG_TIME => {
                             Glob::Time {
                                 time: r.read_i32::<le>().unwrap(),
                                 season: r.read_u8().unwrap(),
-                                inc: inc
+                                inc: inc,
                             }
                         }
-                        /*1 /*GMSG_ASTRO*/ =>*/
-                        2 /*GMSG_LIGHT*/ => {
-                            Glob::Light { 
+                        // GMSG_ASTRO =>
+                        GMSG_LIGHT => {
+                            Glob::Light {
                                 amb: (r.read_u8().unwrap(), r.read_u8().unwrap(), r.read_u8().unwrap(), r.read_u8().unwrap()),
                                 dif: (r.read_u8().unwrap(), r.read_u8().unwrap(), r.read_u8().unwrap(), r.read_u8().unwrap()),
                                 spc: (r.read_u8().unwrap(), r.read_u8().unwrap(), r.read_u8().unwrap(), r.read_u8().unwrap()),
                                 ang: r.read_i32::<le>().unwrap(),
                                 ele: r.read_i32::<le>().unwrap(),
-                                inc: inc
+                                inc: inc,
                             }
                         }
-                        3 /*GMSG_SKY*/ => {
+                        GMSG_SKY => {
                             use std::u16;
                             let id1 = r.read_u16::<le>().unwrap();
-                            Glob::Sky(
-                                if id1 == u16::MAX {
-                                    None
+                            Glob::Sky(if id1 == u16::MAX {
+                                None
+                            } else {
+                                let id2 = r.read_u16::<le>().unwrap();
+                                if id2 == u16::MAX {
+                                    Some((id1, None))
                                 } else {
-                                    let id2 = r.read_u16::<le>().unwrap();
-                                    if id2 == u16::MAX {
-                                        Some((
-                                            id1, None
-                                        ))
-                                    } else {
-                                        Some((
-                                            id1, Some((
-                                                id2, r.read_i32::<le>().unwrap()
-                                            ))
-                                        ))
-                                    }
+                                    Some((id1, Some((id2, r.read_i32::<le>().unwrap()))))
                                 }
-                            )
+                            })
                         }
-                        _ => return Err( Error{ source:"unknown GLOBLOB type", detail:None })
+                        _ => {
+                            return Err(Error {
+                                source: "unknown GLOBLOB type",
+                                detail: None,
+                            })
+                        }
                     });
                 }
-                Ok( RelElem::GLOBLOB( globs ))
-            },
-            5  /*PAGINAE*/ => { Ok( RelElem::PAGINAE(Paginae) ) },
-            6  /*RESID*/   => {
-                let id = try!(r.read_u16::<le>());
+                Ok(RelElem::GLOBLOB(globs))
+            }
+            PAGINAE => Ok(RelElem::PAGINAE(Paginae)),
+            RESID => {
+                let id = r.read_u16::<le>()?;
                 let name = r.read_strz().unwrap();
-                let ver = try!(r.read_u16::<le>());
-                Ok( RelElem::RESID( ResId{ id:id, name:name, ver:ver } ) )
-            },
-            7  /*PARTY*/   => { Ok( RelElem::PARTY(Party) ) },
-            8  /*SFX*/     => { Ok( RelElem::SFX(Sfx) ) },
-            9  /*CATTR*/   => { Ok( RelElem::CATTR(Cattr) ) },
-            10 /*MUSIC*/   => { Ok( RelElem::MUSIC(Music) ) },
-            11 /*TILES*/   => {
+                let ver = r.read_u16::<le>()?;
+                Ok(RelElem::RESID(ResId {
+                    id: id,
+                    name: name,
+                    ver: ver,
+                }))
+            }
+            PARTY => Ok(RelElem::PARTY(Party)),
+            SFX => Ok(RelElem::SFX(Sfx)),
+            CATTR => Ok(RelElem::CATTR(Cattr)),
+            MUSIC => Ok(RelElem::MUSIC(Music)),
+            TILES => {
                 let mut tiles = Vec::new();
                 loop {
                     let id = match r.read_u8() {
                         Ok(b) => b,
-                        Err(_) => break //TODO check error type
+                        Err(_) => break, //TODO check error type
                     };
                     let name = r.read_strz().unwrap();
-                    let ver = try!(r.read_u16::<le>());
-                    tiles.push(TilesElem{ id:id, name:name, ver:ver });
+                    let ver = r.read_u16::<le>()?;
+                    tiles.push(TilesElem {
+                        id: id,
+                        name: name,
+                        ver: ver,
+                    });
                 }
-                Ok( RelElem::TILES(Tiles{ tiles:tiles }) )
-            },
-            12 /*BUFF*/    => { Ok( RelElem::BUFF(Buff) ) },
-            13 /*SESSKEY*/ => { Ok( RelElem::SESSKEY(SessKey) ) },
-            _  /*UNKNOWN*/ => { Err( Error{ source:"unknown REL type", detail:None } ) },
+                Ok(RelElem::TILES(Tiles { tiles: tiles }))
+            }
+            BUFF => Ok(RelElem::BUFF(Buff)),
+            SESSKEY => Ok(RelElem::SESSKEY(SessKey)),
+            _ => {
+                Err(Error {
+                    source: "unknown REL type",
+                    detail: None,
+                })
+            }
         }
     }
 
@@ -455,13 +494,13 @@ impl RelElem {
                 let mut tmp = vec![];
                 tmp.write_u16::<le>(msg.id)?; // widget ID
                 tmp.write(msg.name.as_bytes())?; // message name
-                tmp.write_u8(0)?; // \0
+                tmp.write_u8(0)?; // '\0'
                 let args_buf = write_list(&msg.args)?;
                 tmp.write(&args_buf)?;
                 if last {
-                    w.write_u8(1)?; // type WDGMSG
+                    w.write_u8(WDGMSG)?;
                 } else {
-                    w.write_u8(1 & 0x80)?; // type WDGMSG & more rels attached bit
+                    w.write_u8(WDGMSG & MORE_RELS_ATTACHED_BIT)?;
                     w.write_u16::<le>(tmp.len() as u16)?; // rel length
                 }
                 w.write(&tmp)?;
@@ -488,6 +527,7 @@ pub enum SessError {
     EXPR,
     UNKNOWN(u8),
 }
+
 impl SessError {
     pub fn new(t: u8) -> SessError {
         match t {
@@ -501,21 +541,25 @@ impl SessError {
         }
     }
 }
+
 #[allow(non_camel_case_types)]
 #[derive(Debug)]
 pub struct sSess {
     pub err: SessError,
 }
+
 #[allow(non_camel_case_types)]
 #[derive(Debug)]
 pub struct cSess {
     pub login: String,
     pub cookie: Vec<u8>,
 }
+
 pub struct Rel {
     pub seq: u16,
     pub rel: Vec<RelElem>,
 }
+
 #[allow(dead_code)]
 impl Rel {
     fn new(seq: u16) -> Rel {
@@ -528,6 +572,7 @@ impl Rel {
         self.rel.push(elem);
     }
 }
+
 impl Debug for Rel {
     fn fmt(&self, f: &mut Formatter) -> ::std::fmt::Result {
         writeln!(f, "REL seq={}", self.seq)?;
@@ -537,32 +582,39 @@ impl Debug for Rel {
         Ok(())
     }
 }
+
 #[derive(Debug)]
 pub struct Ack {
     pub seq: u16,
 }
+
 #[allow(dead_code)]
 #[derive(Debug)]
 pub struct Beat;
+
 #[derive(Debug)]
 pub struct MapReq {
     pub x: i32,
     pub y: i32,
 }
+
 pub struct MapData {
     pub pktid: i32,
     pub off: u16,
     pub len: u16,
     pub buf: Vec<u8>,
 }
+
 impl Debug for MapData {
     fn fmt(&self, f: &mut Formatter) -> ::std::fmt::Result {
         write!(f, "MAPDATA pktid:{} offset:{} len:{} buf:[..{}]", self.pktid, self.off, self.len, self.buf.len())
     }
 }
+
 pub struct ObjData {
     pub obj: Vec<ObjDataElem>,
 }
+
 impl Debug for ObjData {
     fn fmt(&self, f: &mut Formatter) -> ::std::fmt::Result {
         writeln!(f, "OBJDATA")?;
@@ -572,6 +624,7 @@ impl Debug for ObjData {
         Ok(())
     }
 }
+
 #[derive(Debug)]
 pub struct ObjDataElem {
     pub fl: u8,
@@ -579,10 +632,12 @@ pub struct ObjDataElem {
     pub frame: i32,
     pub prop: Vec<ObjDataElemProp>,
 }
+
 #[derive(Debug)]
 pub struct ObjAck {
     pub obj: Vec<ObjAckElem>,
 }
+
 impl ObjAck {
     pub fn new(objdata: &ObjData) -> ObjAck {
         let mut objack = ObjAck { obj: Vec::new() };
@@ -595,6 +650,7 @@ impl ObjAck {
         objack
     }
 }
+
 #[derive(Debug)]
 pub struct ObjAckElem {
     pub id: u32,
@@ -664,12 +720,14 @@ pub enum ObjDataElemProp {
     odCMPEQU(Option<Vec<(u8, String, u16, Option<(u16, u16, u16)>)>>),
     odICON(odICON),
 }
+
 #[allow(non_camel_case_types)]
 #[derive(Debug)]
 pub enum odFOLLOW {
     Stop,
     To(u32, u16, String),
 }
+
 #[allow(non_camel_case_types)]
 #[derive(Debug)]
 pub enum odHOMING {
@@ -677,12 +735,14 @@ pub enum odHOMING {
     Change((i32, i32), u16),
     Delete,
 }
+
 #[allow(non_camel_case_types)]
 #[derive(Debug)]
 pub enum odBUDDY {
     Update(String, u8, u8),
     Delete,
 }
+
 #[allow(non_camel_case_types)]
 #[derive(Debug)]
 pub enum odICON {
@@ -690,20 +750,40 @@ pub enum odICON {
     Del,
 }
 
+const OD_REM: u8 = 0;
+const OD_MOVE: u8 = 1;
+const OD_RES: u8 = 2;
+const OD_LINBEG: u8 = 3;
+const OD_LINSTEP: u8 = 4;
+const OD_SPEECH: u8 = 5;
+const OD_COMPOSE: u8 = 6;
+const OD_DRAWOFF: u8 = 7;
+const OD_LUMIN: u8 = 8;
+const OD_AVATAR: u8 = 9;
+const OD_FOLLOW: u8 = 10;
+const OD_HOMING: u8 = 11;
+const OD_OVERLAY: u8 = 12;
+const OD_AUTH: u8 = 13;
+const OD_HEALTH: u8 = 14;
+const OD_BUDDY: u8 = 15;
+const OD_CMPPOSE: u8 = 16;
+const OD_CMPMOD: u8 = 17;
+const OD_CMPEQU: u8 = 18;
+const OD_ICON: u8 = 19;
+const OD_END: u8 = 255;
+
 impl ObjDataElemProp {
     pub fn from_buf(r: &mut Cursor<&[u8]>) -> Result<Option<ObjDataElemProp>, Error> {
-        let t = r.read_u8()? as usize;
+        let t = r.read_u8()?;
         match t {
-            0   /*OD_REM*/ => {
-                Ok(Some(ObjDataElemProp::odREM))
-            },
-            1   /*OD_MOVE*/ => {
-                let xy = (try!(r.read_i32::<le>()), try!(r.read_i32::<le>()));
-                let ia = try!(r.read_u16::<le>());
-                Ok(Some(ObjDataElemProp::odMOVE(xy,ia)))
-            },
-            2   /*OD_RES*/ => {
-                let mut resid = try!(r.read_u16::<le>());
+            OD_REM => Ok(Some(ObjDataElemProp::odREM)),
+            OD_MOVE => {
+                let xy = (r.read_i32::<le>()?, r.read_i32::<le>()?);
+                let ia = r.read_u16::<le>()?;
+                Ok(Some(ObjDataElemProp::odMOVE(xy, ia)))
+            }
+            OD_RES => {
+                let mut resid = r.read_u16::<le>()?;
                 if (resid & 0x8000) != 0 {
                     resid &= !0x8000;
                     let sdt_len = r.read_u8().unwrap();
@@ -714,120 +794,119 @@ impl ObjDataElemProp {
                     };
                 }
                 Ok(Some(ObjDataElemProp::odRES(resid)))
-            },
-            3   /*OD_LINBEG*/ => {
-                let s = (try!(r.read_i32::<le>()), try!(r.read_i32::<le>()));
-                let t = (try!(r.read_i32::<le>()), try!(r.read_i32::<le>()));
-                let c = try!(r.read_i32::<le>());
-                Ok(Some(ObjDataElemProp::odLINBEG(s,t,c)))
-            },
-            4   /*OD_LINSTEP*/ => {
-                let l = try!(r.read_i32::<le>());
+            }
+            OD_LINBEG => {
+                let s = (r.read_i32::<le>()?, r.read_i32::<le>()?);
+                let t = (r.read_i32::<le>()?, r.read_i32::<le>()?);
+                let c = r.read_i32::<le>()?;
+                Ok(Some(ObjDataElemProp::odLINBEG(s, t, c)))
+            }
+            OD_LINSTEP => {
+                let l = r.read_i32::<le>()?;
                 Ok(Some(ObjDataElemProp::odLINSTEP(l)))
-            },
-            5   /*OD_SPEECH*/ => {
-                let zo = try!(r.read_u16::<le>());
+            }
+            OD_SPEECH => {
+                let zo = r.read_u16::<le>()?;
                 let text = r.read_strz().unwrap();
-                Ok(Some(ObjDataElemProp::odSPEECH(zo,text)))
-            },
-            6   /*OD_COMPOSE*/ => {
-                let resid = try!(r.read_u16::<le>());
+                Ok(Some(ObjDataElemProp::odSPEECH(zo, text)))
+            }
+            OD_COMPOSE => {
+                let resid = r.read_u16::<le>()?;
                 Ok(Some(ObjDataElemProp::odCOMPOSE(resid)))
-            },
-            7   /*OD_DRAWOFF*/ => {
-                let off = (try!(r.read_i32::<le>()), try!(r.read_i32::<le>()));
+            }
+            OD_DRAWOFF => {
+                let off = (r.read_i32::<le>()?, r.read_i32::<le>()?);
                 Ok(Some(ObjDataElemProp::odDRAWOFF(off)))
-            },
-            8   /*OD_LUMIN*/ => {
-                let off = (try!(r.read_i32::<le>()), try!(r.read_i32::<le>()));
-                let sz = try!(r.read_u16::<le>());
-                let str_ = try!(r.read_u8());
-                Ok(Some(ObjDataElemProp::odLUMIN(off,sz,str_)))
-            },
-            9   /*OD_AVATAR*/ => {
+            }
+            OD_LUMIN => {
+                let off = (r.read_i32::<le>()?, r.read_i32::<le>()?);
+                let sz = r.read_u16::<le>()?;
+                let str_ = r.read_u8()?;
+                Ok(Some(ObjDataElemProp::odLUMIN(off, sz, str_)))
+            }
+            OD_AVATAR => {
                 let mut layers = Vec::new();
                 loop {
-                    let layer = try!(r.read_u16::<le>());
+                    let layer = r.read_u16::<le>()?;
                     if layer == 65535 {
                         break;
                     }
                     layers.push(layer);
                 }
                 Ok(Some(ObjDataElemProp::odAVATAR(layers)))
-            },
-            10  /*OD_FOLLOW*/ => {
-                let oid = try!(r.read_u32::<le>());
+            }
+            OD_FOLLOW => {
+                let oid = r.read_u32::<le>()?;
                 if oid == 0xff_ff_ff_ff {
                     Ok(Some(ObjDataElemProp::odFOLLOW(odFOLLOW::Stop)))
                 } else {
-                    let xfres = try!(r.read_u16::<le>());
+                    let xfres = r.read_u16::<le>()?;
                     let xfname = r.read_strz().unwrap();
-                    Ok(Some(ObjDataElemProp::odFOLLOW(odFOLLOW::To(oid,xfres,xfname))))
+                    Ok(Some(ObjDataElemProp::odFOLLOW(odFOLLOW::To(oid, xfres, xfname))))
                 }
-            },
-            11  /*OD_HOMING*/ => {
-                let oid = try!(r.read_u32::<le>());
+            }
+            OD_HOMING => {
+                let oid = r.read_u32::<le>()?;
                 match oid {
-                    0xff_ff_ff_ff => {
-                        Ok(Some(ObjDataElemProp::odHOMING(odHOMING::Delete)))
-                    },
+                    0xff_ff_ff_ff => Ok(Some(ObjDataElemProp::odHOMING(odHOMING::Delete))),
                     0xff_ff_ff_fe => {
-                        let tgtc = (try!(r.read_i32::<le>()), try!(r.read_i32::<le>()));
-                        let v = try!(r.read_u16::<le>());
-                        Ok(Some(ObjDataElemProp::odHOMING(odHOMING::Change(tgtc,v))))
-                    },
-                    _             => {
-                        let tgtc = (try!(r.read_i32::<le>()), try!(r.read_i32::<le>()));
-                        let v = try!(r.read_u16::<le>());
-                        Ok(Some(ObjDataElemProp::odHOMING(odHOMING::New(tgtc,v))))
+                        let tgtc = (r.read_i32::<le>()?, r.read_i32::<le>()?);
+                        let v = r.read_u16::<le>()?;
+                        Ok(Some(ObjDataElemProp::odHOMING(odHOMING::Change(tgtc, v))))
+                    }
+                    _ => {
+                        let tgtc = (r.read_i32::<le>()?, r.read_i32::<le>()?);
+                        let v = r.read_u16::<le>()?;
+                        Ok(Some(ObjDataElemProp::odHOMING(odHOMING::New(tgtc, v))))
                     }
                 }
-            },
-            12  /*OD_OVERLAY*/ => {
+            }
+            OD_OVERLAY => {
                 let /*olid*/ _ = try!(r.read_i32::<le>());
-                let resid = try!(r.read_u16::<le>());
+                let resid = r.read_u16::<le>()?;
                 if (resid != 0xffff) && ((resid & 0x8000) != 0) {
-                    let sdt_len = try!(r.read_u8()) as usize;
+                    let sdt_len = r.read_u8()? as usize;
                     let /*sdt*/ _ = {
                         let mut tmp = vec![0; sdt_len];
                         r.read_exact(&mut tmp).unwrap();
                         tmp
                     };
                 }
-                Ok(Some(ObjDataElemProp::odOVERLAY( resid&(!0x8000) )))
-            },
-            13  /*OD_AUTH*/   => {
+                Ok(Some(ObjDataElemProp::odOVERLAY(resid & (!0x8000))))
+            }
+            OD_AUTH => {
                 Ok(Some(ObjDataElemProp::odAUTH)) // Removed
-            },
-            14  /*OD_HEALTH*/ => {
-                let hp = try!(r.read_u8());
+            }
+            OD_HEALTH => {
+                let hp = r.read_u8()?;
                 Ok(Some(ObjDataElemProp::odHEALTH(hp)))
-            },
-            15  /*OD_BUDDY*/ => {
+            }
+            OD_BUDDY => {
                 let name = r.read_strz().unwrap();
-                //XXX FIXME C string is not like Rust string, it has \0 at the end,
+                // XXX FIXME C string is not like Rust string, it has \0 at the end,
                 //          so this check is incorrect, I SUPPOSE.
                 //          MOST PROBABLY we will crash here because 2 more readings.
                 if name.is_empty() {
                     Ok(Some(ObjDataElemProp::odBUDDY(odBUDDY::Delete)))
                 } else {
-                    let group = try!(r.read_u8());
-                    let btype = try!(r.read_u8());
-                    Ok(Some(ObjDataElemProp::odBUDDY(odBUDDY::Update(name,group,btype))))
+                    let group = r.read_u8()?;
+                    let btype = r.read_u8()?;
+                    Ok(Some(ObjDataElemProp::odBUDDY(odBUDDY::Update(name, group, btype))))
                 }
-            },
-            16  /*OD_CMPPOSE*/ => {
-                let pfl = try!(r.read_u8());
-                let seq = try!(r.read_u8());
-                let ids1 =
-                if (pfl & 2) != 0 {
+            }
+            OD_CMPPOSE => {
+                let pfl = r.read_u8()?;
+                let seq = r.read_u8()?;
+                let ids1 = if (pfl & 2) != 0 {
                     let mut ids = Vec::new();
                     loop {
-                        let mut resid = try!(r.read_u16::<le>());
-                        if resid == 65535 { break; }
+                        let mut resid = r.read_u16::<le>()?;
+                        if resid == 65535 {
+                            break;
+                        }
                         if (resid & 0x8000) != 0 {
                             resid &= !0x8000;
-                            let sdt_len = try!(r.read_u8()) as usize;
+                            let sdt_len = r.read_u8()? as usize;
                             let /*sdt*/ _ = {
                                 let mut tmp = vec![0; sdt_len];
                                 r.read_exact(&mut tmp).unwrap();
@@ -844,15 +923,16 @@ impl ObjDataElemProp {
                 } else {
                     None
                 };
-                let ids2 =
-                if (pfl & 4) != 0 {
+                let ids2 = if (pfl & 4) != 0 {
                     let mut ids = Vec::new();
                     loop {
-                        let mut resid = try!(r.read_u16::<le>());
-                        if resid == 65535 { break; }
+                        let mut resid = r.read_u16::<le>()?;
+                        if resid == 65535 {
+                            break;
+                        }
                         if (resid & 0x8000) != 0 {
                             resid &= !0x8000;
-                            let sdt_len = try!(r.read_u8()) as usize;
+                            let sdt_len = r.read_u8()? as usize;
                             let /*sdt*/ _ = {
                                 let mut tmp = vec![0; sdt_len];
                                 r.read_exact(&mut tmp).unwrap();
@@ -861,26 +941,30 @@ impl ObjDataElemProp {
                         }
                         ids.push(resid);
                     }
-                    let ttime = try!(r.read_u8());
+                    let ttime = r.read_u8()?;
                     if !ids.is_empty() {
-                        Some((Some(ids),ttime))
+                        Some((Some(ids), ttime))
                     } else {
-                        Some((None,ttime))
+                        Some((None, ttime))
                     }
                 } else {
                     None
                 };
-                Ok(Some(ObjDataElemProp::odCMPPOSE(seq,ids1,ids2)))
-            },
-            17  /*OD_CMPMOD*/ => {
+                Ok(Some(ObjDataElemProp::odCMPPOSE(seq, ids1, ids2)))
+            }
+            OD_CMPMOD => {
                 let mut m = Vec::new();
                 loop {
-                    let modif = try!(r.read_u16::<le>());
-                    if modif == 65535 { break; }
+                    let modif = r.read_u16::<le>()?;
+                    if modif == 65535 {
+                        break;
+                    }
                     let mut ids = Vec::new();
                     loop {
-                        let resid = try!(r.read_u16::<le>());
-                        if resid == 65535 { break; }
+                        let resid = r.read_u16::<le>()?;
+                        if resid == 65535 {
+                            break;
+                        }
                         ids.push(resid);
                     }
                     if !ids.is_empty() {
@@ -893,23 +977,25 @@ impl ObjDataElemProp {
                     None
                 };
                 Ok(Some(ObjDataElemProp::odCMPMOD(mods)))
-            },
-            18  /*OD_CMPEQU*/ => {
+            }
+            OD_CMPEQU => {
                 let mut e = Vec::new();
                 loop {
-                    let h = try!(r.read_u8());
-                    if h == 255 { break; }
+                    let h = r.read_u8()?;
+                    if h == 255 {
+                        break;
+                    }
                     let at = r.read_strz().unwrap();
-                    let resid = try!(r.read_u16::<le>());
+                    let resid = r.read_u16::<le>()?;
                     let off = if (h & 0x80) != 0 {
-                        let x = try!(r.read_u16::<le>());
-                        let y = try!(r.read_u16::<le>());
-                        let z = try!(r.read_u16::<le>());
-                        Some((x,y,z))
+                        let x = r.read_u16::<le>()?;
+                        let y = r.read_u16::<le>()?;
+                        let z = r.read_u16::<le>()?;
+                        Some((x, y, z))
                     } else {
                         None
                     };
-                    e.push((h&0x7f,at,resid,off));
+                    e.push((h & 0x7f, at, resid, off));
                 }
                 let equ = if !e.is_empty() {
                     Some(e)
@@ -917,20 +1003,18 @@ impl ObjDataElemProp {
                     None
                 };
                 Ok(Some(ObjDataElemProp::odCMPEQU(equ)))
-            },
-            19  /*OD_ICON*/ => {
-                let resid = try!(r.read_u16::<le>());
+            }
+            OD_ICON => {
+                let resid = r.read_u16::<le>()?;
                 if resid == 65535 {
                     Ok(Some(ObjDataElemProp::odICON(odICON::Del)))
                 } else {
                     let /*ifl*/ _ = try!(r.read_u8());
                     Ok(Some(ObjDataElemProp::odICON(odICON::Set(resid))))
                 }
-            },
-            255 /*OD_END*/ => {
-                Ok(None)
-            },
-            _   /*UNKNOWN*/ => {
+            }
+            OD_END => Ok(None),
+            _ => {
                 Ok(None) /*TODO return error*/
             }
         }
@@ -942,6 +1026,16 @@ pub enum MessageDirection {
     FromClient,
     FromServer,
 }
+
+const SESS: u8 = 0;
+const REL: u8 = 1;
+const ACK: u8 = 2;
+const BEAT: u8 = 3;
+const MAPREQ: u8 = 4;
+const MAPDATA: u8 = 5;
+const OBJDATA: u8 = 6;
+const OBJACK: u8 = 7;
+const CLOSE: u8 = 8;
 
 impl Message {
     // TODO ADD fuzzing tests:
@@ -963,8 +1057,8 @@ impl Message {
         let mut r = Cursor::new(buf);
         let mtype = r.read_u8()?;
         let res = match mtype {
-            0 /*SESS*/ => {
-                //TODO ??? Ok(Message::sess(err))
+            SESS => {
+                // TODO ??? Ok(Message::sess(err))
                 //     impl Message { fn sess (err: u8) -> Message::SESS { ... } }
                 match dir {
                     MessageDirection::FromClient => {
@@ -972,94 +1066,115 @@ impl Message {
                         let /*proto*/ _ = r.read_strz().unwrap();
                         let /*version*/ _ = try!(r.read_u16::<le>());
                         let login = r.read_strz().unwrap();
-                        let cookie_len = try!(r.read_u16::<le>());
+                        let cookie_len = r.read_u16::<le>()?;
                         let cookie = {
                             let mut tmp = vec![0; cookie_len as usize];
-                            try!(r.read_exact(&mut tmp));
+                            r.read_exact(&mut tmp)?;
                             tmp
                         };
-                        Ok( Message::C_SESS( cSess{ login : login, cookie : cookie } ) )
+                        Ok(Message::C_SESS(cSess {
+                            login: login,
+                            cookie: cookie,
+                        }))
                     }
-                    MessageDirection::FromServer => {
-                        Ok( Message::S_SESS( sSess{ err : SessError::new(try!(r.read_u8())) } ) )
-                    }
+                    MessageDirection::FromServer => Ok(Message::S_SESS(sSess { err: SessError::new(r.read_u8()?) })),
                 }
-            },
-            1 /*REL*/ => {
-                let seq = try!(r.read_u16::<le>());
+            }
+            REL => {
+                let seq = r.read_u16::<le>()?;
                 let mut rel_vec = Vec::new();
                 loop {
                     let mut rel_type = match r.read_u8() {
-                        Ok(b) => {b}
-                        Err(_) => {break;}
+                        Ok(b) => b,
+                        Err(_) => {
+                            break;
+                        }
                     };
                     let rel_buf = if (rel_type & 0x80) != 0 {
                         rel_type &= !0x80;
-                        let rel_len = try!(r.read_u16::<le>());
+                        let rel_len = r.read_u16::<le>()?;
                         let mut tmp = vec![0; rel_len as usize];
                         r.read_exact(&mut tmp).unwrap();
                         tmp
                     } else {
                         let mut tmp = Vec::new();
-                        try!(r.read_to_end(&mut tmp));
+                        r.read_to_end(&mut tmp)?;
                         tmp
                     };
-                    rel_vec.push(try!(RelElem::from_buf(rel_type, rel_buf.as_slice())));
+                    rel_vec.push(RelElem::from_buf(rel_type, rel_buf.as_slice())?);
                 }
-                Ok( Message::REL( Rel{ seq : seq, rel : rel_vec } ) )
-            },
-            2 /*ACK*/ => {
-                Ok( Message::ACK( Ack{ seq : try!(r.read_u16::<le>()) } ) )
-            },
-            3 /*BEAT*/ => {
-                Ok( Message::BEAT )
-            },
-            4 /*MAPREQ*/ => {
-                Ok( Message::MAPREQ( MapReq {
-                    x:try!(r.read_i32::<le>()),
-                    y:try!(r.read_i32::<le>()),
-                } ) )
-            },
-            5 /*MAPDATA*/ => {
-                let pktid = try!(r.read_i32::<le>());
-                let off = try!(r.read_u16::<le>());
-                let len = try!(r.read_u16::<le>());
+                Ok(Message::REL(Rel {
+                    seq: seq,
+                    rel: rel_vec,
+                }))
+            }
+            ACK => Ok(Message::ACK(Ack { seq: r.read_u16::<le>()? })),
+            BEAT => Ok(Message::BEAT),
+            MAPREQ => {
+                Ok(Message::MAPREQ(MapReq {
+                    x: r.read_i32::<le>()?,
+                    y: r.read_i32::<le>()?,
+                }))
+            }
+            MAPDATA => {
+                let pktid = r.read_i32::<le>()?;
+                let off = r.read_u16::<le>()?;
+                let len = r.read_u16::<le>()?;
                 let mut buf = Vec::new();
-                try!(r.read_to_end(&mut buf));
-                //info!("    pktid={} off={} len={}", pktid, off, len);
-                //if (off == 0) {
+                r.read_to_end(&mut buf)?;
+                // info!("    pktid={} off={} len={}", pktid, off, len);
+                // if (off == 0) {
                 //    info!("      coord=({}, {})", r.read_i32::<le>().unwrap(), r.read_i32::<le>().unwrap());
                 //    info!("      mmname=\"{}\"", r.read_until(0).unwrap());
                 //    loop {
                 //        let pidx = r.read_u8().unwrap();
                 //        if pidx == 255 break;
                 //    }
-                //}
-                Ok( Message::MAPDATA( MapData{ pktid:pktid, off:off, len:len, buf:buf } ) )
-            },
-            6 /*OBJDATA*/ => {
+                // }
+                Ok(Message::MAPDATA(MapData {
+                    pktid: pktid,
+                    off: off,
+                    len: len,
+                    buf: buf,
+                }))
+            }
+            OBJDATA => {
                 let mut obj = Vec::new();
                 loop {
                     let fl = match r.read_u8() {
-                        Ok(b) => {b}
-                        Err(_) => {break;}
+                        Ok(b) => b,
+                        Err(_) => {
+                            break;
+                        }
                     };
-                    let id = try!(r.read_u32::<le>());
-                    let frame = try!(r.read_i32::<le>());
+                    let id = r.read_u32::<le>()?;
+                    let frame = r.read_i32::<le>()?;
                     let mut prop = Vec::new();
-                    while let Some(p) = try!(ObjDataElemProp::from_buf(&mut r)) { prop.push(p) }
-                    obj.push( ObjDataElem{ fl:fl, id:id, frame:frame, prop:prop } );
+                    while let Some(p) = ObjDataElemProp::from_buf(&mut r)? {
+                        prop.push(p)
+                    }
+                    obj.push(ObjDataElem {
+                        fl: fl,
+                        id: id,
+                        frame: frame,
+                        prop: prop,
+                    });
                 }
-                Ok( Message::OBJDATA( ObjData{ obj : obj } ) )
-            },
-            7 /*OBJACK*/ => {
-                //TODO FIXME parse ObjAck instead of empty return
-                Ok( Message::OBJACK(ObjAck{obj:Vec::new()}) )
-            },
-            8 /*CLOSE*/ => {
-                Ok( Message::CLOSE/*(Close)*/ )
-            },
-            _ /*UNKNOWN*/ => { Err( Error{ source:"unknown message type", detail:None } ) }
+                Ok(Message::OBJDATA(ObjData { obj: obj }))
+            }
+            OBJACK => {
+                // TODO FIXME parse ObjAck instead of empty return
+                Ok(Message::OBJACK(ObjAck { obj: Vec::new() }))
+            }
+            CLOSE => {
+                Ok(Message::CLOSE /* (Close) */)
+            }
+            _ => {
+                Err(Error {
+                    source: "unknown message type",
+                    detail: None,
+                })
+            }
         };
 
         let mut tmp = Vec::new();
@@ -1081,7 +1196,7 @@ impl Message {
             // !!! this is client session message, not server !!!
             Message::C_SESS(ref sess) => /*(name: &str, cookie: &[u8]) -> Vec<u8>*/ {
                 let mut w = vec![];
-                try!(w.write_u8(0)); // SESS
+                try!(w.write_u8(SESS));
                 try!(w.write_u16::<le>(2)); // unknown
                 try!(w.write("Salem".as_bytes())); // proto
                 try!(w.write_u8(0));
@@ -1097,18 +1212,18 @@ impl Message {
             }
             Message::ACK(ref ack) => /*ack (seq: u16) -> Vec<u8>*/ {
                 let mut w = vec![];
-                try!(w.write_u8(2)); //ACK
+                try!(w.write_u8(ACK));
                 try!(w.write_u16::<le>(ack.seq));
                 Ok(w)
             }
             Message::BEAT => /* beat () -> Vec<u8> */ {
                 let mut w = vec![];
-                try!(w.write_u8(3)); //BEAT
+                try!(w.write_u8(BEAT));
                 Ok(w)
             }
             Message::REL(ref rel) => /* rel_wdgmsg_play (seq: u16, name: &str) -> Vec<u8> */ {
                 let mut w = vec![];
-                try!(w.write_u8(1)); // REL
+                try!(w.write_u8(REL));
                 try!(w.write_u16::<le>(rel.seq));// sequence
                 for i in 0 .. rel.rel.len() {
                     let rel_elem = &rel.rel[i];
@@ -1120,23 +1235,23 @@ impl Message {
             }
             Message::MAPREQ(ref mapreq) => /* mapreq (x:i32, y:i32) -> Vec<u8> */ {
                 let mut w = vec![];
-                try!(w.write_u8(4)); // MAPREQ
-                try!(w.write_i32::<le>(mapreq.x)); // x
-                try!(w.write_i32::<le>(mapreq.y)); // y
+                try!(w.write_u8(MAPREQ));
+                try!(w.write_i32::<le>(mapreq.x));
+                try!(w.write_i32::<le>(mapreq.y));
                 Ok(w)
             }
             Message::OBJACK(ref objack) => {
                 let mut w = vec![];
-                w.write_u8(7).unwrap(); //OBJACK writer
+                try!(w.write_u8(OBJACK));
                 for o in &objack.obj {
-                    w.write_u32::<le>(o.id).unwrap();
-                    w.write_i32::<le>(o.frame).unwrap();
+                    try!(w.write_u32::<le>(o.id));
+                    try!(w.write_i32::<le>(o.frame));
                 }
                 Ok(w)
             }
             Message::CLOSE => {
                 let mut w = vec![];
-                try!(w.write_u8(8)); //CLOSE
+                try!(w.write_u8(CLOSE));
                 Ok(w)
             }
             _ => {

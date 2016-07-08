@@ -46,8 +46,7 @@ impl Ai for AiDecl {
                 }
             }
             AiState::WaitForWorld => {
-                if state.widget_exists("mapview", None) && state.hero_exists() && state.hero_grid_exists() &&
-                   !state.hero_is_moving() {
+                if state.widget_exists("mapview", None) && state.hero_exists() && state.hero_grid_exists() && !state.hero_is_moving() {
                     self.state = AiState::Walking;
                 }
             }

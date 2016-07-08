@@ -156,9 +156,7 @@ mod tests {
         }
     }
 
-    fn shift_test<A: MinMax + ShiftToUnsigned<B> + PartialEq + Add<Output = A> + One + Copy,
-                  B: MinMax + PartialEq + Add<Output = B> + One>
-        () {
+    fn shift_test<A: MinMax + ShiftToUnsigned<B> + PartialEq + Add<Output = A> + One + Copy, B: MinMax + PartialEq + Add<Output = B> + One>() {
         let mut a = A::min();
         let mut b = B::min();
         loop {

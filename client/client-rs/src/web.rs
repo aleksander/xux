@@ -34,8 +34,7 @@ fn _responce(state: &State, buf: &str) -> Option<String> {
                             <div id=\"showdata\"></div> \r\n\
                         </body> \r\n\
                     </html>\r\n\r\n";
-        Some(format!("HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\n\r\n",
-                     body.len()) + &body)
+        Some(format!("HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\n\r\n", body.len()) + &body)
     } else if buf.starts_with("env ") {
         // {
         //   res:[{id:id,name:name}],
@@ -73,9 +72,7 @@ fn _responce(state: &State, buf: &str) -> Option<String> {
                 Some(resid) => resid,
                 None => 0,
             };
-            body =
-                body +
-                &format!("\r\n{}{{\"x\":{},\"y\":{},\"resid\":{},\"resname\":\"{}\"}}", period, x, y, resid, resname);
+            body = body + &format!("\r\n{}{{\"x\":{},\"y\":{},\"resid\":{},\"resname\":\"{}\"}}", period, x, y, resid, resname);
             period = ",";
         }
 
@@ -83,8 +80,7 @@ fn _responce(state: &State, buf: &str) -> Option<String> {
 
         period = "";
         for (id, w) in &state.widgets {
-            body = body +
-                   &format!("\r\n{}{{\"id\":{},\"name\":\"{}\",\"parent\":\"{}\"}}", period, id, w.typ, w.parent);
+            body = body + &format!("\r\n{}{{\"id\":{},\"name\":\"{}\",\"parent\":\"{}\"}}", period, id, w.typ, w.parent);
             period = ",";
         }
 
@@ -113,8 +109,7 @@ fn _responce(state: &State, buf: &str) -> Option<String> {
         }
 
         body = body + "]}";
-        Some(format!("HTTP/1.1 200 OK\r\nContent-Type: text/json\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\n\r\n",
-                     body.len()) + &body)
+        Some(format!("HTTP/1.1 200 OK\r\nContent-Type: text/json\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\n\r\n", body.len()) + &body)
     } else if buf.starts_with("objects ") {
         let mut body = String::new();
         for o in state.objects.values() {
@@ -134,16 +129,14 @@ fn _responce(state: &State, buf: &str) -> Option<String> {
             body = body + &format!("{{\"x\":{},\"y\":{},\"resid\":{},\"resname\":\"{}\"}},", x, y, resid, resname);
         }
         body = "[ ".to_owned() + &body[..body.len() - 1] + " ]";
-        Some(format!("HTTP/1.1 200 OK\r\nContent-Type: text/json\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\n\r\n",
-                     body.len()) + &body)
+        Some(format!("HTTP/1.1 200 OK\r\nContent-Type: text/json\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\n\r\n", body.len()) + &body)
     } else if buf.starts_with("widgets ") {
         let mut body = String::new();
         for (id, w) in &state.widgets {
             body = body + &format!("{{\"id\":{},\"name\":\"{}\",\"parent\":\"{}\"}},", id, w.typ, w.parent);
         }
         body = "[ ".to_owned() + &body[..body.len() - 1] + " ]";
-        Some(format!("HTTP/1.1 200 OK\r\nContent-Type: text/json\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\n\r\n",
-                     body.len()) + &body)
+        Some(format!("HTTP/1.1 200 OK\r\nContent-Type: text/json\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\n\r\n", body.len()) + &body)
     } else if buf.starts_with("resources ") {
         // TODO
         Some("HTTP/1.1 404 Not Implemented\r\n\r\n".to_owned())
