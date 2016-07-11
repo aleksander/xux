@@ -353,7 +353,7 @@ const BUFF: u8 = 12;
 const SESSKEY: u8 = 13;
 
 const GMSG_TIME: u8 = 0;
-const GMSG_ASTRO: u8 = 1;
+//const GMSG_ASTRO: u8 = 1; //TODO
 const GMSG_LIGHT: u8 = 2;
 const GMSG_SKY: u8 = 3;
 
@@ -862,7 +862,7 @@ impl ObjDataElemProp {
                 }
             }
             OD_OVERLAY => {
-                let /*olid*/ _ = try!(r.read_i32::<le>());
+                let /*olid*/ _ = r.read_i32::<le>()?;
                 let resid = r.read_u16::<le>()?;
                 if (resid != 0xffff) && ((resid & 0x8000) != 0) {
                     let sdt_len = r.read_u8()? as usize;
@@ -1009,7 +1009,7 @@ impl ObjDataElemProp {
                 if resid == 65535 {
                     Ok(Some(ObjDataElemProp::odICON(odICON::Del)))
                 } else {
-                    let /*ifl*/ _ = try!(r.read_u8());
+                    let /*ifl*/ _ = r.read_u8()?;
                     Ok(Some(ObjDataElemProp::odICON(odICON::Set(resid))))
                 }
             }
@@ -1062,9 +1062,9 @@ impl Message {
                 //     impl Message { fn sess (err: u8) -> Message::SESS { ... } }
                 match dir {
                     MessageDirection::FromClient => {
-                        let /*unknown*/ _ = try!(r.read_u16::<le>());
+                        let /*unknown*/ _ = r.read_u16::<le>()?;
                         let /*proto*/ _ = r.read_strz().unwrap();
-                        let /*version*/ _ = try!(r.read_u16::<le>());
+                        let /*version*/ _ = r.read_u16::<le>()?;
                         let login = r.read_strz().unwrap();
                         let cookie_len = r.read_u16::<le>()?;
                         let cookie = {
@@ -1196,15 +1196,15 @@ impl Message {
             // !!! this is client session message, not server !!!
             Message::C_SESS(ref sess) => /*(name: &str, cookie: &[u8]) -> Vec<u8>*/ {
                 let mut w = vec![];
-                try!(w.write_u8(SESS));
-                try!(w.write_u16::<le>(2)); // unknown
-                try!(w.write("Salem".as_bytes())); // proto
-                try!(w.write_u8(0));
-                try!(w.write_u16::<le>(36)); // version
-                try!(w.write(sess.login.as_bytes())); // login
-                try!(w.write_u8(0));
-                try!(w.write_u16::<le>(32)); // cookie length
-                try!(w.write(sess.cookie.as_slice())); // cookie
+                w.write_u8(SESS)?;
+                w.write_u16::<le>(2)?; // unknown
+                w.write("Salem".as_bytes())?; // proto
+                w.write_u8(0)?;
+                w.write_u16::<le>(36)?; // version
+                w.write(sess.login.as_bytes())?; // login
+                w.write_u8(0)?;
+                w.write_u16::<le>(32)?; // cookie length
+                w.write(sess.cookie.as_slice())?; // cookie
                 Ok(w)
             }
             Message::S_SESS(/*ref sess*/ _ ) => {
@@ -1212,46 +1212,46 @@ impl Message {
             }
             Message::ACK(ref ack) => /*ack (seq: u16) -> Vec<u8>*/ {
                 let mut w = vec![];
-                try!(w.write_u8(ACK));
-                try!(w.write_u16::<le>(ack.seq));
+                w.write_u8(ACK)?;
+                w.write_u16::<le>(ack.seq)?;
                 Ok(w)
             }
             Message::BEAT => /* beat () -> Vec<u8> */ {
                 let mut w = vec![];
-                try!(w.write_u8(BEAT));
+                w.write_u8(BEAT)?;
                 Ok(w)
             }
             Message::REL(ref rel) => /* rel_wdgmsg_play (seq: u16, name: &str) -> Vec<u8> */ {
                 let mut w = vec![];
-                try!(w.write_u8(REL));
-                try!(w.write_u16::<le>(rel.seq));// sequence
+                w.write_u8(REL)?;
+                w.write_u16::<le>(rel.seq)?;// sequence
                 for i in 0 .. rel.rel.len() {
                     let rel_elem = &rel.rel[i];
                     let last_one = i == (rel.rel.len() - 1);
-                    let rel_elem_buf = try!(rel_elem.to_buf(last_one));
-                    try!(w.write(&rel_elem_buf));
+                    let rel_elem_buf = rel_elem.to_buf(last_one)?;
+                    w.write(&rel_elem_buf)?;
                 }
                 Ok(w)
             }
             Message::MAPREQ(ref mapreq) => /* mapreq (x:i32, y:i32) -> Vec<u8> */ {
                 let mut w = vec![];
-                try!(w.write_u8(MAPREQ));
-                try!(w.write_i32::<le>(mapreq.x));
-                try!(w.write_i32::<le>(mapreq.y));
+                w.write_u8(MAPREQ)?;
+                w.write_i32::<le>(mapreq.x)?;
+                w.write_i32::<le>(mapreq.y)?;
                 Ok(w)
             }
             Message::OBJACK(ref objack) => {
                 let mut w = vec![];
-                try!(w.write_u8(OBJACK));
+                w.write_u8(OBJACK)?;
                 for o in &objack.obj {
-                    try!(w.write_u32::<le>(o.id));
-                    try!(w.write_i32::<le>(o.frame));
+                    w.write_u32::<le>(o.id)?;
+                    w.write_i32::<le>(o.frame)?;
                 }
                 Ok(w)
             }
             Message::CLOSE => {
                 let mut w = vec![];
-                try!(w.write_u8(CLOSE));
+                w.write_u8(CLOSE)?;
                 Ok(w)
             }
             _ => {

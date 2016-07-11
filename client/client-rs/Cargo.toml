@@ -59,3 +59,9 @@ ai_decl = []
 ai_lua = []
 default = ["driver_std","ai_decl"]
 mio_lua = ["driver_mio","ai_lua"]
+
+[profile.dev]
+panic = 'unwind'
+
+[profile.release]
+panic = 'abort'
