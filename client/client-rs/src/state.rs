@@ -546,20 +546,16 @@ impl State {
                 // info!("RX: REL {}", rel.seq);
                 if rel.seq == self.rx_rel_seq {
                     self.dispatch_rel_cache(&rel)?;
+                    //TODO shuold we clean up cache here (remove RELs that in the past) ?
+                } else if rel.seq.wrapping_sub(self.rx_rel_seq) < u16::MAX/2 {
+                    // future REL
+                    self.cache_rel(rel);
                 } else {
-                    let cur = self.rx_rel_seq;
-                    let new = rel.seq;
-                    let future = ((new > cur) && ((new - cur) < (u16::MAX / 2))) || ((new < cur) && ((cur - new) > (u16::MAX / 2)));
-                    if future {
-                        // future REL
-                        self.cache_rel(rel);
-                    } else {
-                        // past REL
-                        info!("past");
-                        // TODO self.ack(seq);
-                        let last_acked_seq = self.rx_rel_seq - 1;
-                        self.enqueue_to_send(Message::ACK(Ack { seq: last_acked_seq }))?;
-                    }
+                    // past REL
+                    info!("past");
+                    // TODO self.ack(seq);
+                    let last_acked_seq = self.rx_rel_seq - 1;
+                    self.enqueue_to_send(Message::ACK(Ack { seq: last_acked_seq }))?;
                 }
             }
             Message::ACK(ack) => {
@@ -670,7 +666,8 @@ impl State {
     }
 
     fn dispatch_rel_cache(&mut self, rel: &Rel) -> Result<(), Error> {
-        // XXX are we handle seq right in the case of overflow ???
+        // XXX FIXME do we handle seq right in the case of overflow ???
+        //           to do refactor this code and replace add with wrapping_add
         let mut next_rel_seq = rel.seq + ((rel.rel.len() as u16) - 1);
         self.dispatch_rel(rel);
         loop {
