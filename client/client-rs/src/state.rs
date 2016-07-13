@@ -370,11 +370,11 @@ pub struct State {
     pub charlist: Vec<String>,
     pub resources: HashMap<u16, String>,
     pub seq: u16,
-    pub rx_rel_seq: u16,
+    pub rx_rel_seq: u16, //TODO wrap this to struct OverflowableCounter to incapsulate correct handling of all the operations on it
     pub que: LinkedList<EnqueuedBuffer>,
     pub tx_buf: LinkedList<EnqueuedBuffer>,
     pub enqueue_seq: usize,
-    pub rel_cache: HashMap<u16, Rel>,
+    pub rel_cache: HashMap<u16, Rel>, //TODO unify with rx_rel_seq to have more consistent entity (struct Rel { ... })
     pub hero: Hero,
     pub map: Map,
     events: LinkedList<Event>,
@@ -660,11 +660,13 @@ impl State {
         Ok(())
     }
 
+    //TODO add struct Rel { ... } and move this to self.rel.cache(rel)
     fn cache_rel(&mut self, rel: Rel) {
         info!("cache REL {}-{}", rel.seq, rel.seq + ((rel.rel.len() as u16) - 1));
         self.rel_cache.insert(rel.seq, rel);
     }
 
+    //TODO add struct Rel { ... } and move this to self.rel.dispatch_cache(rel)
     fn dispatch_rel_cache(&mut self, rel: &Rel) -> Result<(), Error> {
         // XXX FIXME do we handle seq right in the case of overflow ???
         //           to do refactor this code and replace add with wrapping_add
@@ -687,6 +689,7 @@ impl State {
         Ok(())
     }
 
+    //TODO add struct Rel { ... } and move this to self.rel.dispatch(rel)
     fn dispatch_rel(&mut self, rel: &Rel) {
         info!("dispatch REL {}-{}", rel.seq, rel.seq + ((rel.rel.len() as u16) - 1));
         // info!("RX: {:?}", rel);
