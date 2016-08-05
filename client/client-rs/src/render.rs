@@ -33,24 +33,24 @@ impl Render {
     pub fn new() -> Render {
         let (tx, rx) = channel();
 
-        // NO UI
-        //         thread::spawn(move || {
-        //             //use std::sync::mpsc::RecvError;
-        //
-        //             loop {
-        //                 match rx.recv() {
-        //                     Ok(_) => {
-        //                     }
-        //                     Err(_) => {
-        //                         info!("render: disconnected");
-        //                         return;
-        //                     }
-        //                 }
-        //             }
-        //         });
+        // TODO RenderNone (or NoUI) impl Render
+        thread::spawn(move || {
+            //use std::sync::mpsc::RecvError;
+            loop {
+                match rx.recv() {
+                    Ok(_) => {
+                    }
+                    Err(_) => {
+                        info!("render: disconnected");
+                        return;
+                    }
+                }
+            }
+        });
 
         // ncurses TUI
         // FIXME: could alternatively use: rustbox, rustty
+        /*
         initscr();
 
         if let None = curs_set(CURSOR_VISIBILITY::CURSOR_INVISIBLE) {
@@ -103,6 +103,7 @@ impl Render {
                 }
             }
         });
+        */
 
         // 3D UI
         //         thread::spawn(move || {

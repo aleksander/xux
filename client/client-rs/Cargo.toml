@@ -26,31 +26,7 @@ log = "*"
 fern = "*"
 #clippy = "*"
 pnet = "*"
-#pcapng = "*"
-
-#[dependencies.ncurses]
-#path = "../../../ncurses-rs"
-
-#[dependencies.openssl]
-#openssl = "0.5.5"
-#git = "git://github.com/sfackler/rust-openssl"
-
-#[dependencies.mio]
-#git = "https://github.com/AngryLawyer/rust-sdl2"
-#mio = "0.3.0"
-#git = "https://github.com/carllerche/mio"
-#git = "https://github.com/fhartwig/mio.git"
-
-#git = "https://github.com/aleksander/mio.git"
-#branch = "fixups"
-
-[dependencies.pcapng]
-#git = "https://github.com/richo/pcapng-rs.git"
-git = "https://github.com/kornholi/pcapng.git"
-
-#[dependencies.pnet]
-#path = "../../../libpnet"
-#git = "https://github.com/libpnet/libpnet.git"
+pcap = "*"
 
 [features]
 driver_std = []

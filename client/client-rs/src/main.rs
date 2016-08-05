@@ -397,10 +397,7 @@ fn run(ip: IpAddr, username: String, password: String) {
 
     match authorize(ip, 1871, username, password) {
         Ok((login, cookie)) => {
-            Client::new(// ip, 1870
-                        &mut driver,
-                        &mut ai)
-                .run(&login, &cookie);
+            Client::new(/*ip, 1870*/ &mut driver, &mut ai).run(&login, &cookie);
         }
         Err(e) => {
             info!("ERROR: {:?}", e);
@@ -440,7 +437,7 @@ fn main() {
     // TODO use rustfmt precommit hook
 
     let args: Vec<String> = std::env::args().collect();
-    if args.len() < 3 || args.len() > 3 {
+    if args.len() != 3 {
         info!("wrong argument count");
         info!("usage: {} username password", args[0]);
         return;
