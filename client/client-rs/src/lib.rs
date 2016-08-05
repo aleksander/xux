@@ -4,7 +4,7 @@
 extern crate log;
 extern crate byteorder;
 
-pub mod message;
+pub mod proto;
 pub mod state;
 
 pub mod driver;

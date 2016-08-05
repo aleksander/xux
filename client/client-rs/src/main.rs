@@ -25,8 +25,8 @@ use std::fs::File;
 mod state;
 use state::State;
 
-mod message;
-use message::Error;
+mod proto;
+use proto::Error;
 
 mod ai;
 use ai::Ai;

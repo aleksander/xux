@@ -1,8 +1,9 @@
 [package]
 
-name = "client-rs"
+name = "sac"
 version = "0.0.0"
 authors = ["Aleksander Usov <aleksander.usov@gmail.com>"]
+description = "Salem Alternative Client"
 
 [dependencies]
 rustc-serialize = "*"

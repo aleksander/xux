@@ -8,8 +8,8 @@ use nom::Err;
 
 extern crate pcap;
 
-extern crate client_rs;
-use client_rs::message::*;
+extern crate sac;
+use sac::proto::*;
 
 extern crate pnet;
 use pnet::packet::ethernet::EthernetPacket;

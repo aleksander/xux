@@ -29,21 +29,21 @@ type le = LittleEndian;
 #[allow(non_camel_case_types)]
 type be = BigEndian;
 
-use message::MapData;
-use message::Rel;
-use message::Message;
-use message::MessageDirection;
-use message::Error;
-use message::SessError;
-use message::ObjDataElemProp;
-use message::MsgList;
-use message::Ack;
-use message::ObjAck;
-use message::RelElem;
-use message::NewWdg;
-use message::WdgMsg;
-use message::cSess;
-use message::MapReq;
+use proto::MapData;
+use proto::Rel;
+use proto::Message;
+use proto::MessageDirection;
+use proto::Error;
+use proto::SessError;
+use proto::ObjDataElemProp;
+use proto::msg_list::MsgList;
+use proto::Ack;
+use proto::ObjAck;
+use proto::RelElem;
+use proto::NewWdg;
+use proto::WdgMsg;
+use proto::cSess;
+use proto::MapReq;
 
 // extern crate rustc_serialize;
 // use self::rustc_serialize::hex::ToHex;
