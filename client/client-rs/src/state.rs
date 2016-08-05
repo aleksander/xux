@@ -1,22 +1,10 @@
-// use std::net::IpAddr;
-// use std::net::Ipv4Addr;
 use std::collections::hash_map::HashMap;
-// use std::collections::hash_set::HashSet;
 use std::collections::LinkedList;
-// use std::net::TcpStream;
-// use std::net::SocketAddr;
-
-// extern crate openssl;
-// use self::openssl::crypto::hash::Type;
-// use self::openssl::crypto::hash::hash;
-// use self::openssl::ssl::{SslMethod, SslContext, SslStream};
 
 use std::vec::Vec;
 use std::io::Cursor;
 use std::io::Read;
 use std::io::BufRead;
-// use std::io::Write;
-// use std::str;
 use std::u16;
 
 extern crate byteorder;
@@ -29,21 +17,22 @@ type le = LittleEndian;
 #[allow(non_camel_case_types)]
 type be = BigEndian;
 
-use proto::MapData;
-use proto::Rel;
-use proto::Message;
-use proto::MessageDirection;
-use proto::Error;
-use proto::SessError;
-use proto::ObjDataElemProp;
+use proto::message_mapdata::MapData;
+use proto::message_rel::Rel;
+use proto::message::Message;
+use proto::message::MessageDirection;
+use proto::message_sess::SessError;
+use proto::message_objdata::ObjDataElemProp;
 use proto::msg_list::MsgList;
-use proto::Ack;
-use proto::ObjAck;
-use proto::RelElem;
-use proto::NewWdg;
-use proto::WdgMsg;
-use proto::cSess;
-use proto::MapReq;
+use proto::message_ack::Ack;
+use proto::message_objack::ObjAck;
+use proto::message_rel::RelElem;
+use proto::message_rel::NewWdg;
+use proto::message_rel::WdgMsg;
+use proto::message_sess::cSess;
+use proto::message_mapreq::MapReq;
+
+use ::Error;
 
 // extern crate rustc_serialize;
 // use self::rustc_serialize::hex::ToHex;
@@ -900,11 +889,6 @@ impl State {
     }
 
     pub fn send_play(&mut self, i: usize) -> Result<(), Error> {
-        // TODO let mut rel = Rel::new(seq,id,name);
-        let mut rel = Rel {
-            seq: 0,
-            rel: Vec::new(),
-        };
         let id = self.widget_id("charlist", None).expect("charlist widget is not found");
         let name = "play".to_owned();
         let charname = self.charlist[i].clone();
@@ -917,7 +901,8 @@ impl State {
             name: name,
             args: args,
         });
-        rel.rel.push(elem);
+        let mut rel = Rel::new(0);
+        rel.append(elem);
         self.enqueue_to_send(Message::REL(rel))
     }
 
@@ -987,11 +972,6 @@ impl State {
 
     pub fn go(&mut self, x: i32, y: i32) -> Result<(), Error> /*TODO Option<Error>*/ {
         info!("GO");
-        // TODO let mut rel = Rel::new(seq,id,name);
-        let mut rel = Rel {
-            seq: 0,
-            rel: Vec::new(),
-        };
         let id = self.widget_id("mapview", None).expect("mapview widget is not found");
         let name: String = "click".to_owned();
         let mut args: Vec<MsgList> = Vec::new();
@@ -1004,7 +984,8 @@ impl State {
             name: name,
             args: args,
         });
-        rel.rel.push(elem);
+        let mut rel = Rel::new(0);
+        rel.append(elem);
         self.enqueue_to_send(Message::REL(rel))?;
         Ok(())
     }
@@ -1012,11 +993,6 @@ impl State {
     #[allow(dead_code)]
     pub fn pick(&mut self, obj_id: u32) -> Result<(), Error> {
         info!("PICK");
-        // TODO let mut rel = Rel::new(seq,id,name);
-        let mut rel = Rel {
-            seq: 0,
-            rel: Vec::new(),
-        };
         let id = self.widget_id("mapview", None).expect("mapview widget is not found");
         let name = "click".to_owned();
         let mut args = Vec::new();
@@ -1045,7 +1021,8 @@ impl State {
             name: name,
             args: args,
         });
-        rel.rel.push(elem);
+        let mut rel = Rel::new(0);
+        rel.append(elem);
         self.enqueue_to_send(Message::REL(rel))?;
         Ok(())
     }
@@ -1053,11 +1030,6 @@ impl State {
     #[allow(dead_code)]
     pub fn choose_pick(&mut self, wdg_id: u16) -> Result<(), Error> {
         info!("GO");
-        // TODO let mut rel = Rel::new(seq,id,name);
-        let mut rel = Rel {
-            seq: 0,
-            rel: Vec::new(),
-        };
         let name = "cl".to_owned();
         let mut args = Vec::new();
         args.push(MsgList::tINT(0));
@@ -1067,7 +1039,8 @@ impl State {
             name: name,
             args: args,
         });
-        rel.rel.push(elem);
+        let mut rel = Rel::new(0);
+        rel.append(elem);
         self.enqueue_to_send(Message::REL(rel))?;
         Ok(())
     }

@@ -1,7 +1,7 @@
-use proto::Error;
+use ::Error;
 use ::std::io;
-//use ::std::io::Read;
 use ::std::io::BufRead;
+use ::std::result::Result;
 use ::byteorder::LittleEndian as LE;
 use ::byteorder::{ReadBytesExt, WriteBytesExt};
 
@@ -30,15 +30,18 @@ pub trait ReadBytesSac : ReadBytesExt + BufRead {
     fn f64(&mut self) -> io::Result<f64> {
         self.read_f64::<LE>()
     }
-    fn strz(&mut self) -> io::Result<String> {
+    fn strz(&mut self) -> Result<String,Error> {
         let mut tmp = Vec::new();
         self.read_until(0, &mut tmp)?;
         tmp.pop();
-        //FIXME remove unwrap()
-        Ok(String::from_utf8(tmp).unwrap())
+        Ok(String::from_utf8(tmp)?)
     }
-
-    //TODO read_coord, read_color etc.
+    fn coord(&mut self) -> io::Result<(i32,i32)> {
+        Ok((self.i32()?, self.i32()?))
+    }
+    fn color(&mut self) -> io::Result<(u8,u8,u8,u8)> {
+        Ok((self.u8()?, self.u8()?, self.u8()?, self.u8()?))
+    }
 }
 
 impl<R: ReadBytesExt + BufRead + ?Sized> ReadBytesSac for R {}

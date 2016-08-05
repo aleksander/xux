@@ -9,7 +9,7 @@ use nom::Err;
 extern crate pcap;
 
 extern crate sac;
-use sac::proto::*;
+use sac::proto::message::*;
 
 extern crate pnet;
 use pnet::packet::ethernet::EthernetPacket;

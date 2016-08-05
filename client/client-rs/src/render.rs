@@ -16,7 +16,7 @@ pub enum Event {
     // AI(...ai desigions...),
     // AI: going to pick obj (ID)
     // AI: going by path (PATH CHAIN)
-    Input,
+    //Input,
 }
 
 pub struct Render {
@@ -38,7 +38,12 @@ impl Render {
             //use std::sync::mpsc::RecvError;
             loop {
                 match rx.recv() {
-                    Ok(_) => {
+                    Ok(event) => {
+                        match event {
+                            Event::Grid(_,_,_,_) => {}
+                            Event::Obj(_,_) => {}
+                            //Event::Input => {}
+                        }
                     }
                     Err(_) => {
                         info!("render: disconnected");

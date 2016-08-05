@@ -26,10 +26,12 @@ mod state;
 use state::State;
 
 mod proto;
-use proto::Error;
 
 mod ai;
 use ai::Ai;
+
+mod error;
+pub use error::Error;
 
 // TODO #[cfg(ai = "lua")]
 

@@ -14,3 +14,6 @@ pub mod driver_std;
 pub mod ai;
 pub mod ai_decl;
 // FIXME pub mod ai_lua;
+
+pub mod error;
+pub use error::Error;
