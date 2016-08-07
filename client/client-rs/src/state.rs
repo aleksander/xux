@@ -582,7 +582,7 @@ impl State {
             }
             Message::OBJDATA(objdata) => {
                 // info!("RX: OBJDATA {:?}", objdata);
-                self.enqueue_to_send(Message::OBJACK(ObjAck::new(&objdata)))?; // send OBJACKs
+                self.enqueue_to_send(Message::OBJACK(ObjAck::from_objdata(&objdata)))?; // send OBJACKs
                 for o in &objdata.obj {
                     // FIXME ??? do NOT add hero object
                     // TODO  if o.id == self.hero.id {

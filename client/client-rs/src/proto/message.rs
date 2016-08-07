@@ -76,41 +76,13 @@ impl Message {
                 }
             }
             REL => Ok(Message::REL(Rel::from_buf(&mut r)?)),
-            ACK => Ok(Message::ACK(Ack { seq: r.u16()? })),
+            ACK => Ok(Message::ACK(Ack::from_buf(&mut r)?)),
             BEAT => Ok(Message::BEAT),
             MAPREQ => Ok(Message::MAPREQ(MapReq::from_buf(&mut r)?)),
             MAPDATA => Ok(Message::MAPDATA(MapData::from_buf(&mut r)?)),
-            OBJDATA => {
-                let mut obj = Vec::new();
-                loop {
-                    let fl = match r.u8() {
-                        Ok(b) => b,
-                        Err(_) => {
-                            break;
-                        }
-                    };
-                    let id = r.u32()?;
-                    let frame = r.i32()?;
-                    let mut prop = Vec::new();
-                    while let Some(p) = ObjDataElemProp::from_buf(&mut r)? {
-                        prop.push(p)
-                    }
-                    obj.push(ObjDataElem {
-                        fl: fl,
-                        id: id,
-                        frame: frame,
-                        prop: prop,
-                    });
-                }
-                Ok(Message::OBJDATA(ObjData { obj: obj }))
-            }
-            OBJACK => {
-                // TODO FIXME parse ObjAck instead of empty return
-                Ok(Message::OBJACK(ObjAck { obj: Vec::new() }))
-            }
-            CLOSE => {
-                Ok(Message::CLOSE /* (Close) */)
-            }
+            OBJDATA => Ok(Message::OBJDATA(ObjData::from_buf(&mut r)?)),
+            OBJACK => Ok(Message::OBJACK(ObjAck::from_buf(&mut r)?)),
+            CLOSE => Ok(Message::CLOSE),
             _ => {
                 Err(Error {
                     source: "unknown message type",

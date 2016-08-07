@@ -3,11 +3,37 @@ use std::result::Result;
 use std::fmt::Formatter;
 use Error;
 use proto::serialization::*;
-use std::io::Cursor;
-use std::io::Read;
 
 pub struct ObjData {
     pub obj: Vec<ObjDataElem>,
+}
+
+impl ObjData {
+    // TODO impl FromBuf for ObjData {}
+    pub fn from_buf <R:ReadBytesSac> (r: &mut R) -> Result<ObjData,Error> {
+        let mut obj = Vec::new();
+        loop {
+            let fl = match r.u8() {
+                Ok(b) => b,
+                Err(_) => {
+                    break;
+                }
+            };
+            let id = r.u32()?;
+            let frame = r.i32()?;
+            let mut prop = Vec::new();
+            while let Some(p) = ObjDataElemProp::from_buf(r)? {
+                prop.push(p)
+            }
+            obj.push(ObjDataElem {
+                fl: fl,
+                id: id,
+                frame: frame,
+                prop: prop,
+            });
+        }
+        Ok(ObjData { obj: obj })
+    }
 }
 
 impl fmt::Debug for ObjData {
@@ -106,7 +132,7 @@ const OD_ICON: u8 = 19;
 const OD_END: u8 = 255;
 
 impl ObjDataElemProp {
-    pub fn from_buf(r: &mut Cursor<&[u8]>) -> Result<Option<ObjDataElemProp>, Error> {
+    pub fn from_buf <R:ReadBytesSac> (r: &mut R) -> Result<Option<ObjDataElemProp>, Error> {
         let t = r.u8()?;
         match t {
             OD_REM => Ok(Some(ObjDataElemProp::odREM)),
