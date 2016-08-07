@@ -72,30 +72,14 @@ impl Message {
             SESS => {
                 match dir {
                     MessageDirection::FromClient => Ok(Message::C_SESS(cSess::from_buf(&mut r)?)),
-                    MessageDirection::FromServer => Ok(Message::S_SESS(sSess{ err: SessError::new(r.u8()?) })),
+                    MessageDirection::FromServer => Ok(Message::S_SESS(sSess::from_buf(&mut r)?)),
                 }
             }
             REL => Ok(Message::REL(Rel::from_buf(&mut r)?)),
             ACK => Ok(Message::ACK(Ack { seq: r.u16()? })),
             BEAT => Ok(Message::BEAT),
-            MAPREQ => {
-                Ok(Message::MAPREQ(MapReq {
-                    x: r.i32()?,
-                    y: r.i32()?,
-                }))
-            }
-            MAPDATA => {
-                Ok(Message::MAPDATA(MapData {
-                    pktid: r.i32()?,
-                    off: r.u16()?,
-                    len: r.u16()?,
-                    buf: {
-                        let mut buf = Vec::new();
-                        r.read_to_end(&mut buf)?;
-                        buf
-                    },
-                }))
-            }
+            MAPREQ => Ok(Message::MAPREQ(MapReq::from_buf(&mut r)?)),
+            MAPDATA => Ok(Message::MAPDATA(MapData::from_buf(&mut r)?)),
             OBJDATA => {
                 let mut obj = Vec::new();
                 loop {

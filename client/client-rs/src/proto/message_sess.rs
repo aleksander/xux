@@ -32,6 +32,13 @@ pub struct sSess {
     pub err: SessError,
 }
 
+impl sSess {
+    // TODO impl FromBuf for sSess {}
+    pub fn from_buf <R:ReadBytesSac> (r: &mut R) -> Result<sSess,Error> {
+        Ok(sSess{ err: SessError::new(r.u8()?) })
+    }
+}
+
 #[allow(non_camel_case_types)]
 #[derive(Debug)]
 pub struct cSess {
