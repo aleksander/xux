@@ -8,6 +8,12 @@ pub struct MapReq {
 }
 
 impl MapReq {
+    pub const ID: u8 = 4;
+
+    pub fn new(x: i32, y: i32) -> MapReq {
+        MapReq { x: x, y: y }
+    }
+
     // TODO impl FromBuf for MapReq {}
     pub fn from_buf <R:ReadBytesSac> (r: &mut R) -> Result<MapReq,Error> {
         Ok(MapReq {

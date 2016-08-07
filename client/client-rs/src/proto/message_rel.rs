@@ -11,6 +11,8 @@ pub struct Rel {
 }
 
 impl Rel {
+    pub const ID: u8 = 1;
+
     pub fn new(seq: u16) -> Rel {
         Rel {
             seq: seq,

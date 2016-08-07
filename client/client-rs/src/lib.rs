@@ -1,4 +1,5 @@
 #![feature(question_mark)]
+#![feature(associated_consts)]
 
 #[macro_use]
 extern crate log;

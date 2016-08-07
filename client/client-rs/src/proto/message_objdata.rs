@@ -9,6 +9,8 @@ pub struct ObjData {
 }
 
 impl ObjData {
+    pub const ID: u8 = 6;
+
     // TODO impl FromBuf for ObjData {}
     pub fn from_buf <R:ReadBytesSac> (r: &mut R) -> Result<ObjData,Error> {
         let mut obj = Vec::new();

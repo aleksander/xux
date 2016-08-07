@@ -4,10 +4,12 @@ pub mod message;
 pub mod message_sess;
 pub mod message_rel;
 pub mod message_ack;
+pub mod message_beat;
 pub mod message_mapreq;
 pub mod message_mapdata;
 pub mod message_objdata;
 pub mod message_objack;
+pub mod message_close;
 
 //pub use proto::message_ack::*;
 //pub use proto::message_mapreq::*;

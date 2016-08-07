@@ -10,6 +10,8 @@ pub struct MapData {
 }
 
 impl MapData {
+    pub const ID: u8 = 5;
+
     // TODO impl FromBuf for MapData {}
     pub fn from_buf <R:ReadBytesSac> (r: &mut R) -> Result<MapData,Error> {
         Ok(MapData {

@@ -1,8 +1,6 @@
 use proto::serialization::*;
 use Error;
 
-pub const ID: u8 = 0;
-
 #[derive(Debug)]
 pub enum SessError {
     OK,
@@ -35,6 +33,8 @@ pub struct sSess {
 }
 
 impl sSess {
+    pub const ID: u8 = 0;
+
     // TODO impl FromBuf for sSess {}
     pub fn from_buf <R:ReadBytesSac> (r: &mut R) -> Result<sSess,Error> {
         Ok(sSess{ err: SessError::new(r.u8()?) })
@@ -55,6 +55,8 @@ pub struct cSess {
 }
 
 impl cSess {
+    pub const ID: u8 = 0;
+
     // TODO impl FromBuf for cSess {}
     pub fn from_buf <R:ReadBytesSac> (r: &mut R) -> Result<cSess,Error> {
         let /*unknown*/ _ = r.u16()?;
@@ -74,7 +76,7 @@ impl cSess {
     }
 
     pub fn to_buf <W:WriteBytesSac> (&self, w: &mut W) -> Result<(), Error> {
-        w.u8(ID)?;
+        w.u8(Self::ID)?;
         w.u16(2)?; // unknown
         w.write("Salem".as_bytes())?; // proto
         w.u8(0)?;

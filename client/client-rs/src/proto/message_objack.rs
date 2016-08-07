@@ -8,6 +8,8 @@ pub struct ObjAck {
 }
 
 impl ObjAck {
+    pub const ID: u8 = 7;
+
     // TODO impl FromBuf for ObjAck {}
     pub fn from_buf <R:ReadBytesSac> (_: &mut R) -> Result<ObjAck,Error> {
         // TODO FIXME parse ObjAck instead of empty return

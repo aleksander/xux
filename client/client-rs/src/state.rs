@@ -30,6 +30,7 @@ use proto::message_rel::NewWdg;
 use proto::message_rel::WdgMsg;
 use proto::message_sess::cSess;
 use proto::message_mapreq::MapReq;
+use proto::message_close::Close;
 //use proto::serialization::ToBuf;
 use Error;
 
@@ -438,7 +439,7 @@ impl State {
                             seq: self.enqueue_seq,
                         }))
                     }
-                    ClientMessage::CLOSE => {
+                    ClientMessage::CLOSE(_) => {
                         (MessageHint::CLOSE,
                          Some(Timeout {
                             ms: 100,
@@ -453,7 +454,7 @@ impl State {
                         }))
                     }
                     ClientMessage::ACK(_) |
-                    ClientMessage::BEAT |
+                    ClientMessage::BEAT(_) |
                     ClientMessage::OBJACK(_) => (MessageHint::NONE, None),
                 };
 
@@ -618,7 +619,7 @@ impl State {
                     }
                 }
             }
-            ServerMessage::CLOSE => {
+            ServerMessage::CLOSE(_) => {
                 // info!("RX: CLOSE");
                 // TODO return Status::EndOfSession instead of Error
                 return Err(Error {
@@ -894,7 +895,7 @@ impl State {
         //     or client.send(Message::mapreq(x,y).to_buf())
         // TODO add "force" flag to update this grid forcelly
         if !self.map.grids.contains_key(&(x, y)) {
-            self.enqueue_to_send(ClientMessage::MAPREQ(MapReq { x: x, y: y }))?;
+            self.enqueue_to_send(ClientMessage::MAPREQ(MapReq::new(x, y)))?;
         }
         Ok(())
     }
@@ -939,7 +940,7 @@ impl State {
     }
 
     pub fn close(&mut self) -> Result<(), Error> {
-        self.enqueue_to_send(ClientMessage::CLOSE)?;
+        self.enqueue_to_send(ClientMessage::CLOSE(Close))?;
         Ok(())
     }
 
