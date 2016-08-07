@@ -17,28 +17,10 @@ type le = LittleEndian;
 #[allow(non_camel_case_types)]
 type be = BigEndian;
 
-use proto::message_mapdata::MapData;
-use proto::message_rel::Rel;
-use proto::message::*;
-use proto::message_sess::SessError;
-use proto::message_objdata::ObjDataElemProp;
-use proto::msg_list::MsgList;
-use proto::message_ack::Ack;
-use proto::message_objack::ObjAck;
-use proto::message_rel::RelElem;
-use proto::message_rel::NewWdg;
-use proto::message_rel::WdgMsg;
-use proto::message_sess::cSess;
-use proto::message_mapreq::MapReq;
-use proto::message_close::Close;
-//use proto::serialization::ToBuf;
+use proto::*;
 use Error;
 
-// extern crate rustc_serialize;
-// use self::rustc_serialize::hex::ToHex;
-
 extern crate flate2;
-// use std::io::prelude::*;
 use self::flate2::read::ZlibDecoder;
 
 pub type Resid = u16;
