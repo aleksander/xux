@@ -10,7 +10,6 @@ pub struct Rel {
     pub rel: Vec<RelElem>,
 }
 
-#[allow(dead_code)]
 impl Rel {
     pub fn new(seq: u16) -> Rel {
         Rel {
@@ -20,6 +19,36 @@ impl Rel {
     }
     pub fn append(&mut self, elem: RelElem) {
         self.rel.push(elem);
+    }
+
+    // TODO impl FromBuf for Rel {}
+    pub fn from_buf <R:ReadBytesSac> (r: &mut R) -> Result<Rel,Error> {
+        let seq = r.u16()?;
+        let mut rel_vec = Vec::new();
+        loop {
+            let mut rel_type = match r.u8() {
+                Ok(b) => b,
+                Err(_) => {
+                    break;
+                }
+            };
+            let rel_buf = if (rel_type & MORE_RELS_ATTACHED_BIT) != 0 {
+                rel_type &= !MORE_RELS_ATTACHED_BIT;
+                let rel_len = r.u16()?;
+                let mut tmp = vec![0; rel_len as usize];
+                r.read_exact(&mut tmp)?;
+                tmp
+            } else {
+                let mut tmp = Vec::new();
+                r.read_to_end(&mut tmp)?;
+                tmp
+            };
+            rel_vec.push(RelElem::from_buf(rel_type, rel_buf.as_slice())?);
+        }
+        Ok(Rel {
+            seq: seq,
+            rel: rel_vec,
+        })
     }
 }
 
@@ -34,7 +63,6 @@ impl fmt::Debug for Rel {
 }
 
 #[derive(Debug)]
-// TODO replace with plain struct variants
 pub enum RelElem {
     NEWWDG(NewWdg),
     WDGMSG(WdgMsg),

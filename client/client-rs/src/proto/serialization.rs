@@ -36,9 +36,11 @@ pub trait ReadBytesSac : ReadBytesExt + BufRead {
         tmp.pop();
         Ok(String::from_utf8(tmp)?)
     }
+    //FIXME return struct Coord
     fn coord(&mut self) -> io::Result<(i32,i32)> {
         Ok((self.i32()?, self.i32()?))
     }
+    //FIXME return struct Color
     fn color(&mut self) -> io::Result<(u8,u8,u8,u8)> {
         Ok((self.u8()?, self.u8()?, self.u8()?, self.u8()?))
     }
@@ -90,6 +92,7 @@ pub trait WriteBytesSac : WriteBytesExt {
 impl<R: WriteBytesExt + ?Sized> WriteBytesSac for R {}
 
 pub trait FromBuf {
+    //FIXME should return Self, not Vec<Self>
     fn from_buf <R:ReadBytesSac> (r: &mut R) -> Result<Vec<Self>, Error> where Self: ::std::marker::Sized;
 }
 

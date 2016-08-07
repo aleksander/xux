@@ -51,6 +51,8 @@ pub enum Message {
 //    OBJDATA( ObjData ),
 //    CLOSE/*( Close )*/,
 // }
+// TODO impl FromBuf for ServerMessage
+// TODO impl ToBuf for ClientMessage
 
 const SESS: u8 = 0;
 const REL: u8 = 1;
@@ -63,76 +65,17 @@ const OBJACK: u8 = 7;
 const CLOSE: u8 = 8;
 
 impl Message {
-    // TODO ADD fuzzing tests:
-    //        for i in range(0u8, 255) {
-    //            let mut v = Vec::new();
-    //            v.push(i);
-    //            info!("{}", Message::from_buf(v.as_slice()));
-    //        }
-    // TODO
-    // fn from_buf_checked (buf,dir) {
-    //     if (this message can be received by this dir) {
-    //         return Ok(buf.from_buf)
-    //     else
-    //         return Err("this king of message can't be received by this side")
-    // }
-    // TODO return Error with stack trace on Err instead of String
-    // TODO get Vec not &[]. return Vec in the case of error
     pub fn from_buf(buf: &[u8], dir: MessageDirection) -> Result<(Message, Option<Vec<u8>>), Error> {
         let mut r = Cursor::new(buf);
         let mtype = r.u8()?;
         let res = match mtype {
             SESS => {
-                // TODO ??? Ok(Message::sess(err))
-                //     impl Message { fn sess (err: u8) -> Message::SESS { ... } }
                 match dir {
-                    MessageDirection::FromClient => {
-                        let /*unknown*/ _ = r.u16()?;
-                        let /*proto*/ _ = r.strz()?;
-                        let /*version*/ _ = r.u16()?;
-                        let login = r.strz()?;
-                        let cookie_len = r.u16()?;
-                        let cookie = {
-                            let mut tmp = vec![0; cookie_len as usize];
-                            r.read_exact(&mut tmp)?;
-                            tmp
-                        };
-                        Ok(Message::C_SESS(cSess {
-                            login: login,
-                            cookie: cookie,
-                        }))
-                    }
-                    MessageDirection::FromServer => Ok(Message::S_SESS(sSess { err: SessError::new(r.u8()?) })),
+                    MessageDirection::FromClient => Ok(Message::C_SESS(cSess::from_buf(&mut r)?)),
+                    MessageDirection::FromServer => Ok(Message::S_SESS(sSess{ err: SessError::new(r.u8()?) })),
                 }
             }
-            REL => {
-                let seq = r.u16()?;
-                let mut rel_vec = Vec::new();
-                loop {
-                    let mut rel_type = match r.u8() {
-                        Ok(b) => b,
-                        Err(_) => {
-                            break;
-                        }
-                    };
-                    let rel_buf = if (rel_type & 0x80) != 0 {
-                        rel_type &= !0x80;
-                        let rel_len = r.u16()?;
-                        let mut tmp = vec![0; rel_len as usize];
-                        r.read_exact(&mut tmp).unwrap();
-                        tmp
-                    } else {
-                        let mut tmp = Vec::new();
-                        r.read_to_end(&mut tmp)?;
-                        tmp
-                    };
-                    rel_vec.push(RelElem::from_buf(rel_type, rel_buf.as_slice())?);
-                }
-                Ok(Message::REL(Rel {
-                    seq: seq,
-                    rel: rel_vec,
-                }))
-            }
+            REL => Ok(Message::REL(Rel::from_buf(&mut r)?)),
             ACK => Ok(Message::ACK(Ack { seq: r.u16()? })),
             BEAT => Ok(Message::BEAT),
             MAPREQ => {
