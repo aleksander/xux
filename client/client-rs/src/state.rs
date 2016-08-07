@@ -19,8 +19,7 @@ type be = BigEndian;
 
 use proto::message_mapdata::MapData;
 use proto::message_rel::Rel;
-use proto::message::Message;
-use proto::message::MessageDirection;
+use proto::message::*;
 use proto::message_sess::SessError;
 use proto::message_objdata::ObjDataElemProp;
 use proto::msg_list::MsgList;
@@ -31,8 +30,8 @@ use proto::message_rel::NewWdg;
 use proto::message_rel::WdgMsg;
 use proto::message_sess::cSess;
 use proto::message_mapreq::MapReq;
-
-use ::Error;
+//use proto::serialization::ToBuf;
+use Error;
 
 // extern crate rustc_serialize;
 // use self::rustc_serialize::hex::ToHex;
@@ -173,7 +172,7 @@ pub struct Timeout {
 #[allow(non_camel_case_types)]
 #[derive(Clone,PartialEq)]
 pub enum MessageHint {
-    C_SESS,
+    SESS,
     REL(u16),
     MAPREQ(i32, i32),
     CLOSE,
@@ -415,54 +414,47 @@ impl State {
         // TODO
     }
 
-    pub fn enqueue_to_send(&mut self, mut msg: Message) -> Result<(), Error> {
-        if let Message::REL(ref mut rel) = msg {
+    pub fn enqueue_to_send(&mut self, mut msg: ClientMessage) -> Result<(), Error> {
+        if let ClientMessage::REL(ref mut rel) = msg {
             assert!(rel.seq == 0);
             rel.seq = self.seq;
             self.seq += rel.rel.len() as u16;
         }
-        match msg.to_buf() {
-            Ok(buf) => {
+        let mut buf = vec!();
+        match msg.to_buf(&mut buf) {
+            Ok(()) => {
                 let (msg_hint, timeout) = match msg {
-                    Message::C_SESS(_) => {
-                        (MessageHint::C_SESS,
+                    ClientMessage::SESS(_) => {
+                        (MessageHint::SESS,
                          Some(Timeout {
                             ms: 100,
                             seq: self.enqueue_seq,
                         }))
                     }
-                    Message::REL(rel) => {
+                    ClientMessage::REL(rel) => {
                         (MessageHint::REL(rel.seq),
                          Some(Timeout {
                             ms: 100,
                             seq: self.enqueue_seq,
                         }))
                     }
-                    Message::CLOSE => {
+                    ClientMessage::CLOSE => {
                         (MessageHint::CLOSE,
                          Some(Timeout {
                             ms: 100,
                             seq: self.enqueue_seq,
                         }))
                     }
-                    Message::MAPREQ(mapreq) => {
+                    ClientMessage::MAPREQ(mapreq) => {
                         (MessageHint::MAPREQ(mapreq.x, mapreq.y),
                          Some(Timeout {
                             ms: 400,
                             seq: self.enqueue_seq,
                         }))
                     }
-                    Message::ACK(_) |
-                    Message::BEAT |
-                    Message::OBJACK(_) => (MessageHint::NONE, None),
-                    Message::S_SESS(_) |
-                    Message::MAPDATA(_) |
-                    Message::OBJDATA(_) => {
-                        return Err(Error {
-                            source: "client must NOT send this kind of message",
-                            detail: None,
-                        });
-                    }
+                    ClientMessage::ACK(_) |
+                    ClientMessage::BEAT |
+                    ClientMessage::OBJACK(_) => (MessageHint::NONE, None),
                 };
 
                 let ebuf = EnqueuedBuffer {
@@ -495,8 +487,9 @@ impl State {
         }
     }
 
-    pub fn dispatch_message(&mut self, buf: &[u8] /* , tx_buf:&mut LinkedList<Vec<u8>> */) -> Result<(), Error> {
-        let (msg, remains) = match Message::from_buf(buf, MessageDirection::FromServer) {
+    pub fn dispatch_message(&mut self, buf: &[u8]) -> Result<(), Error> {
+        let mut r = Cursor::new(buf);
+        let (msg, remains) = match ServerMessage::from_buf(&mut r) {
             Ok((msg, remains)) => (msg, remains),
             Err(err) => {
                 info!("message parse error: {:?}", err);
@@ -511,7 +504,7 @@ impl State {
         }
 
         match msg {
-            Message::S_SESS(sess) => {
+            ServerMessage::SESS(sess) => {
                 // info!("RX: S_SESS {:?}", sess.err);
                 match sess.err {
                     SessError::OK => {}
@@ -525,13 +518,10 @@ impl State {
                         // ??? or can we re-send our SESS requests in case of BUSY err ?
                     }
                 }
-                self.remove_from_que(MessageHint::C_SESS);
+                self.remove_from_que(MessageHint::SESS);
                 Self::start_send_beats();
             }
-            Message::C_SESS(_) => {
-                info!("     !!! client must not receive C_SESS !!!");
-            }
-            Message::REL(rel) => {
+            ServerMessage::REL(rel) => {
                 // info!("RX: REL {}", rel.seq);
                 if rel.seq == self.rx_rel_seq {
                     self.dispatch_rel_cache(&rel)?;
@@ -544,21 +534,15 @@ impl State {
                     info!("past");
                     // TODO self.ack(seq);
                     let last_acked_seq = self.rx_rel_seq - 1;
-                    self.enqueue_to_send(Message::ACK(Ack { seq: last_acked_seq }))?;
+                    self.enqueue_to_send(ClientMessage::ACK(Ack { seq: last_acked_seq }))?;
                 }
             }
-            Message::ACK(ack) => {
+            ServerMessage::ACK(ack) => {
                 // info!("RX: ACK {}", ack.seq);
                 // info!("our rel {} acked", self.seq);
                 self.remove_from_que(MessageHint::REL(ack.seq));
             }
-            Message::BEAT => {
-                info!("     !!! client must not receive BEAT !!!");
-            }
-            Message::MAPREQ(_) => {
-                info!("     !!! client must not receive MAPREQ !!!");
-            }
-            Message::MAPDATA(mapdata) => {
+            ServerMessage::MAPDATA(mapdata) => {
                 // info!("RX: MAPDATA {:?}", mapdata);
                 let pktid = mapdata.pktid;
                 self.map.append(mapdata);
@@ -580,9 +564,9 @@ impl State {
                     }
                 }
             }
-            Message::OBJDATA(objdata) => {
+            ServerMessage::OBJDATA(objdata) => {
                 // info!("RX: OBJDATA {:?}", objdata);
-                self.enqueue_to_send(Message::OBJACK(ObjAck::from_objdata(&objdata)))?; // send OBJACKs
+                self.enqueue_to_send(ClientMessage::OBJACK(ObjAck::from_objdata(&objdata)))?; // send OBJACKs
                 for o in &objdata.obj {
                     // FIXME ??? do NOT add hero object
                     // TODO  if o.id == self.hero.id {
@@ -634,8 +618,7 @@ impl State {
                     }
                 }
             }
-            Message::OBJACK(_) => {}
-            Message::CLOSE => {
+            ServerMessage::CLOSE => {
                 // info!("RX: CLOSE");
                 // TODO return Status::EndOfSession instead of Error
                 return Err(Error {
@@ -673,7 +656,7 @@ impl State {
                 }
             }
         }
-        self.enqueue_to_send(Message::ACK(Ack { seq: next_rel_seq }))?;
+        self.enqueue_to_send(ClientMessage::ACK(Ack { seq: next_rel_seq }))?;
         self.rx_rel_seq = next_rel_seq + 1;
         Ok(())
     }
@@ -881,7 +864,7 @@ impl State {
         // TODO get username from server responce, not from auth username
         // let cookie = self.cookie.clone();
         // let user = self.user.clone();
-        self.enqueue_to_send(Message::C_SESS(cSess {
+        self.enqueue_to_send(ClientMessage::SESS(cSess {
                 login: login.to_owned(),
                 cookie: cookie.to_vec(),
             }))?;
@@ -903,7 +886,7 @@ impl State {
         });
         let mut rel = Rel::new(0);
         rel.append(elem);
-        self.enqueue_to_send(Message::REL(rel))
+        self.enqueue_to_send(ClientMessage::REL(rel))
     }
 
     pub fn mapreq(&mut self, x: i32, y: i32) -> Result<(), Error> {
@@ -911,7 +894,7 @@ impl State {
         //     or client.send(Message::mapreq(x,y).to_buf())
         // TODO add "force" flag to update this grid forcelly
         if !self.map.grids.contains_key(&(x, y)) {
-            self.enqueue_to_send(Message::MAPREQ(MapReq { x: x, y: y }))?;
+            self.enqueue_to_send(ClientMessage::MAPREQ(MapReq { x: x, y: y }))?;
         }
         Ok(())
     }
@@ -946,7 +929,8 @@ impl State {
     pub fn tx(&mut self) -> Option<EnqueuedBuffer> {
         let buf = self.tx_buf.pop_back();
         if let Some(ref buf) = buf {
-            match Message::from_buf(buf.buf.as_slice(), MessageDirection::FromClient) {
+            let mut r = Cursor::new(buf.buf.as_slice());
+            match ClientMessage::from_buf(&mut r/*buf.buf.as_slice()*/) {
                 Ok((msg, _)) => info!("TX: {:?}", msg),
                 Err(e) => panic!("ERROR: malformed TX message: {:?}", e),
             }
@@ -955,7 +939,7 @@ impl State {
     }
 
     pub fn close(&mut self) -> Result<(), Error> {
-        self.enqueue_to_send(Message::CLOSE)?;
+        self.enqueue_to_send(ClientMessage::CLOSE)?;
         Ok(())
     }
 
@@ -986,7 +970,7 @@ impl State {
         });
         let mut rel = Rel::new(0);
         rel.append(elem);
-        self.enqueue_to_send(Message::REL(rel))?;
+        self.enqueue_to_send(ClientMessage::REL(rel))?;
         Ok(())
     }
 
@@ -1023,7 +1007,7 @@ impl State {
         });
         let mut rel = Rel::new(0);
         rel.append(elem);
-        self.enqueue_to_send(Message::REL(rel))?;
+        self.enqueue_to_send(ClientMessage::REL(rel))?;
         Ok(())
     }
 
@@ -1041,7 +1025,7 @@ impl State {
         });
         let mut rel = Rel::new(0);
         rel.append(elem);
-        self.enqueue_to_send(Message::REL(rel))?;
+        self.enqueue_to_send(ClientMessage::REL(rel))?;
         Ok(())
     }
 

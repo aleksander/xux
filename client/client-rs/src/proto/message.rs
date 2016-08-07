@@ -6,20 +6,13 @@ use proto::message_mapdata::*;
 use proto::message_objdata::*;
 use proto::message_objack::*;
 use Error;
-use std::io::Cursor;
+//use std::io::Cursor;
 use proto::serialization::*;
-use std::io::Read;
-use std::io::Write;
+//use std::io::Read;
 
-#[derive(Clone,Copy)]
-pub enum MessageDirection {
-    FromClient,
-    FromServer,
-}
-
+/*
 #[allow(non_camel_case_types)]
 #[derive(Debug)]
-// TODO replace with plain struct variants
 pub enum Message {
     C_SESS(cSess),
     S_SESS(sSess),
@@ -32,29 +25,33 @@ pub enum Message {
     OBJACK(ObjAck),
     CLOSE,
 }
+*/
 
-// TODO maybe:
-// pub enum ClientMessage {
-//    SESS( cSess ),
-//    REL( Rel ),
-//    ACK( Ack ),
-//    BEAT,
-//    MAPREQ( MapReq ),
-//    OBJACK( ObjAck ),
-//    CLOSE/*( Close )*/,
-// }
-// pub enum ServerMessage {
-//    SESS( sSess ),
-//    REL( Rel ),
-//    ACK( Ack ),
-//    MAPDATA( MapData ),
-//    OBJDATA( ObjData ),
-//    CLOSE/*( Close )*/,
-// }
+#[derive(Debug)]
+pub enum ClientMessage {
+    SESS( cSess ),
+    REL( Rel ),
+    ACK( Ack ),
+    BEAT,
+    MAPREQ( MapReq ),
+    OBJACK( ObjAck ),
+    CLOSE,
+}
+
+#[derive(Debug)]
+pub enum ServerMessage {
+    SESS( sSess ),
+    REL( Rel ),
+    ACK( Ack ),
+    MAPDATA( MapData ),
+    OBJDATA( ObjData ),
+    CLOSE,
+}
+
 // TODO impl FromBuf for ServerMessage
 // TODO impl ToBuf for ClientMessage
 
-const SESS: u8 = 0;
+pub const SESS: u8 = ID;
 const REL: u8 = 1;
 const ACK: u8 = 2;
 const BEAT: u8 = 3;
@@ -64,25 +61,17 @@ const OBJDATA: u8 = 6;
 const OBJACK: u8 = 7;
 const CLOSE: u8 = 8;
 
-impl Message {
-    pub fn from_buf(buf: &[u8], dir: MessageDirection) -> Result<(Message, Option<Vec<u8>>), Error> {
-        let mut r = Cursor::new(buf);
+impl ClientMessage {
+    pub fn from_buf <R:ReadBytesSac> (r: &mut R) -> Result<(ClientMessage, Option<Vec<u8>>), Error> {
         let mtype = r.u8()?;
         let res = match mtype {
-            SESS => {
-                match dir {
-                    MessageDirection::FromClient => Ok(Message::C_SESS(cSess::from_buf(&mut r)?)),
-                    MessageDirection::FromServer => Ok(Message::S_SESS(sSess::from_buf(&mut r)?)),
-                }
-            }
-            REL => Ok(Message::REL(Rel::from_buf(&mut r)?)),
-            ACK => Ok(Message::ACK(Ack::from_buf(&mut r)?)),
-            BEAT => Ok(Message::BEAT),
-            MAPREQ => Ok(Message::MAPREQ(MapReq::from_buf(&mut r)?)),
-            MAPDATA => Ok(Message::MAPDATA(MapData::from_buf(&mut r)?)),
-            OBJDATA => Ok(Message::OBJDATA(ObjData::from_buf(&mut r)?)),
-            OBJACK => Ok(Message::OBJACK(ObjAck::from_buf(&mut r)?)),
-            CLOSE => Ok(Message::CLOSE),
+            SESS => Ok(ClientMessage::SESS(cSess::from_buf(r)?)),
+            REL => Ok(ClientMessage::REL(Rel::from_buf(r)?)),
+            ACK => Ok(ClientMessage::ACK(Ack::from_buf(r)?)),
+            BEAT => Ok(ClientMessage::BEAT),
+            MAPREQ => Ok(ClientMessage::MAPREQ(MapReq::from_buf(r)?)),
+            OBJACK => Ok(ClientMessage::OBJACK(ObjAck::from_buf(r)?)),
+            CLOSE => Ok(ClientMessage::CLOSE),
             _ => {
                 Err(Error {
                     source: "unknown message type",
@@ -105,72 +94,113 @@ impl Message {
         }
     }
 
-    pub fn to_buf(&self) -> Result<Vec<u8>, Error> {
+    pub fn to_buf <W:WriteBytesSac> (&self, w: &mut W) -> Result<(), Error> {
         match *self {
-            // !!! this is client session message, not server !!!
-            Message::C_SESS(ref sess) => /*(name: &str, cookie: &[u8]) -> Vec<u8>*/ {
-                let mut w = vec![];
-                w.u8(SESS)?;
-                w.u16(2)?; // unknown
-                w.write("Salem".as_bytes())?; // proto
-                w.u8(0)?;
-                w.u16(36)?; // version
-                w.write(sess.login.as_bytes())?; // login
-                w.u8(0)?;
-                w.u16(32)?; // cookie length
-                w.write(sess.cookie.as_slice())?; // cookie
-                Ok(w)
-            }
-            Message::S_SESS(/*ref sess*/ _ ) => {
-                Err( Error{ source:"sSess.to_buf is not implemented yet", detail:None } )
-            }
-            Message::ACK(ref ack) => /*ack (seq: u16) -> Vec<u8>*/ {
-                let mut w = vec![];
+            ClientMessage::SESS(ref sess) => sess.to_buf(w),
+            //ClientMessage::S_SESS(ref s_sess) => s_sess.to_buf(w),
+            ClientMessage::ACK(ref ack) => {
                 w.u8(ACK)?;
                 w.u16(ack.seq)?;
-                Ok(w)
+                Ok(())
             }
-            Message::BEAT => /* beat () -> Vec<u8> */ {
-                let mut w = vec![];
+            ClientMessage::BEAT => {
                 w.u8(BEAT)?;
-                Ok(w)
+                Ok(())
             }
-            Message::REL(ref rel) => /* rel_wdgmsg_play (seq: u16, name: &str) -> Vec<u8> */ {
-                let mut w = vec![];
+            ClientMessage::REL(ref rel) => {
                 w.u8(REL)?;
-                w.u16(rel.seq)?;// sequence
+                w.u16(rel.seq)?; // sequence
                 for i in 0 .. rel.rel.len() {
                     let rel_elem = &rel.rel[i];
                     let last_one = i == (rel.rel.len() - 1);
                     let rel_elem_buf = rel_elem.to_buf(last_one)?;
                     w.write(&rel_elem_buf)?;
                 }
-                Ok(w)
+                Ok(())
             }
-            Message::MAPREQ(ref mapreq) => /* mapreq (x:i32, y:i32) -> Vec<u8> */ {
-                let mut w = vec![];
+            ClientMessage::MAPREQ(ref mapreq) => {
                 w.u8(MAPREQ)?;
                 w.i32(mapreq.x)?;
                 w.i32(mapreq.y)?;
-                Ok(w)
+                Ok(())
             }
-            Message::OBJACK(ref objack) => {
-                let mut w = vec![];
+            ClientMessage::OBJACK(ref objack) => {
                 w.u8(OBJACK)?;
                 for o in &objack.obj {
                     w.u32(o.id)?;
                     w.i32(o.frame)?;
                 }
-                Ok(w)
+                Ok(())
             }
-            Message::CLOSE => {
-                let mut w = vec![];
+            ClientMessage::CLOSE => {
                 w.u8(CLOSE)?;
-                Ok(w)
+                Ok(())
+            }
+        }
+    }
+}
+
+impl ServerMessage {
+    pub fn from_buf <R:ReadBytesSac> (r: &mut R) -> Result<(ServerMessage, Option<Vec<u8>>), Error> {
+        //let mut r = Cursor::new(buf);
+        let mtype = r.u8()?;
+        let res = match mtype {
+            SESS => Ok(ServerMessage::SESS(sSess::from_buf(r)?)),
+            REL => Ok(ServerMessage::REL(Rel::from_buf(r)?)),
+            ACK => Ok(ServerMessage::ACK(Ack::from_buf(r)?)),
+            MAPDATA => Ok(ServerMessage::MAPDATA(MapData::from_buf(r)?)),
+            OBJDATA => Ok(ServerMessage::OBJDATA(ObjData::from_buf(r)?)),
+            CLOSE => Ok(ServerMessage::CLOSE),
+            _ => {
+                Err(Error {
+                    source: "unknown message type",
+                    detail: None,
+                })
+            }
+        };
+
+        let mut tmp = Vec::new();
+        r.read_to_end(&mut tmp)?;
+        let remains = if tmp.is_empty() {
+            None
+        } else {
+            Some(tmp)
+        };
+
+        match res {
+            Ok(msg) => Ok((msg, remains)),
+            Err(e) => Err(e),
+        }
+    }
+
+    /*
+    pub fn to_buf <W:WriteBytesSac> (&self, w: &mut W) -> Result<(), Error> {
+        match *self {
+            ServerMessage::SESS(ref sess) => sess.to_buf(w),
+            ServerMessage::ACK(ref ack) => {
+                w.u8(ACK)?;
+                w.u16(ack.seq)?;
+                Ok(())
+            }
+            ServerMessage::REL(ref rel) => {
+                w.u8(REL)?;
+                w.u16(rel.seq)?; // sequence
+                for i in 0 .. rel.rel.len() {
+                    let rel_elem = &rel.rel[i];
+                    let last_one = i == (rel.rel.len() - 1);
+                    let rel_elem_buf = rel_elem.to_buf(last_one)?;
+                    w.write(&rel_elem_buf)?;
+                }
+                Ok(())
+            }
+            ServerMessage::CLOSE => {
+                w.u8(CLOSE)?;
+                Ok(())
             }
             _ => {
                 Err( Error{ source:"unknown message type", detail:None } )
             }
         }
     }
+    */
 }

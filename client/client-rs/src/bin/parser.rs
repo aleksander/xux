@@ -1,4 +1,5 @@
 use std::env;
+use std::io::Cursor;
 
 #[macro_use]
 extern crate nom;
@@ -18,6 +19,12 @@ use pnet::packet::ipv4::Ipv4Packet;
 use pnet::packet::Packet;
 use pnet::packet::ip::IpNextHeaderProtocols::Udp;
 use pnet::packet::udp::UdpPacket;
+
+#[derive(Clone,Copy)]
+pub enum MessageDirection {
+    FromClient,
+    FromServer,
+}
 
 fn main() {
 
@@ -80,16 +87,35 @@ fn main() {
             }
         } else {
             println!("");
-            match Message::from_buf(udp.payload(), dir) {
-                Ok((msg, remains)) => {
-                    println!("{}: {:?}", dir_str, msg);
-                    if let Some(buf) = remains {
-                        println!("REMAINS {} bytes", buf.len());
+            let mut r = Cursor::new(udp.payload());
+            match dir {
+                MessageDirection::FromClient => {
+                    match ClientMessage::from_buf(&mut r) {
+                        Ok((msg, remains)) => {
+                            println!("CLIENT: {:?}", msg);
+                            if let Some(buf) = remains {
+                                println!("REMAINS {} bytes", buf.len());
+                            }
+                        }
+                        Err(e) => {
+                            println!("FAILED TO PARSE! ERROR: {:?}", e);
+                            println!("BUF: {:?}", udp.payload());
+                        }
                     }
                 }
-                Err(e) => {
-                    println!("FAILED TO PARSE! ERROR: {:?}", e);
-                    println!("BUF: {:?}", udp.payload());
+                MessageDirection::FromServer => {
+                    match ServerMessage::from_buf(&mut r) {
+                        Ok((msg, remains)) => {
+                            println!("SERVER: {:?}", msg);
+                            if let Some(buf) = remains {
+                                println!("REMAINS {} bytes", buf.len());
+                            }
+                        }
+                        Err(e) => {
+                            println!("FAILED TO PARSE! ERROR: {:?}", e);
+                            println!("BUF: {:?}", udp.payload());
+                        }
+                    }
                 }
             }
         }

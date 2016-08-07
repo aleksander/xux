@@ -1,6 +1,8 @@
 use proto::serialization::*;
 use Error;
 
+pub const ID: u8 = 0;
+
 #[derive(Debug)]
 pub enum SessError {
     OK,
@@ -37,6 +39,12 @@ impl sSess {
     pub fn from_buf <R:ReadBytesSac> (r: &mut R) -> Result<sSess,Error> {
         Ok(sSess{ err: SessError::new(r.u8()?) })
     }
+
+    /*
+    pub fn to_buf <W:WriteBytesSac> (&self, _: &mut W) -> Result<(), Error> {
+        Err( Error{ source:"sSess.to_buf is not implemented yet", detail:None } )
+    }
+    */
 }
 
 #[allow(non_camel_case_types)]
@@ -63,5 +71,18 @@ impl cSess {
             login: login,
             cookie: cookie,
         })
+    }
+
+    pub fn to_buf <W:WriteBytesSac> (&self, w: &mut W) -> Result<(), Error> {
+        w.u8(ID)?;
+        w.u16(2)?; // unknown
+        w.write("Salem".as_bytes())?; // proto
+        w.u8(0)?;
+        w.u16(36)?; // version
+        w.write(self.login.as_bytes())?; // login
+        w.u8(0)?;
+        w.u16(32)?; // cookie length
+        w.write(self.cookie.as_slice())?; // cookie
+        Ok(())
     }
 }
