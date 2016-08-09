@@ -141,7 +141,7 @@ impl RelElem {
             MAPIV => Ok(RelElem::MAPIV(MapIv)),
             GLOBLOB => {
                 let mut globs = Vec::new();
-                let inc = r.u8().unwrap();
+                let inc = r.u8()?;
                 loop {
                     let t = match r.u8() {
                         Ok(b) => b,
@@ -150,33 +150,33 @@ impl RelElem {
                     globs.push(match t {
                         GMSG_TIME => {
                             Glob::Time {
-                                time: r.i32().unwrap(),
-                                season: r.u8().unwrap(),
+                                time: r.i32()?,
+                                season: r.u8()?,
                                 inc: inc,
                             }
                         }
                         // GMSG_ASTRO =>
                         GMSG_LIGHT => {
                             Glob::Light {
-                                amb: (r.u8().unwrap(), r.u8().unwrap(), r.u8().unwrap(), r.u8().unwrap()),
-                                dif: (r.u8().unwrap(), r.u8().unwrap(), r.u8().unwrap(), r.u8().unwrap()),
-                                spc: (r.u8().unwrap(), r.u8().unwrap(), r.u8().unwrap(), r.u8().unwrap()),
-                                ang: r.i32().unwrap(),
-                                ele: r.i32().unwrap(),
+                                amb: (r.u8()?, r.u8()?, r.u8()?, r.u8()?),
+                                dif: (r.u8()?, r.u8()?, r.u8()?, r.u8()?),
+                                spc: (r.u8()?, r.u8()?, r.u8()?, r.u8()?),
+                                ang: r.i32()?,
+                                ele: r.i32()?,
                                 inc: inc,
                             }
                         }
                         GMSG_SKY => {
                             use std::u16;
-                            let id1 = r.u16().unwrap();
+                            let id1 = r.u16()?;
                             Glob::Sky(if id1 == u16::MAX {
                                 None
                             } else {
-                                let id2 = r.u16().unwrap();
+                                let id2 = r.u16()?;
                                 if id2 == u16::MAX {
                                     Some((id1, None))
                                 } else {
-                                    Some((id1, Some((id2, r.i32().unwrap()))))
+                                    Some((id1, Some((id2, r.i32()?))))
                                 }
                             })
                         }

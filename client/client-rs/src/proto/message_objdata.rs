@@ -147,10 +147,10 @@ impl ObjDataElemProp {
                 let mut resid = r.u16()?;
                 if (resid & 0x8000) != 0 {
                     resid &= !0x8000;
-                    let sdt_len = r.u8().unwrap();
+                    let sdt_len = r.u8()?;
                     let /*sdt*/ _ = {
                         let mut tmp = vec![0; sdt_len as usize];
-                        r.read_exact(&mut tmp).unwrap();
+                        r.read_exact(&mut tmp)?;
                         tmp
                     };
                 }
@@ -229,7 +229,7 @@ impl ObjDataElemProp {
                     let sdt_len = r.u8()? as usize;
                     let /*sdt*/ _ = {
                         let mut tmp = vec![0; sdt_len];
-                        r.read_exact(&mut tmp).unwrap();
+                        r.read_exact(&mut tmp)?;
                         tmp
                     };
                 }
@@ -270,7 +270,7 @@ impl ObjDataElemProp {
                             let sdt_len = r.u8()? as usize;
                             let /*sdt*/ _ = {
                                 let mut tmp = vec![0; sdt_len];
-                                r.read_exact(&mut tmp).unwrap();
+                                r.read_exact(&mut tmp)?;
                                 tmp
                             };
                         }
@@ -296,7 +296,7 @@ impl ObjDataElemProp {
                             let sdt_len = r.u8()? as usize;
                             let /*sdt*/ _ = {
                                 let mut tmp = vec![0; sdt_len];
-                                r.read_exact(&mut tmp).unwrap();
+                                r.read_exact(&mut tmp)?;
                                 tmp
                             };
                         }
