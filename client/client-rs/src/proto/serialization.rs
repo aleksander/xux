@@ -15,6 +15,9 @@ pub trait ReadBytesSac : ReadBytesExt + BufRead {
     fn i32(&mut self) -> io::Result<i32> {
         self.read_i32::<LE>()
     }
+    fn i64(&mut self) -> io::Result<i64> {
+        self.read_i64::<LE>()
+    }
     fn u8(&mut self) -> io::Result<u8> {
         self.read_u8()
     }
@@ -23,6 +26,9 @@ pub trait ReadBytesSac : ReadBytesExt + BufRead {
     }
     fn u32(&mut self) -> io::Result<u32> {
         self.read_u32::<LE>()
+    }
+    fn u64(&mut self) -> io::Result<u64> {
+        self.read_u64::<LE>()
     }
     fn f32(&mut self) -> io::Result<f32> {
         self.read_f32::<LE>()

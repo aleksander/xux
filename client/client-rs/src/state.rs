@@ -4,18 +4,7 @@ use std::collections::LinkedList;
 use std::vec::Vec;
 use std::io::Cursor;
 use std::io::Read;
-use std::io::BufRead;
 use std::u16;
-
-extern crate byteorder;
-use self::byteorder::LittleEndian;
-use self::byteorder::BigEndian;
-use self::byteorder::ReadBytesExt;
-// use self::byteorder::WriteBytesExt;
-#[allow(non_camel_case_types)]
-type le = LittleEndian;
-#[allow(non_camel_case_types)]
-type be = BigEndian;
 
 use proto::*;
 use Error;
@@ -198,7 +187,8 @@ pub struct Surface {
     pub name: String,
     pub id: i64,
     pub tiles: Vec<u8>,
-    pub z: Vec<i16>, // pub ol: Vec<u8>,
+    pub z: Vec<i16>,
+    //pub ol: Vec<u8>,
 }
 
 pub type PacketId = i32;
@@ -264,39 +254,32 @@ impl Map {
     }
 
     // XXX ??? move to message ?
-    fn from_buf(buf: Vec<u8>) -> Surface {
-        let mut r = Cursor::new(buf);
-        let x = r.read_i32::<le>().unwrap();
-        let y = r.read_i32::<le>().unwrap();
-        let mmname = {
-            let mut tmp = Vec::new();
-            r.read_until(0, &mut tmp).unwrap();
-            tmp.pop();
-            String::from_utf8(tmp).unwrap()
-        };
+    fn from_buf <R:ReadBytesSac> (r: &mut R) -> Result<Surface,Error> {
+        //let mut r = Cursor::new(buf);
+        let x = r.i32()?;
+        let y = r.i32()?;
+        let mmname = r.strz()?;
         // let mut pfl = vec![0; 256];
         loop {
-            let pidx = r.read_u8().unwrap();
+            let pidx = r.u8()?;
             if pidx == 255 {
                 break;
             }
             // pfl[pidx as usize]
-            let _ = r.read_u8().unwrap();
+            let _ = r.u8()?;
         }
         let mut decoder = ZlibDecoder::new(r);
         let mut unzipped = Vec::new();
-        let /*unzipped_len*/ _ = decoder.read_to_end(&mut unzipped).unwrap();
+        let /*unzipped_len*/ _ = decoder.read_to_end(&mut unzipped)?;
         // TODO check unzipped_len
         let mut r = Cursor::new(unzipped);
-        let id = r.read_i64::<le>().unwrap();
-        let mut tiles = Vec::with_capacity(100 * 100);
-        for _ in 0..100 * 100 {
-            tiles.push(r.read_u8().unwrap());
+        fn tmp <R:ReadBytesSac> (r: &mut R) -> Result<(i64,Vec<u8>,Vec<i16>),Error> {
+            let id = r.i64()?;
+            let tiles = (0..100*100).map(|_|r.u8()).collect()?;
+            let z = (0..100*100).map(|_|r.i16()).collect()?;
+            Ok((id,tiles,z))
         }
-        let mut z = Vec::with_capacity(100 * 100);
-        for _ in 0..100 * 100 {
-            z.push(r.read_i16::<le>().unwrap());
-        }
+        let (id,tiles,z) = tmp(&mut r)?;
         // let mut ol = vec![0; 100*100];
         // loop {
         //     let pidx = r.read_u8().unwrap();
@@ -318,14 +301,15 @@ impl Map {
         //         }
         //     }
         // }
-        Surface {
+        Ok(Surface {
             x: x,
             y: y,
             name: mmname,
             id: id,
             tiles: tiles,
-            z: z, // ,ol:ol
-        }
+            z: z,
+            //ol: ol
+        })
     }
 }
 
@@ -532,7 +516,7 @@ impl State {
                 if self.map.complete(pktid) {
                     // TODO let map = self.mapdata.assemble(pktid).to_map();
                     let map_buf = self.map.assemble(pktid);
-                    let map = Map::from_buf(map_buf);
+                    let map = Map::from_buf(&mut Cursor::new(map_buf))?;
                     assert!(map.tiles.len() == 10_000);
                     assert!(map.z.len() == 10_000);
                     info!("MAP COMPLETE ({},{}) name='{}' id={}", map.x, map.y, map.name, map.id);
