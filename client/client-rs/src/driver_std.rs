@@ -24,42 +24,34 @@ impl Driver for DriverStd {
 
 pub struct DriverStd {
     sock: std::net::UdpSocket,
-    // buf: Vec<u8>,
-    dst: std::net::SocketAddr,
     tx: Sender<Event>, // XXX maybe use SyncSender ?
     rx: Receiver<Event>,
 }
 
 impl DriverStd {
-    pub fn new(ip: std::net::IpAddr, port: u16) -> std::io::Result<DriverStd> {
+    pub fn new(host: &str, port: u16) -> std::io::Result<DriverStd> {
         let sock = std::net::UdpSocket::bind("0.0.0.0:0")?;
         let (tx, rx) = channel();
-        let dst = std::net::SocketAddr::new(ip, port);
+        sock.connect((host, port)).expect("udp_sock::connect");
 
-        let _tx = tx.clone();
-        let _sock = sock.try_clone().expect("driver::new.try_clone(sock)");
-        let serv = dst;
+        let receiver_tx = tx.clone();
+        let sock_rx = sock.try_clone().expect("driver::new.try_clone(sock)");
         thread::spawn(move || {
             let mut buf = vec![0; 65535];
             loop {
-                // FIXME check the sender ip:port
-                let (len, src) = _sock.recv_from(&mut buf).expect("driver::recv_from(sock)");
-                if src != serv {
-                    info!("WARNING: datagram not from serv");
-                    continue;
-                }
+                let len = sock_rx.recv(&mut buf).expect("driver::recv");
                 // TODO zero-copy data processing
-                _tx.send(Event::Rx(buf[..len].to_vec())).expect("driver::send(event::rx)");
+                receiver_tx.send(Event::Rx(buf[..len].to_vec())).expect("driver::send(event::rx)");
             }
         });
 
-        let _tx = tx.clone();
+        let render_tx = tx.clone();
         thread::spawn(move || {
             let listener = std::net::TcpListener::bind("127.0.0.1:8080").expect("driver::new.tcp_new");
             for stream in listener.incoming() {
                 match stream {
                     Ok(mut stream) => {
-                        let _tx = _tx.clone();
+                        let _tx = render_tx.clone();
                         thread::spawn(move || {
                             let mut buf = vec![0; 1024];
                             let (reply_tx, reply_rx) = channel();
@@ -83,8 +75,6 @@ impl DriverStd {
 
         Ok(DriverStd {
             sock: sock,
-            // buf: vec![0; 65535],
-            dst: dst,
             tx: tx,
             rx: rx,
         })
@@ -92,7 +82,7 @@ impl DriverStd {
 
     pub fn tx(&self, buf: &[u8]) -> std::io::Result<()> {
         // info!("driver.tx: {} bytes", buf.len());
-        let len = self.sock.send_to(buf, &self.dst)?;
+        let len = self.sock.send(buf)?;
         if len != buf.len() {
             return Err(std::io::Error::new(std::io::ErrorKind::Other, "sent len != buf len"));
         }

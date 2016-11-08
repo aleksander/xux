@@ -1,9 +1,4 @@
-#![feature(lookup_host)]
 #![feature(associated_consts)]
-#![feature(question_mark)]
-
-use std::net::IpAddr;
-use std::net::SocketAddr;
 
 #[macro_use]
 extern crate log;
@@ -11,9 +6,8 @@ extern crate log;
 extern crate fern;
 
 extern crate openssl;
-use self::openssl::crypto::hash::Type;
-use self::openssl::crypto::hash::hash;
-use self::openssl::ssl::{SslMethod, SslContext, SslStream};
+use self::openssl::hash::{hash, MessageDigest};
+use self::openssl::ssl::{SslMethod, SslConnectorBuilder};
 
 extern crate rustc_serialize;
 extern crate byteorder;
@@ -130,12 +124,12 @@ use shift_to_unsigned::ShiftToUnsigned;
 mod driver;
 pub use driver::Driver;
 
-pub fn authorize(ip: IpAddr, port: u16, user: String, pass: String) -> Result<(String, Vec<u8>), Error> {
-    let auth_addr = SocketAddr::new(ip, port);
-    info!("authorize {} @ {}", user, auth_addr);
-    let stream = std::net::TcpStream::connect(&auth_addr).expect("tcpstream::connect");
-    let context = SslContext::new(SslMethod::Sslv23).expect("sslsocket::new");
-    let mut stream = SslStream::connect(&context, stream).expect("sslstream::connect");
+pub fn authorize(host: &str, port: u16, user: String, pass: String) -> Result<(String, Vec<u8>), Error> {
+
+    info!("authorize {} @ {}:{}", user, host, port);
+    let connector = SslConnectorBuilder::new(SslMethod::tls()).expect("sslConnector::new").build();
+    let stream = std::net::TcpStream::connect((host, port)).expect("tcpstream::connect");
+    let mut stream = connector.connect(host, stream).expect("sslstream::connect");
 
     fn msg(buf: Vec<u8>) -> Vec<u8> {
         let mut msg = Vec::new();
@@ -145,7 +139,7 @@ pub fn authorize(ip: IpAddr, port: u16, user: String, pass: String) -> Result<(S
     }
 
     // TODO use closure instead (no need to pass stream)
-    fn command(stream: &mut SslStream<std::net::TcpStream>, cmd: Vec<u8>) -> Result<Vec<u8>, Error> {
+    fn command<S:Read+Write>(mut stream: S /*&mut SslStream<std::net::TcpStream>*/, cmd: Vec<u8>) -> Result<Vec<u8>, Error> {
         stream.write(msg(cmd).as_slice())?;
         stream.flush()?;
 
@@ -175,7 +169,7 @@ pub fn authorize(ip: IpAddr, port: u16, user: String, pass: String) -> Result<(S
         buf.push(0);
         buf.extend(user.as_bytes());
         buf.push(0);
-        buf.extend(hash(Type::SHA256, pass.as_bytes()).as_slice());
+        buf.extend(hash(MessageDigest::sha256(), pass.as_bytes()).expect("hash").as_slice());
         let msg = command(&mut stream, buf)?;
         // FIXME use read_strz analog
         str::from_utf8(&msg[..msg.len() - 1]).expect("authorize.login.from_utf8()").to_string()
@@ -391,15 +385,14 @@ impl<'a, D: Driver, A: Ai> Client<'a, D, A> {
 
 // TODO fn run_std_lua() { run::<Std,Lua>() }
 // TODO fn run<D,A>(ip: IpAddr, username: String, password: String) where D:Driver,A:Ai {
-fn run(ip: IpAddr, username: String, password: String) {
-    // ip: IpAddr, port: u16
-    let mut ai = AiDecl::new();
-    ai.init();
-    let mut driver = DriverStd::new(ip, 1870).expect("driver::new");
+fn run(host: &str, username: String, password: String) {
 
-    match authorize(ip, 1871, username, password) {
+    match authorize(host, 1871, username, password) {
         Ok((login, cookie)) => {
-            Client::new(/*ip, 1870*/ &mut driver, &mut ai).run(&login, &cookie);
+            let mut ai = AiDecl::new();
+            ai.init();
+            let mut driver = DriverStd::new(host, 1870).expect("driver::new");
+            Client::new(&mut driver, &mut ai).run(&login, &cookie);
         }
         Err(e) => {
             info!("ERROR: {:?}", e);
@@ -448,14 +441,6 @@ fn main() {
     let username = args[1].clone();
     let password = args[2].clone();
 
-    let ip = {
-        let mut ips = ::std::net::lookup_host("game.salemthegame.com").expect("lookup_host");
-        let host = ips.next().expect("ip.next");
-        host.ip()
-    };
-
-    info!("connect to {}", ip);
-
     // run::<DriverMio,AiLua>(ip, username, password);
-    run(ip, username, password);
+    run("game.salemthegame.com", username, password);
 }

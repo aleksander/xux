@@ -275,8 +275,8 @@ impl Map {
         let mut r = Cursor::new(unzipped);
         fn tmp <R:ReadBytesSac> (r: &mut R) -> Result<(i64,Vec<u8>,Vec<i16>),Error> {
             let id = r.i64()?;
-            let tiles = (0..100*100).map(|_|r.u8()).collect()?;
-            let z = (0..100*100).map(|_|r.i16()).collect()?;
+            let tiles = (0..100*100).map(|_|r.u8()).collect::<Result<Vec<u8>,::std::io::Error>>()?;
+            let z = (0..100*100).map(|_|r.i16()).collect::<Result<Vec<i16>,::std::io::Error>>()?;
             Ok((id,tiles,z))
         }
         let (id,tiles,z) = tmp(&mut r)?;
