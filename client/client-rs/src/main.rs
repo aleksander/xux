@@ -8,6 +8,7 @@ extern crate fern;
 extern crate openssl;
 use self::openssl::hash::{hash, MessageDigest};
 use self::openssl::ssl::{SslMethod, SslConnectorBuilder};
+use self::openssl::ssl;
 
 extern crate rustc_serialize;
 extern crate byteorder;
@@ -127,7 +128,9 @@ pub use driver::Driver;
 pub fn authorize(host: &str, port: u16, user: String, pass: String) -> Result<(String, Vec<u8>), Error> {
 
     info!("authorize {} @ {}:{}", user, host, port);
-    let connector = SslConnectorBuilder::new(SslMethod::tls()).expect("sslConnector::new").build();
+    let mut builder = SslConnectorBuilder::new(SslMethod::tls()).expect("sslConnector::new");
+    builder.builder_mut().set_verify_callback(ssl::SSL_VERIFY_NONE, |_,_| { println!("!!! VERIFY"); true });
+    let connector = builder.build();
     let stream = std::net::TcpStream::connect((host, port)).expect("tcpstream::connect");
     let mut stream = connector.connect(host, stream).expect("sslstream::connect");
 
@@ -139,7 +142,7 @@ pub fn authorize(host: &str, port: u16, user: String, pass: String) -> Result<(S
     }
 
     // TODO use closure instead (no need to pass stream)
-    fn command<S:Read+Write>(mut stream: S /*&mut SslStream<std::net::TcpStream>*/, cmd: Vec<u8>) -> Result<Vec<u8>, Error> {
+    fn command<S:Read+Write>(mut stream: S, cmd: Vec<u8>) -> Result<Vec<u8>, Error> {
         stream.write(msg(cmd).as_slice())?;
         stream.flush()?;
 
