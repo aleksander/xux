@@ -1,17 +1,11 @@
-usefull links
--------------
-http://www.akadia.com/services/ssh_test_certificate.html
-http://www.assembla.com/spaces/hnhsrv/wiki
+# Salem alternative client. #
 
-TODOs
------
-* use github markup
-* convert all *.py to linux utf-8 without BOM
+The surpose is to implement console client for "Salem" (salemthegame.com) and "Haven and Hearth" (havenandhearth.com) MMORPGs with strong automation capabilities done by scripting.
 
-python:
- pylint
- pypy
- psyco
- shed skin
- cython
- gccpy
+# Building and running #
+
+```
+cd client/client-rs
+cargo build --release
+cargo run --release --bin sac -- [USERNAME] [PASSWORD]
+```
