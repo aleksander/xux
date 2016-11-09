@@ -7,7 +7,6 @@ extern crate fern;
 
 extern crate openssl;
 use self::openssl::hash::{hash, MessageDigest};
-use self::openssl::ssl::{SslMethod, SslConnectorBuilder};
 use self::openssl::ssl;
 
 extern crate rustc_serialize;
@@ -128,11 +127,12 @@ pub use driver::Driver;
 pub fn authorize(host: &str, port: u16, user: String, pass: String) -> Result<(String, Vec<u8>), Error> {
 
     info!("authorize {} @ {}:{}", user, host, port);
-    let mut builder = SslConnectorBuilder::new(SslMethod::tls()).expect("sslConnector::new");
-    builder.builder_mut().set_verify_callback(ssl::SSL_VERIFY_NONE, |_,_| { println!("!!! VERIFY"); true });
-    let connector = builder.build();
     let stream = std::net::TcpStream::connect((host, port)).expect("tcpstream::connect");
-    let mut stream = connector.connect(host, stream).expect("sslstream::connect");
+    let mut ctx = ssl::SslContext::builder(ssl::SslMethod::tls()).expect("sslContext::builder");
+    ctx.set_verify(ssl::SSL_VERIFY_NONE);
+    let ctx = ctx.build();
+    let ssl = ssl::Ssl::new(&ctx).expect("Ssl::new");
+    let mut stream = ssl.connect(stream).expect("Ssl::connect");
 
     fn msg(buf: Vec<u8>) -> Vec<u8> {
         let mut msg = Vec::new();
