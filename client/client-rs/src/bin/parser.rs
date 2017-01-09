@@ -5,7 +5,6 @@ use std::io::Cursor;
 extern crate nom;
 use nom::IResult;
 use nom::be_u8;
-use nom::Err;
 
 extern crate pcap;
 
@@ -184,13 +183,13 @@ fn parse_from_server(i: &[u8]) -> IResult<&[u8], &str> {
                 0 => parse_ssess(i),
                 1 => parse_rel(i),
                 2 => parse_ack(i),
-                3 => IResult::Error(Err::Code(nom::ErrorKind::Tag))/*parse_beat(i)*/,
-                4 => IResult::Error(Err::Code(nom::ErrorKind::Tag))/*parse_mapreq(i)*/,
+                3 => IResult::Error(nom::ErrorKind::Tag)/*parse_beat(i)*/,
+                4 => IResult::Error(nom::ErrorKind::Tag)/*parse_mapreq(i)*/,
                 5 => parse_mapdata(i),
                 6 => parse_objdata(i),
-                7 => IResult::Error(Err::Code(nom::ErrorKind::Tag))/*parse_objack(i)*/,
+                7 => IResult::Error(nom::ErrorKind::Tag)/*parse_objack(i)*/,
                 8 => parse_close(i),
-                _ => IResult::Error(Err::Code(nom::ErrorKind::Tag))
+                _ => IResult::Error(nom::ErrorKind::Tag)
             }
         }
         IResult::Error(e) => IResult::Error(e),
@@ -207,11 +206,11 @@ fn parse_from_client(i: &[u8]) -> IResult<&[u8], &str> {
                 2 => parse_ack(i),
                 3 => parse_beat(i),
                 4 => parse_mapreq(i),
-                5 => IResult::Error(Err::Code(nom::ErrorKind::Tag))/*parse_mapdata(i)*/,
-                6 => IResult::Error(Err::Code(nom::ErrorKind::Tag))/*parse_objdata(i)*/,
+                5 => IResult::Error(nom::ErrorKind::Tag)/*parse_mapdata(i)*/,
+                6 => IResult::Error(nom::ErrorKind::Tag)/*parse_objdata(i)*/,
                 7 => parse_objack(i),
                 8 => parse_close(i),
-                _ => IResult::Error(Err::Code(nom::ErrorKind::Tag))
+                _ => IResult::Error(nom::ErrorKind::Tag)
             }
         }
         IResult::Error(e) => IResult::Error(e),
