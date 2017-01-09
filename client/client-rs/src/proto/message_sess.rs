@@ -59,9 +59,9 @@ impl cSess {
 
     // TODO impl FromBuf for cSess {}
     pub fn from_buf <R:ReadBytesSac> (r: &mut R) -> Result<cSess,Error> {
-        let /*unknown*/ _ = r.u16()?;
-        let /*proto*/ _ = r.strz()?;
-        let /*version*/ _ = r.u16()?;
+        let _unknown = r.u16()?;
+        let _proto = r.strz()?;
+        let _version = r.u16()?;
         let login = r.strz()?;
         let cookie_len = r.u16()?;
         let cookie = {

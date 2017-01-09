@@ -61,7 +61,7 @@ impl DriverStd {
                                     .expect("driver::send(event::tcp)");
                                 let reply = reply_rx.recv().expect("driver::recv_rx");
                                 // info!("RENDERRED REPLY: {:?}", reply);
-                                let /*len*/_ = stream.write(reply.as_bytes()).expect("strem.write");
+                                let _len = stream.write(reply.as_bytes()).expect("strem.write");
                             }
                         });
                     }

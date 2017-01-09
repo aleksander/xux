@@ -270,7 +270,7 @@ impl Map {
         }
         let mut decoder = ZlibDecoder::new(r);
         let mut unzipped = Vec::new();
-        let /*unzipped_len*/ _ = decoder.read_to_end(&mut unzipped)?;
+        let _unzipped_len = decoder.read_to_end(&mut unzipped)?;
         // TODO check unzipped_len
         let mut r = Cursor::new(unzipped);
         fn tmp <R:ReadBytesSac> (r: &mut R) -> Result<(i64,Vec<u8>,Vec<i16>),Error> {

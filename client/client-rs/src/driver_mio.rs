@@ -111,7 +111,7 @@ impl ControlConn {
                             info!("ERROR: failed to re-reg for write: {}", e);
                         }
                     }
-                    Ok(Some(/*r*/_)) => {
+                    Ok(Some(_r)) => {
                         //info!("CONN: we wrote {} bytes!", r);
                         //self.mut_buf = Some(buf.flip());
                         //self.interest.insert(EventSet::readable());
@@ -248,8 +248,8 @@ impl ControlConn {
             let tmp2: Vec<&str> = tmp1[1].split('/').collect();
             info!("TMP2: {:?}", tmp2);
             if tmp2.len() > 3 {
-                let /*x*/_: i32 = match str::FromStr::from_str(tmp2[2]) { Ok(v) => v, Err(_) => 0 };
-                let /*y*/_: i32 = match str::FromStr::from_str(tmp2[3]) { Ok(v) => v, Err(_) => 0 };
+                let _x: i32 = match str::FromStr::from_str(tmp2[2]) { Ok(v) => v, Err(_) => 0 };
+                let _y: i32 = match str::FromStr::from_str(tmp2[3]) { Ok(v) => v, Err(_) => 0 };
                 //self.url = Some(Url::Go(x,y));
             } else {
                 //self.url = Some(Url::Go(0,0));
@@ -284,7 +284,7 @@ impl ControlConn {
                 }
                 return Err(Error::new(ErrorKind::Other, "read zero bytes"));
             }
-            Ok(Some(/*r*/ _)) => {
+            Ok(Some(_r)) => {
                 //info!("{:?}: read {} bytes", self.token, r);
                 let buf = buf.flip();
                 let buf = String::from_utf8_lossy(&buf.bytes()).into_owned();
@@ -622,7 +622,7 @@ impl/*<'a>*/ Handler for AnyHandler/*<'a>*/ {
         }
     }
 
-    fn timeout (&mut self, /*eloop*/ _: &mut EventLoop<AnyHandler>, timeout: usize) {
+    fn timeout (&mut self, _eloop: &mut EventLoop<AnyHandler>, timeout: usize) {
         self.client.state.timeout(timeout);
     }
 }

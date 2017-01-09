@@ -51,9 +51,9 @@ use image::Rgb;
 use image::ImageRgb8;
 use image::PNG;
 
-use byteorder::{LittleEndian, BigEndian, ReadBytesExt, WriteBytesExt};
-#[allow(non_camel_case_types)]
-type le = LittleEndian;
+use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
+//#[allow(non_camel_case_types)]
+//type le = LittleEndian;
 #[allow(non_camel_case_types)]
 type be = BigEndian;
 

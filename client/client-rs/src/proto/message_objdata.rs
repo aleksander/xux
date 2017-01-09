@@ -148,7 +148,7 @@ impl ObjDataElemProp {
                 if (resid & 0x8000) != 0 {
                     resid &= !0x8000;
                     let sdt_len = r.u8()?;
-                    let /*sdt*/ _ = {
+                    let _sdt = {
                         let mut tmp = vec![0; sdt_len as usize];
                         r.read_exact(&mut tmp)?;
                         tmp
@@ -223,11 +223,11 @@ impl ObjDataElemProp {
                 }
             }
             OD_OVERLAY => {
-                let /*olid*/ _ = r.i32()?;
+                let _olid = r.i32()?;
                 let resid = r.u16()?;
                 if (resid != 0xffff) && ((resid & 0x8000) != 0) {
                     let sdt_len = r.u8()? as usize;
-                    let /*sdt*/ _ = {
+                    let _sdt = {
                         let mut tmp = vec![0; sdt_len];
                         r.read_exact(&mut tmp)?;
                         tmp
@@ -268,7 +268,7 @@ impl ObjDataElemProp {
                         if (resid & 0x8000) != 0 {
                             resid &= !0x8000;
                             let sdt_len = r.u8()? as usize;
-                            let /*sdt*/ _ = {
+                            let _sdt = {
                                 let mut tmp = vec![0; sdt_len];
                                 r.read_exact(&mut tmp)?;
                                 tmp
@@ -294,7 +294,7 @@ impl ObjDataElemProp {
                         if (resid & 0x8000) != 0 {
                             resid &= !0x8000;
                             let sdt_len = r.u8()? as usize;
-                            let /*sdt*/ _ = {
+                            let _sdt = {
                                 let mut tmp = vec![0; sdt_len];
                                 r.read_exact(&mut tmp)?;
                                 tmp
@@ -370,7 +370,7 @@ impl ObjDataElemProp {
                 if resid == 65535 {
                     Ok(Some(ObjDataElemProp::odICON(odICON::Del)))
                 } else {
-                    let /*ifl*/ _ = r.u8()?;
+                    let _ifl = r.u8()?;
                     Ok(Some(ObjDataElemProp::odICON(odICON::Set(resid))))
                 }
             }

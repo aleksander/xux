@@ -90,8 +90,8 @@ fn _responce(state: &State, buf: &str) -> Option<String> {
         match state.hero_grid() {
             Some(// grid
                  _) => {
-                for /*y*/_ in 0..100 {
-                    for /*x*/_ in 0..100 {
+                for _y in 0..100 {
+                    for _x in 0..100 {
                         body = body + &format!("{}{}", period, 0/*grid.z[x+y*100]*/); //FIXME grids Z buffers moved from State to Client
                         period = ",";
                     }
@@ -151,8 +151,8 @@ fn _responce(state: &State, buf: &str) -> Option<String> {
         let tmp2: Vec<&str> = tmp1[1].split('/').collect();
         info!("TMP2: {:?}", tmp2);
         if tmp2.len() > 3 {
-            let /*x*/_: i32 = match str::FromStr::from_str(tmp2[2]) { Ok(v) => v, Err(_) => 0 };
-            let /*y*/_: i32 = match str::FromStr::from_str(tmp2[3]) { Ok(v) => v, Err(_) => 0 };
+            let _x: i32 = match str::FromStr::from_str(tmp2[2]) { Ok(v) => v, Err(_) => 0 };
+            let _y: i32 = match str::FromStr::from_str(tmp2[3]) { Ok(v) => v, Err(_) => 0 };
             // self.url = Some(Url::Go(x,y));
         } else {
             // self.url = Some(Url::Go(0,0));
