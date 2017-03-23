@@ -97,7 +97,9 @@ impl FromBuf for MsgList {
                     let len = r.u8()?;
                     if (len & 128) != 0 {
                         let len = r.i32()?;
-                        assert!(len > 0);
+                        if len <= 0 { return Err(Error::new("MsgList.from_buf: len <= 0", None)); }
+                        //TODO this magic 65535 const should be set to some adequate default (but what is adequate?)
+                        if len > 65535 { return Err(Error::new("MsgList.from_buf: len > 65535", None)); }
                         let mut bytes = vec![0; len as usize];
                         r.read_exact(&mut bytes)?;
                         list[deep].push(MsgList::tBYTES(bytes));

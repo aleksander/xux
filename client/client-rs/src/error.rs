@@ -7,6 +7,15 @@ pub struct Error {
     pub detail: Option<String>,
 }
 
+impl Error {
+    pub fn new (source: &'static str, detail: Option<String>) -> Error {
+        Error {
+            source: source,
+            detail: detail,
+        }
+    }
+}
+
 impl From<io::Error> for Error {
     fn from(_: io::Error) -> Error {
         Error {
