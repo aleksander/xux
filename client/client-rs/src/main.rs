@@ -1,4 +1,6 @@
 #![feature(associated_consts)]
+#![recursion_limit = "1024"]
+#![feature(zero_one)]
 
 #[macro_use]
 extern crate log;
@@ -24,8 +26,15 @@ mod proto;
 mod ai;
 use ai::Ai;
 
-mod error;
-pub use error::Error;
+//mod error;
+//pub use error::Error;
+#[macro_use]
+extern crate error_chain;
+mod errors {
+    // Create the Error, ErrorKind, ResultExt, and Result types
+    error_chain! { }
+}
+use errors::*;
 
 // TODO #[cfg(ai = "lua")]
 
@@ -124,7 +133,7 @@ use shift_to_unsigned::ShiftToUnsigned;
 mod driver;
 pub use driver::Driver;
 
-pub fn authorize(host: &str, port: u16, user: String, pass: String) -> Result<(String, Vec<u8>), Error> {
+pub fn authorize(host: &str, port: u16, user: String, pass: String) -> Result<(String, Vec<u8>)> {
 
     info!("authorize {} @ {}:{}", user, host, port);
     let stream = std::net::TcpStream::connect((host, port)).expect("tcpstream::connect");
@@ -142,28 +151,26 @@ pub fn authorize(host: &str, port: u16, user: String, pass: String) -> Result<(S
     }
 
     // TODO use closure instead (no need to pass stream)
-    fn command<S:Read+Write>(mut stream: S, cmd: Vec<u8>) -> Result<Vec<u8>, Error> {
-        stream.write(msg(cmd).as_slice())?;
-        stream.flush()?;
+    fn command<S:Read+Write>(mut stream: S, cmd: Vec<u8>) -> Result<Vec<u8>> {
+        stream.write(msg(cmd).as_slice()).chain_err(||"unable to write cmd")?;
+        stream.flush().chain_err(||"unable to flush")?;
 
         let len = {
             let mut buf = vec![0; 2];
-            stream.read_exact(&mut buf)?;
+            stream.read_exact(&mut buf).chain_err(||"unable to read")?;
             let mut rdr = Cursor::new(buf);
-            rdr.read_u16::<be>()?
+            rdr.read_u16::<be>().chain_err(||"unable to read len")?
         };
 
         let mut msg = vec![0; len as usize];
-        stream.read_exact(msg.as_mut_slice())?;
+        stream.read_exact(msg.as_mut_slice()).chain_err(||"unable to read msg")?;
         debug!("msg: {:?}", msg);
         if (msg.len() < "ok\0".len()) || (msg[0] != b'o') || (msg[1] != b'k') || (msg[2] != 0) {
-            // FIXME return raw vec in details, not String
-            return Err(Error {
-                source: "unexpected answer",
-                detail: Some(String::from_utf8(msg).expect("authorize.command.from_utf8(msg)")),
-            });
+            Err(format!("unexpected answer: '{}'",
+                String::from_utf8(msg).chain_err(||"unable to decode msg")?).into())
+        } else {
+            Ok(msg[3..].to_vec())
         }
-        Ok(msg[3..].to_vec())
     }
 
     let login = {
@@ -173,9 +180,9 @@ pub fn authorize(host: &str, port: u16, user: String, pass: String) -> Result<(S
         buf.extend(user.as_bytes());
         buf.push(0);
         buf.extend(hash(MessageDigest::sha256(), pass.as_bytes()).expect("hash").as_slice());
-        let msg = command(&mut stream, buf)?;
+        let msg = command(&mut stream, buf).chain_err(||"unable to 'pw'")?;
         // FIXME use read_strz analog
-        str::from_utf8(&msg[..msg.len() - 1]).expect("authorize.login.from_utf8()").to_string()
+        str::from_utf8(&msg[..msg.len() - 1]).chain_err(||"unable to decode login")?.to_string()
     };
 
     let cookie = {
@@ -332,9 +339,9 @@ impl<'a, D: Driver, A: Ai> Client<'a, D, A> {
         }
     }
 
-    fn run(&mut self, login: &str, cookie: &[u8]) -> Option<Error> {
+    fn run(&mut self, login: &str, cookie: &[u8]) -> Result<()> {
         info!("connect {} / {}", login, cookie.to_hex());
-        self.state.connect(login, cookie).expect("run.connect");
+        self.state.connect(login, cookie)?;
 
         loop {
             while let Some(event) = self.state.next_event() {
@@ -345,10 +352,7 @@ impl<'a, D: Driver, A: Ai> Client<'a, D, A> {
                     }
                     state::Event::Obj((x, y)) => render::Event::Obj(x, y),
                 };
-                if let Err(e) = self.render.update(event) {
-                    info!("render.update ERROR: {:?}", e);
-                    return None /*TODO Some(e)*/;
-                }
+                self.render.update(event).chain_err(||"unable to undate render")?;
             }
             self.send_all_enqueued();
             self.dispatch_single_event();
@@ -388,22 +392,7 @@ impl<'a, D: Driver, A: Ai> Client<'a, D, A> {
 
 // TODO fn run_std_lua() { run::<Std,Lua>() }
 // TODO fn run<D,A>(ip: IpAddr, username: String, password: String) where D:Driver,A:Ai {
-fn run(host: &str, username: String, password: String) {
-
-    match authorize(host, 1871, username, password) {
-        Ok((login, cookie)) => {
-            let mut ai = AiDecl::new();
-            ai.init();
-            let mut driver = DriverStd::new(host, 1870).expect("driver::new");
-            Client::new(&mut driver, &mut ai).run(&login, &cookie);
-        }
-        Err(e) => {
-            info!("ERROR: {:?}", e);
-        }
-    }
-}
-
-fn main() {
+fn run() -> Result<()> {
     // let mut log_open_options = std::fs::OpenOptions::new();
     // let log_open_options = log_open_options.create(true).read(true).write(true).truncate(true);
     let logger_config = fern::DispatchConfig {
@@ -438,12 +427,39 @@ fn main() {
     if args.len() != 3 {
         info!("wrong argument count");
         info!("usage: {} username password", args[0]);
-        return;
+        return Err("wrong argument count".into());
     }
 
     let username = args[1].clone();
     let password = args[2].clone();
+    let host = "game.salemthegame.com";
+    let auth_port = 1871;
+    let game_port = 1870;
 
     // run::<DriverMio,AiLua>(ip, username, password);
-    run("game.salemthegame.com", username, password);
+    //run(host, username, password);
+    let (login, cookie) = authorize(host, auth_port, username, password)?;
+
+    let mut ai = AiDecl::new();
+    ai.init();
+    let mut driver = DriverStd::new(host, game_port).chain_err(||"unable to create driver")?;
+
+    let mut client = Client::new(&mut driver, &mut ai);
+    client.run(&login, &cookie)
+}
+
+fn main () {
+    if let Err(ref e) = run() {
+        println!("error: {}", e);
+
+        for e in e.iter().skip(1) {
+            println!("caused by: {}", e);
+        }
+
+        if let Some(backtrace) = e.backtrace() {
+            println!("backtrace: {:?}", backtrace);
+        }
+
+        ::std::process::exit(1);
+    }
 }

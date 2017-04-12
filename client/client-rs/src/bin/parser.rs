@@ -4,11 +4,12 @@ use std::io::Cursor;
 #[macro_use]
 extern crate nom;
 use nom::IResult;
-use nom::be_u8;
+use nom::{le_u8, le_u16};
 
 extern crate pcap;
 
 extern crate sac;
+use sac::proto;
 use sac::proto::message::*;
 
 extern crate pnet;
@@ -62,26 +63,39 @@ fn main() {
             continue;
         };
 
-        let dir_str = match dir {
-            MessageDirection::FromServer => "SERVER",
-            MessageDirection::FromClient => "CLIENT",
-        };
-
         if nom_parser {
-            match parse(udp.payload(), dir) {
-                IResult::Done(i, o) => {
-                    println!("{}: {:?}", dir_str, o);
-                    if i.len() > 0 {
-                        println!("REMAINS: {} bytes", i.len());
+            match dir {
+                MessageDirection::FromServer => match parse_server_message(udp.payload()) {
+                    IResult::Done(i, o) => {
+                        println!("SERVER: {:?}", o);
+                        if i.len() > 0 {
+                            println!("REMAINS: {} bytes", i.len());
+                        }
                     }
-                }
-                IResult::Error(e) => {
-                    println!("Error: {:?}", e);
-                    break;
-                }
-                IResult::Incomplete(n) => {
-                    println!("Incomplete: {:?}", n);
-                    break;
+                    IResult::Error(e) => {
+                        println!("Error: {:?}", e);
+                        break;
+                    }
+                    IResult::Incomplete(n) => {
+                        println!("Incomplete: {:?}", n);
+                        break;
+                    }
+                },
+                MessageDirection::FromClient => match parse_client_message(udp.payload()) {
+                    IResult::Done(i, o) => {
+                        println!("CLIENT: {:?}", o);
+                        if i.len() > 0 {
+                            println!("REMAINS: {} bytes", i.len());
+                        }
+                    }
+                    IResult::Error(e) => {
+                        println!("Error: {:?}", e);
+                        break;
+                    }
+                    IResult::Incomplete(n) => {
+                        println!("Incomplete: {:?}", n);
+                        break;
+                    }
                 }
             }
         } else {
@@ -121,99 +135,119 @@ fn main() {
     }
 }
 
-fn parse_ssess(i: &[u8]) -> IResult<&[u8], &str> {
-    IResult::Done(i, "S SESS")
+fn parse_ssess(i: &[u8]) -> IResult<&[u8], proto::sSess> {
+    nom::le_u8(i).map(|i|proto::sSess::new(i))
 }
 
-fn parse_csess(i: &[u8]) -> IResult<&[u8], &str> {
-    IResult::Done(i, "C SESS")
+named!(strz<&[u8], &str>,
+    map_res!(
+        do_parse!(
+            s: take_while!(call!(|c| c != 0)) >>
+            take!(1) >>
+            (s)
+        ),
+        std::str::from_utf8
+    )
+);
+
+#[cfg(test)]
+use nom::IResult::{Done, Incomplete};
+#[cfg(test)]
+use nom::Needed::Size;
+
+#[test]
+fn test_strz() {
+    assert_eq!( strz(b"aaa\0bbb"), Done(&b"bbb"[..], "aaa") );
+    assert_eq!( strz(b"\0aaa\0bbb"), Done(&b"aaa\0bbb"[..], "") );
+    assert_eq!( strz(b"aaabbb"), Incomplete(Size(7)) );
 }
 
-fn parse_rel(i: &[u8]) -> IResult<&[u8], &str> {
-    IResult::Done(i, "REL")
+
+//fn parse_csess(i: &[u8]) -> IResult<&[u8], proto::cSess>
+named!(parse_csess<&[u8], proto::cSess>,
+    do_parse!(
+        unknown: le_u16 >>
+        proto: strz >>
+        version: le_u16 >>
+        login: strz >>
+        cookie_len: le_u16 >>
+        cookie: take!(cookie_len) >>
+        (proto::cSess::new(login.into(), cookie.into()))
+    )
+);
+
+#[test]
+fn test_parse_csess() {
+    assert_eq!(
+        parse_csess(b"\x00\x00Salem\0\x00\x00User\0\x20\x00cookiecookiecookiecookiecookie12"),
+        Done(&b""[..], proto::cSess::new("User".into(), "cookiecookiecookiecookiecookie12".into()))
+    );
 }
 
-fn parse_ack(i: &[u8]) -> IResult<&[u8], &str> {
-    IResult::Done(i, "ACK")
+fn parse_rel(i: &[u8]) -> IResult<&[u8], proto::Rel> {
+    //TODO do parse
+    IResult::Done(i, proto::Rel::new(0))
 }
 
-fn parse_beat(i: &[u8]) -> IResult<&[u8], &str> {
-    IResult::Done(i, "BEAT")
+fn parse_ack(i: &[u8]) -> IResult<&[u8], proto::Ack> {
+    //TODO do parse
+    IResult::Done(i, proto::Ack::new(0))
 }
 
-fn parse_mapreq(i: &[u8]) -> IResult<&[u8], &str> {
-    IResult::Done(i, "MAPREQ")
+fn parse_beat(i: &[u8]) -> IResult<&[u8], proto::Beat> {
+    //TODO do parse
+    IResult::Done(i, proto::Beat)
 }
 
-fn parse_mapdata(i: &[u8]) -> IResult<&[u8], &str> {
-    IResult::Done(i, "MAPDATA")
+fn parse_mapreq(i: &[u8]) -> IResult<&[u8], proto::MapReq> {
+    //TODO do parse
+    IResult::Done(i, proto::MapReq::new(0, 0))
 }
 
-fn parse_objdata(i: &[u8]) -> IResult<&[u8], &str> {
-    IResult::Done(i, "OBJDATA")
+fn parse_mapdata(i: &[u8]) -> IResult<&[u8], proto::MapData> {
+    //TODO do parse
+    IResult::Done(i, proto::MapData::new(0, 0, 0, vec!()))
 }
 
-fn parse_objack(i: &[u8]) -> IResult<&[u8], &str> {
-    IResult::Done(i, "OBJACK")
+fn parse_objdata(i: &[u8]) -> IResult<&[u8], proto::ObjData> {
+    //TODO do parse
+    IResult::Done(i, proto::ObjData::new(vec!()))
 }
 
-fn parse_close(i: &[u8]) -> IResult<&[u8], &str> {
-    IResult::Done(i, "CLOSE")
+fn parse_objack(i: &[u8]) -> IResult<&[u8], proto::ObjAck> {
+    //TODO do parse
+    IResult::Done(i, proto::ObjAck::new(vec!()))
 }
 
-// fn parser(input: &[u8]) -> IResult<&[u8], Msg> {
-//    alt!(input,
-//        msga_parser => { |res| Msg::A(res) } |
-//        msgb_parser => { |res| Msg::B(res) } |
-//        msgc_parser => { |res| Msg::C(res) }
-//    )
-// }
-
-fn parse(i: &[u8], dir: MessageDirection) -> IResult<&[u8], &str> {
-    match dir {
-        MessageDirection::FromServer => parse_from_server(i),
-        MessageDirection::FromClient => parse_from_client(i),
-    }
+fn parse_close(i: &[u8]) -> IResult<&[u8], proto::Close> {
+    //TODO do parse
+    IResult::Done(i, proto::Close)
 }
 
-fn parse_from_server(i: &[u8]) -> IResult<&[u8], &str> {
-    match be_u8(i) {
-        IResult::Done(i, o) => {
-            match o {
-                0 => parse_ssess(i),
-                1 => parse_rel(i),
-                2 => parse_ack(i),
-                3 => IResult::Error(nom::ErrorKind::Tag)/*parse_beat(i)*/,
-                4 => IResult::Error(nom::ErrorKind::Tag)/*parse_mapreq(i)*/,
-                5 => parse_mapdata(i),
-                6 => parse_objdata(i),
-                7 => IResult::Error(nom::ErrorKind::Tag)/*parse_objack(i)*/,
-                8 => parse_close(i),
-                _ => IResult::Error(nom::ErrorKind::Tag)
-            }
-        }
-        IResult::Error(e) => IResult::Error(e),
-        IResult::Incomplete(n) => IResult::Incomplete(n),
-    }
-}
+named!(parse_server_message <&[u8], ServerMessage>,
+    switch!(le_u8,
+        0 => map!(parse_ssess, |o|ServerMessage::SESS(o)) |
+        1 => map!(parse_rel, |o|ServerMessage::REL(o)) |
+        2 => map!(parse_ack, |o|ServerMessage::ACK(o)) |
+        //3
+        //4
+        5 => map!(parse_mapdata, |o|ServerMessage::MAPDATA(o)) |
+        6 => map!(parse_objdata, |o|ServerMessage::OBJDATA(o)) |
+        //7
+        8 => map!(parse_close, |o|ServerMessage::CLOSE(o))
+    )
+);
 
-fn parse_from_client(i: &[u8]) -> IResult<&[u8], &str> {
-    match be_u8(i) {
-        IResult::Done(i, o) => {
-            match o {
-                0 => parse_csess(i),
-                1 => parse_rel(i),
-                2 => parse_ack(i),
-                3 => parse_beat(i),
-                4 => parse_mapreq(i),
-                5 => IResult::Error(nom::ErrorKind::Tag)/*parse_mapdata(i)*/,
-                6 => IResult::Error(nom::ErrorKind::Tag)/*parse_objdata(i)*/,
-                7 => parse_objack(i),
-                8 => parse_close(i),
-                _ => IResult::Error(nom::ErrorKind::Tag)
-            }
-        }
-        IResult::Error(e) => IResult::Error(e),
-        IResult::Incomplete(n) => IResult::Incomplete(n),
-    }
-}
+named!(parse_client_message <&[u8], ClientMessage>,
+    switch!(le_u8,
+        0 => map!(parse_csess, |o|ClientMessage::SESS(o)) |
+        1 => map!(parse_rel, |o|ClientMessage::REL(o)) |
+        2 => map!(parse_ack, |o|ClientMessage::ACK(o)) |
+        3 => map!(parse_beat, |o|ClientMessage::BEAT(o)) |
+        4 => map!(parse_mapreq, |o|ClientMessage::MAPREQ(o)) |
+        //5
+        //6
+        7 => map!(parse_objack, |o|ClientMessage::OBJACK(o)) |
+        8 => map!(parse_close, |o|ClientMessage::CLOSE(o))
+    )
+);

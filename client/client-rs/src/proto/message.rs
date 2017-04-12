@@ -8,7 +8,7 @@ use proto::message_objdata::*;
 use proto::message_objack::*;
 use proto::message_close::*;
 use proto::serialization::*;
-use Error;
+use errors::*;
 
 #[derive(Debug)]
 pub enum ClientMessage {
@@ -43,25 +43,20 @@ pub enum ServerMessage {
 
 impl ClientMessage {
     // TODO impl FromBuf for ClientMessage
-    pub fn from_buf <R:ReadBytesSac> (r: &mut R) -> Result<(ClientMessage, Option<Vec<u8>>), Error> {
-        let msg = match r.u8()? {
-            cSess::ID => Ok(ClientMessage::SESS(cSess::from_buf(r)?)),
-            Rel::ID => Ok(ClientMessage::REL(Rel::from_buf(r)?)),
-            Ack::ID => Ok(ClientMessage::ACK(Ack::from_buf(r)?)),
-            Beat::ID => Ok(ClientMessage::BEAT(Beat)),
-            MapReq::ID => Ok(ClientMessage::MAPREQ(MapReq::from_buf(r)?)),
-            ObjAck::ID => Ok(ClientMessage::OBJACK(ObjAck::from_buf(r)?)),
-            Close::ID => Ok(ClientMessage::CLOSE(Close)),
-            _ => {
-                Err(Error {
-                    source: "unknown message type",
-                    detail: None,
-                })
-            }
-        }?;
+    pub fn from_buf <R:ReadBytesSac> (r: &mut R) -> Result<(ClientMessage, Option<Vec<u8>>)> {
+        let msg = match r.u8().chain_err(||"cmsg.from msg type")? {
+            cSess::ID => ClientMessage::SESS(cSess::from_buf(r)?),
+            Rel::ID => ClientMessage::REL(Rel::from_buf(r)?),
+            Ack::ID => ClientMessage::ACK(Ack::from_buf(r)?),
+            Beat::ID => ClientMessage::BEAT(Beat),
+            MapReq::ID => ClientMessage::MAPREQ(MapReq::from_buf(r)?),
+            ObjAck::ID => ClientMessage::OBJACK(ObjAck::from_buf(r)?),
+            Close::ID => ClientMessage::CLOSE(Close),
+            id => { return Err(format!("cmsg.from wrong message type: {}", id).into()); }
+        };
 
         let mut tmp = Vec::new();
-        r.read_to_end(&mut tmp)?;
+        r.read_to_end(&mut tmp).chain_err(||"cmsg.from read remains")?;
         let remains = if tmp.is_empty() {
             None
         } else {
@@ -71,41 +66,41 @@ impl ClientMessage {
         Ok((msg, remains))
     }
 
-    pub fn to_buf <W:WriteBytesSac> (&self, w: &mut W) -> Result<(), Error> {
+    pub fn to_buf <W:WriteBytesSac> (&self, w: &mut W) -> Result<()> {
         match *self {
             ClientMessage::SESS(ref sess) => sess.to_buf(w),
             ClientMessage::ACK(ref ack) => ack.to_buf(w),
             ClientMessage::BEAT(_) => {
-                w.u8(Beat::ID)?;
+                w.u8(Beat::ID).chain_err(||"cmsg.to BEAT")?;
                 Ok(())
             }
             ClientMessage::REL(ref rel) => {
-                w.u8(Rel::ID)?;
-                w.u16(rel.seq)?; // sequence
+                w.u8(Rel::ID).chain_err(||"cmsg.to REL")?;
+                w.u16(rel.seq).chain_err(||"cmsg.to REL sequence")?;
                 for i in 0 .. rel.rel.len() {
                     let rel_elem = &rel.rel[i];
                     let last_one = i == (rel.rel.len() - 1);
                     let rel_elem_buf = rel_elem.to_buf(last_one)?;
-                    w.write(&rel_elem_buf)?;
+                    w.write(&rel_elem_buf).chain_err(||"cmsg.to REL buf")?;
                 }
                 Ok(())
             }
             ClientMessage::MAPREQ(ref mapreq) => {
-                w.u8(MapReq::ID)?;
-                w.i32(mapreq.x)?;
-                w.i32(mapreq.y)?;
+                w.u8(MapReq::ID).chain_err(||"cmsg.to MAPREQ")?;
+                w.i32(mapreq.x).chain_err(||"cmsg.to MAPREQ x")?;
+                w.i32(mapreq.y).chain_err(||"cmsg.to MAPREQ y")?;
                 Ok(())
             }
             ClientMessage::OBJACK(ref objack) => {
-                w.u8(ObjAck::ID)?;
+                w.u8(ObjAck::ID).chain_err(||"cmsg.to OBJACK")?;
                 for o in &objack.obj {
-                    w.u32(o.id)?;
-                    w.i32(o.frame)?;
+                    w.u32(o.id).chain_err(||"cmsg.to OBJACK id")?;
+                    w.i32(o.frame).chain_err(||"cmsg.to OBJACK frame")?;
                 }
                 Ok(())
             }
             ClientMessage::CLOSE(_) => {
-                w.u8(Close::ID)?;
+                w.u8(Close::ID).chain_err(||"cmsg.to CLOSE")?;
                 Ok(())
             }
         }
@@ -114,35 +109,27 @@ impl ClientMessage {
 
 impl ServerMessage {
     // TODO impl FromBuf for ServerMessage
-    pub fn from_buf <R:ReadBytesSac> (r: &mut R) -> Result<(ServerMessage, Option<Vec<u8>>), Error> {
-        let mtype = r.u8()?;
-        let res = match mtype {
-            sSess::ID => Ok(ServerMessage::SESS(sSess::from_buf(r)?)),
-            Rel::ID => Ok(ServerMessage::REL(Rel::from_buf(r)?)),
-            Ack::ID => Ok(ServerMessage::ACK(Ack::from_buf(r)?)),
-            MapData::ID => Ok(ServerMessage::MAPDATA(MapData::from_buf(r)?)),
-            ObjData::ID => Ok(ServerMessage::OBJDATA(ObjData::from_buf(r)?)),
-            Close::ID => Ok(ServerMessage::CLOSE(Close)),
-            _ => {
-                Err(Error {
-                    source: "unknown message type",
-                    detail: None,
-                })
-            }
+    pub fn from_buf <R:ReadBytesSac> (r: &mut R) -> Result<(ServerMessage, Option<Vec<u8>>)> {
+        let mtype = r.u8().chain_err(||"smsg.from type")?;
+        let msg = match mtype {
+            sSess::ID => ServerMessage::SESS(sSess::from_buf(r)?),
+            Rel::ID => ServerMessage::REL(Rel::from_buf(r)?),
+            Ack::ID => ServerMessage::ACK(Ack::from_buf(r)?),
+            MapData::ID => ServerMessage::MAPDATA(MapData::from_buf(r)?),
+            ObjData::ID => ServerMessage::OBJDATA(ObjData::from_buf(r)?),
+            Close::ID => ServerMessage::CLOSE(Close),
+            id => { return Err(format!("smsg.from wrong message type: {}", id).into()); }
         };
 
         let mut tmp = Vec::new();
-        r.read_to_end(&mut tmp)?;
+        r.read_to_end(&mut tmp).chain_err(||"smsg.from read remains")?;
         let remains = if tmp.is_empty() {
             None
         } else {
             Some(tmp)
         };
 
-        match res {
-            Ok(msg) => Ok((msg, remains)),
-            Err(e) => Err(e),
-        }
+        Ok((msg, remains))
     }
 
     /*

@@ -1,9 +1,9 @@
 use std::fmt;
 use std::io::Cursor;
-use Error;
 use proto::msg_list::MsgList;
 use proto::serialization::*;
 use std::io::Write;
+use errors::*;
 
 pub struct Rel {
     pub seq: u16,
@@ -24,28 +24,25 @@ impl Rel {
     }
 
     // TODO impl FromBuf for Rel {}
-    pub fn from_buf <R:ReadBytesSac> (r: &mut R) -> Result<Rel,Error> {
-        let seq = r.u16()?;
+    pub fn from_buf <R:ReadBytesSac> (r: &mut R) -> Result<Rel> {
+        let seq = r.u16().chain_err(||"rel.from seq")?;
         let mut rel_vec = Vec::new();
         loop {
-            let mut rel_type = match r.u8() {
-                Ok(b) => b,
-                Err(_) => {
-                    break;
-                }
-            };
-            let rel_buf = if (rel_type & MORE_RELS_ATTACHED_BIT) != 0 {
+            let mut rel_type = r.u8().chain_err(||"rel.from type")?;
+            let last = (rel_type & MORE_RELS_ATTACHED_BIT) == 0;
+            let rel_buf = if !last {
                 rel_type &= !MORE_RELS_ATTACHED_BIT;
-                let rel_len = r.u16()?;
+                let rel_len = r.u16().chain_err(||"rel.from len")?;
                 let mut tmp = vec![0; rel_len as usize];
-                r.read_exact(&mut tmp)?;
+                r.read_exact(&mut tmp).chain_err(||"rel.from buf")?;
                 tmp
             } else {
                 let mut tmp = Vec::new();
-                r.read_to_end(&mut tmp)?;
+                r.read_to_end(&mut tmp).chain_err(||"rel.from buf2")?;
                 tmp
             };
             rel_vec.push(RelElem::from_buf(rel_type, rel_buf.as_slice())?);
+            if last { /*TODO get REMAINS*/ break; }
         }
         Ok(Rel {
             seq: seq,
@@ -106,16 +103,16 @@ const MORE_RELS_ATTACHED_BIT: u8 = 0x80;
 
 impl RelElem {
     //TODO impl FromBuf for RelElem
-    pub fn from_buf(kind: u8, buf: &[u8]) -> Result<RelElem, Error> {
+    pub fn from_buf(kind: u8, buf: &[u8]) -> Result<RelElem> {
         let mut r = Cursor::new(buf);
         // XXX RemoteUI.java +53
         match kind {
             NEWWDG => {
-                let id = r.u16()?;
-                let name = r.strz()?;
-                let parent = r.u16()?;
-                let pargs = MsgList::from_buf(&mut r)?;
-                let cargs = MsgList::from_buf(&mut r)?;
+                let id = r.u16().chain_err(||"relelem.from NEWWDG id")?;
+                let name = r.strz().chain_err(||"relelem.from NEWWDG name")?;
+                let parent = r.u16().chain_err(||"relelem.from NEWWDG parent")?;
+                let pargs = MsgList::from_buf(&mut r).chain_err(||"relelem.from NEWWDG pargs")?;
+                let cargs = MsgList::from_buf(&mut r).chain_err(||"relelem.from NEWWDG cargs")?;
                 Ok(RelElem::NEWWDG(NewWdg {
                     id: id,
                     name: name,
@@ -125,7 +122,7 @@ impl RelElem {
                 }))
             }
             WDGMSG => {
-                let id = r.u16()?;
+                let id = r.u16().chain_err(||"relelem.from WDGMSG id")?;
                 let name = r.strz()?;
                 let args = MsgList::from_buf(&mut r)?;
                 Ok(RelElem::WDGMSG(WdgMsg {
@@ -135,13 +132,13 @@ impl RelElem {
                 }))
             }
             DSTWDG => {
-                let id = r.u16()?;
+                let id = r.u16().chain_err(||"relelem.from DSTWDG id")?;
                 Ok(RelElem::DSTWDG(DstWdg { id: id }))
             }
             MAPIV => Ok(RelElem::MAPIV(MapIv)),
             GLOBLOB => {
                 let mut globs = Vec::new();
-                let inc = r.u8()?;
+                let inc = r.u8().chain_err(||"relelem.from GLOBLOB inc")?;
                 loop {
                     let t = match r.u8() {
                         Ok(b) => b,
@@ -150,41 +147,38 @@ impl RelElem {
                     globs.push(match t {
                         GMSG_TIME => {
                             Glob::Time {
-                                time: r.i32()?,
-                                season: r.u8()?,
+                                time: r.i32().chain_err(||"relelem.from GLOBLOB TIME time")?,
+                                season: r.u8().chain_err(||"relelem.from GLOBLOB TIME season")?,
                                 inc: inc,
                             }
                         }
                         // GMSG_ASTRO =>
                         GMSG_LIGHT => {
                             Glob::Light {
-                                amb: (r.u8()?, r.u8()?, r.u8()?, r.u8()?),
-                                dif: (r.u8()?, r.u8()?, r.u8()?, r.u8()?),
-                                spc: (r.u8()?, r.u8()?, r.u8()?, r.u8()?),
-                                ang: r.i32()?,
-                                ele: r.i32()?,
+                                amb: r.color().chain_err(||"relelem.from GLOBLOB LIGHT amb")?,
+                                dif: r.color().chain_err(||"relelem.from GLOBLOB LIGHT dif")?,
+                                spc: r.color().chain_err(||"relelem.from GLOBLOB LIGHT spc")?,
+                                ang: r.i32().chain_err(||"relelem.from GLOBLOB LIGHT ang")?,
+                                ele: r.i32().chain_err(||"relelem.from GLOBLOB LIGHT ele")?,
                                 inc: inc,
                             }
                         }
                         GMSG_SKY => {
                             use std::u16;
-                            let id1 = r.u16()?;
+                            let id1 = r.u16().chain_err(||"relelem.from GLOBLOB SKY id1")?;
                             Glob::Sky(if id1 == u16::MAX {
                                 None
                             } else {
-                                let id2 = r.u16()?;
+                                let id2 = r.u16().chain_err(||"relelem.from GLOBLOB SKY id2")?;
                                 if id2 == u16::MAX {
                                     Some((id1, None))
                                 } else {
-                                    Some((id1, Some((id2, r.i32()?))))
+                                    Some((id1, Some((id2, r.i32().chain_err(||"relelem.from GLOBLOB SKY id3")?))))
                                 }
                             })
                         }
-                        _ => {
-                            return Err(Error {
-                                source: "unknown GLOBLOB type",
-                                detail: None,
-                            })
+                        id => {
+                            return Err(format!("unknown GLOBLOB type: {}", id).into())
                         }
                     });
                 }
@@ -192,9 +186,9 @@ impl RelElem {
             }
             PAGINAE => Ok(RelElem::PAGINAE(Paginae)),
             RESID => {
-                let id = r.u16()?;
-                let name = r.strz()?;
-                let ver = r.u16()?;
+                let id = r.u16().chain_err(||"relelem.from RESID id")?;
+                let name = r.strz().chain_err(||"relelem.from RESID name")?;
+                let ver = r.u16().chain_err(||"relelem.from RESID ver")?;
                 Ok(RelElem::RESID(ResId {
                     id: id,
                     name: name,
@@ -212,8 +206,8 @@ impl RelElem {
                         Ok(b) => b,
                         Err(_) => break, //TODO check error type
                     };
-                    let name = r.strz()?;
-                    let ver = r.u16()?;
+                    let name = r.strz().chain_err(||"relelem.from TILES name")?;
+                    let ver = r.u16().chain_err(||"relelem.from TILES ver")?;
                     tiles.push(TilesElem {
                         id: id,
                         name: name,
@@ -224,45 +218,40 @@ impl RelElem {
             }
             BUFF => Ok(RelElem::BUFF(Buff)),
             SESSKEY => Ok(RelElem::SESSKEY(SessKey)),
-            _ => {
-                Err(Error {
-                    source: "unknown REL type",
-                    detail: None,
-                })
+            id => {
+                Err(format!("unknown REL type: {}", id).into())
             }
         }
     }
 
     //TODO impl ToBuf for RelElem
-    pub fn to_buf(&self, last: bool) -> Result<Vec<u8>, Error> {
+    pub fn to_buf(&self, last: bool) -> Result<Vec<u8>> {
         let mut w = vec![];
         match *self {
             RelElem::WDGMSG(ref msg) => {
                 let mut tmp = vec![];
-                tmp.u16(msg.id)?; // widget ID
-                tmp.write(msg.name.as_bytes())?; // message name
-                tmp.u8(0)?; // '\0'
+                tmp.u16(msg.id).chain_err(||"relelem.to WDGMSG id")?; // widget ID
+                tmp.strz(&msg.name).chain_err(||"relelem.to WDGMSG name")?;
                 let args_buf = {
                     let mut v = Vec::new();
                     msg.args.to_buf(&mut v)?;
                     v
                 };
-                tmp.write(&args_buf)?;
+                tmp.write(&args_buf).chain_err(||"relelem.to WDGMSG args")?;
                 if last {
-                    w.u8(WDGMSG)?;
+                    w.u8(WDGMSG).chain_err(||"relelem.to WDGMSG")?;
                 } else {
-                    w.u8(WDGMSG & MORE_RELS_ATTACHED_BIT)?;
-                    w.u16(tmp.len() as u16)?; // rel length
+                    use std::u16;
+                    w.u8(WDGMSG | MORE_RELS_ATTACHED_BIT).chain_err(||"relelem.to WDGMSG+m")?;
+                    if tmp.len() > u16::MAX as usize { return Err("relelem.to WDGMSG rel buf > u16.max".into()); }
+                    w.u16(tmp.len() as u16).chain_err(||"relelem.to WDGMSG len")?; // rel length
                 }
-                w.write(&tmp)?;
+                w.write(&tmp).chain_err(||"relelem.to WDGMSG buf")?;
 
                 Ok(w)
             }
             _ => {
-                Err(Error {
-                    source: "RelElem.to_buf is not implemented for that elem type",
-                    detail: None,
-                })
+                Err("relelem.to not implemented".into())
             }
         }
     }

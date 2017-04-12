@@ -1,7 +1,6 @@
+use errors::*;
 use std::fmt;
-use std::result::Result;
 use std::fmt::Formatter;
-use Error;
 use proto::serialization::*;
 
 pub struct ObjData {
@@ -11,8 +10,14 @@ pub struct ObjData {
 impl ObjData {
     pub const ID: u8 = 6;
 
+    pub fn new (obj: Vec<ObjDataElem>) -> ObjData {
+        ObjData {
+            obj: obj
+        }
+    }
+
     // TODO impl FromBuf for ObjData {}
-    pub fn from_buf <R:ReadBytesSac> (r: &mut R) -> Result<ObjData,Error> {
+    pub fn from_buf <R:ReadBytesSac> (r: &mut R) -> Result<ObjData> {
         let mut obj = Vec::new();
         loop {
             let fl = match r.u8() {
@@ -134,7 +139,7 @@ const OD_ICON: u8 = 19;
 const OD_END: u8 = 255;
 
 impl ObjDataElemProp {
-    pub fn from_buf <R:ReadBytesSac> (r: &mut R) -> Result<Option<ObjDataElemProp>, Error> {
+    pub fn from_buf <R:ReadBytesSac> (r: &mut R) -> Result<Option<ObjDataElemProp>> {
         let t = r.u8()?;
         match t {
             OD_REM => Ok(Some(ObjDataElemProp::odREM)),
@@ -150,7 +155,7 @@ impl ObjDataElemProp {
                     let sdt_len = r.u8()?;
                     let _sdt = {
                         let mut tmp = vec![0; sdt_len as usize];
-                        r.read_exact(&mut tmp)?;
+                        r.read_exact(&mut tmp).chain_err(||"ObjDataElemProp RES sdt")?;
                         tmp
                     };
                 }
@@ -229,7 +234,7 @@ impl ObjDataElemProp {
                     let sdt_len = r.u8()? as usize;
                     let _sdt = {
                         let mut tmp = vec![0; sdt_len];
-                        r.read_exact(&mut tmp)?;
+                        r.read_exact(&mut tmp).chain_err(||"ObjDataElemProp OVERLAY sdt")?;
                         tmp
                     };
                 }
@@ -270,7 +275,7 @@ impl ObjDataElemProp {
                             let sdt_len = r.u8()? as usize;
                             let _sdt = {
                                 let mut tmp = vec![0; sdt_len];
-                                r.read_exact(&mut tmp)?;
+                                r.read_exact(&mut tmp).chain_err(||"ObjDataElemProp CMPPOSE sdt")?;
                                 tmp
                             };
                         }
@@ -296,7 +301,7 @@ impl ObjDataElemProp {
                             let sdt_len = r.u8()? as usize;
                             let _sdt = {
                                 let mut tmp = vec![0; sdt_len];
-                                r.read_exact(&mut tmp)?;
+                                r.read_exact(&mut tmp).chain_err(||"ObjDataElemProp OVERLAY sdt2")?;
                                 tmp
                             };
                         }

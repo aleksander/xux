@@ -7,7 +7,7 @@ use std::io::Read;
 use std::u16;
 
 use proto::*;
-use Error;
+use errors::*;
 
 extern crate flate2;
 use self::flate2::read::ZlibDecoder;
@@ -254,32 +254,36 @@ impl Map {
     }
 
     // XXX ??? move to message ?
-    fn from_buf <R:ReadBytesSac> (r: &mut R) -> Result<Surface,Error> {
+    fn from_buf <R:ReadBytesSac> (r: &mut R) -> Result<Surface> {
         //let mut r = Cursor::new(buf);
-        let x = r.i32()?;
-        let y = r.i32()?;
+        let x = r.i32().chain_err(||"x")?;
+        let y = r.i32().chain_err(||"y")?;
         let mmname = r.strz()?;
         // let mut pfl = vec![0; 256];
         loop {
-            let pidx = r.u8()?;
+            let pidx = r.u8().chain_err(||"pidx")?;
             if pidx == 255 {
                 break;
             }
             // pfl[pidx as usize]
-            let _ = r.u8()?;
+            let _ = r.u8().chain_err(||"y")?;
         }
         let mut decoder = ZlibDecoder::new(r);
         let mut unzipped = Vec::new();
-        let _unzipped_len = decoder.read_to_end(&mut unzipped)?;
+        let _unzipped_len = decoder.read_to_end(&mut unzipped).chain_err(||"decoder.read_to_end")?;
         // TODO check unzipped_len
         let mut r = Cursor::new(unzipped);
-        fn tmp <R:ReadBytesSac> (r: &mut R) -> Result<(i64,Vec<u8>,Vec<i16>),Error> {
+
+
+        fn tmp <R:ReadBytesSac> (r: &mut R) -> Result<(i64,Vec<u8>,Vec<i16>)> {
             let id = r.i64()?;
-            let tiles = (0..100*100).map(|_|r.u8()).collect::<Result<Vec<u8>,::std::io::Error>>()?;
-            let z = (0..100*100).map(|_|r.i16()).collect::<Result<Vec<i16>,::std::io::Error>>()?;
+            let tiles = (0..100*100).map(|_|r.u8()).collect::<Result<Vec<u8>>>()?;
+            let z = (0..100*100).map(|_|r.i16()).collect::<Result<Vec<i16>>>()?;
             Ok((id,tiles,z))
         }
         let (id,tiles,z) = tmp(&mut r)?;
+
+
         // let mut ol = vec![0; 100*100];
         // loop {
         //     let pidx = r.read_u8().unwrap();
@@ -381,7 +385,7 @@ impl State {
         // TODO
     }
 
-    pub fn enqueue_to_send(&mut self, mut msg: ClientMessage) -> Result<(), Error> {
+    pub fn enqueue_to_send(&mut self, mut msg: ClientMessage) -> Result<()> {
         if let ClientMessage::REL(ref mut rel) = msg {
             assert!(rel.seq == 0);
             rel.seq = self.seq;
@@ -454,7 +458,7 @@ impl State {
         }
     }
 
-    pub fn dispatch_message(&mut self, buf: &[u8]) -> Result<(), Error> {
+    pub fn dispatch_message(&mut self, buf: &[u8]) -> Result<()> {
         let mut r = Cursor::new(buf);
         let (msg, remains) = match ServerMessage::from_buf(&mut r) {
             Ok((msg, remains)) => (msg, remains),
@@ -476,11 +480,7 @@ impl State {
                 match sess.err {
                     SessError::OK => {}
                     _ => {
-                        // TODO return Error::from(SessError)
-                        return Err(Error {
-                            source: "session error",
-                            detail: None,
-                        });
+                        return Err("session error".into());
                         // XXX ??? should we send CLOSE too ???
                         // ??? or can we re-send our SESS requests in case of BUSY err ?
                     }
@@ -588,10 +588,7 @@ impl State {
             ServerMessage::CLOSE(_) => {
                 // info!("RX: CLOSE");
                 // TODO return Status::EndOfSession instead of Error
-                return Err(Error {
-                    source: "session closed",
-                    detail: None,
-                });
+                return Err("session closed".into());
             }
         }
 
@@ -606,7 +603,7 @@ impl State {
     }
 
     //TODO add struct Rel { ... } and move this to self.rel.dispatch_cache(rel)
-    fn dispatch_rel_cache(&mut self, rel: &Rel) -> Result<(), Error> {
+    fn dispatch_rel_cache(&mut self, rel: &Rel) -> Result<()> {
         // XXX FIXME do we handle seq right in the case of overflow ???
         //           to do refactor this code and replace add with wrapping_add
         let mut next_rel_seq = rel.seq + ((rel.rel.len() as u16) - 1);
@@ -826,7 +823,7 @@ impl State {
         }
     }
 
-    pub fn connect(&mut self, login: &str, cookie: &[u8]) -> Result<(), Error> {
+    pub fn connect(&mut self, login: &str, cookie: &[u8]) -> Result<()> {
         // TODO send SESS until reply
         // TODO get username from server responce, not from auth username
         // let cookie = self.cookie.clone();
@@ -838,7 +835,7 @@ impl State {
         Ok(())
     }
 
-    pub fn send_play(&mut self, i: usize) -> Result<(), Error> {
+    pub fn send_play(&mut self, i: usize) -> Result<()> {
         let id = self.widget_id("charlist", None).expect("charlist widget is not found");
         let name = "play".to_owned();
         let charname = self.charlist[i].clone();
@@ -856,7 +853,7 @@ impl State {
         self.enqueue_to_send(ClientMessage::REL(rel))
     }
 
-    pub fn mapreq(&mut self, x: i32, y: i32) -> Result<(), Error> {
+    pub fn mapreq(&mut self, x: i32, y: i32) -> Result<()> {
         // TODO replace with client.send(Message::MapReq::new(x,y).to_buf())
         //     or client.send(Message::mapreq(x,y).to_buf())
         // TODO add "force" flag to update this grid forcelly
@@ -866,7 +863,7 @@ impl State {
         Ok(())
     }
 
-    pub fn rx(&mut self, buf: &[u8]) -> Result<(), Error> {
+    pub fn rx(&mut self, buf: &[u8]) -> Result<()> {
         self.dispatch_message(buf)
     }
 
@@ -905,7 +902,7 @@ impl State {
         buf
     }
 
-    pub fn close(&mut self) -> Result<(), Error> {
+    pub fn close(&mut self) -> Result<()> {
         self.enqueue_to_send(ClientMessage::CLOSE(Close))?;
         Ok(())
     }
@@ -921,7 +918,7 @@ impl State {
     //     return ret;
     // }
 
-    pub fn go(&mut self, x: i32, y: i32) -> Result<(), Error> /*TODO Option<Error>*/ {
+    pub fn go(&mut self, x: i32, y: i32) -> Result<()> /*TODO Option<Error>*/ {
         info!("GO");
         let id = self.widget_id("mapview", None).expect("mapview widget is not found");
         let name: String = "click".to_owned();
@@ -942,7 +939,7 @@ impl State {
     }
 
     #[allow(dead_code)]
-    pub fn pick(&mut self, obj_id: u32) -> Result<(), Error> {
+    pub fn pick(&mut self, obj_id: u32) -> Result<()> {
         info!("PICK");
         let id = self.widget_id("mapview", None).expect("mapview widget is not found");
         let name = "click".to_owned();
@@ -979,7 +976,7 @@ impl State {
     }
 
     #[allow(dead_code)]
-    pub fn choose_pick(&mut self, wdg_id: u16) -> Result<(), Error> {
+    pub fn choose_pick(&mut self, wdg_id: u16) -> Result<()> {
         info!("GO");
         let name = "cl".to_owned();
         let mut args = Vec::new();

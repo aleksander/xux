@@ -28,6 +28,7 @@ fern = "*"
 #clippy = "*"
 pnet = "*"
 pcap = "*"
+error-chain = "*"
 
 [features]
 driver_std = []
