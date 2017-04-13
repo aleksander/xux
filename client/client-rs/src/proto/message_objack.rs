@@ -1,6 +1,6 @@
 use proto::message_objdata::ObjData;
 use proto::serialization::*;
-use Error;
+use errors::*;
 
 #[derive(Debug)]
 pub struct ObjAck {
@@ -17,7 +17,7 @@ impl ObjAck {
     }
 
     // TODO impl FromBuf for ObjAck {}
-    pub fn from_buf <R:ReadBytesSac> (_: &mut R) -> Result<ObjAck,Error> {
+    pub fn from_buf <R:ReadBytesSac> (_: &mut R) -> Result<ObjAck> {
         // TODO FIXME parse ObjAck instead of empty return
         Ok(ObjAck { obj: Vec::new() })
     }

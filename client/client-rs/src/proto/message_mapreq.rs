@@ -1,5 +1,5 @@
 use proto::serialization::*;
-use Error;
+use errors::*;
 
 #[derive(Debug)]
 pub struct MapReq {
@@ -15,7 +15,7 @@ impl MapReq {
     }
 
     // TODO impl FromBuf for MapReq {}
-    pub fn from_buf <R:ReadBytesSac> (r: &mut R) -> Result<MapReq,Error> {
+    pub fn from_buf <R:ReadBytesSac> (r: &mut R) -> Result<MapReq> {
         Ok(MapReq {
             x: r.i32()?,
             y: r.i32()?,

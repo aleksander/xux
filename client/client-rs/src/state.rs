@@ -181,6 +181,7 @@ pub struct MapPieces {
     pieces: HashMap<u16, Vec<u8>>,
 }
 
+//TODO rename to Grid
 pub struct Surface {
     pub x: i32,
     pub y: i32,
@@ -191,69 +192,7 @@ pub struct Surface {
     //pub ol: Vec<u8>,
 }
 
-pub type PacketId = i32;
-
-pub struct Map {
-    pub partial: HashMap<PacketId, MapPieces>, // TODO somehow clean up from old pieces (periodically or whatever)
-    pub grids: HashMap<Coord, (String, i64) /* TODO struct GridHint */>,
-}
-
-impl Map {
-    fn append(&mut self, mapdata: MapData) {
-        let map = self.partial.entry(mapdata.pktid).or_insert(MapPieces {
-            total_len: mapdata.len,
-            pieces: HashMap::new(),
-        });
-        map.pieces.insert(mapdata.off, mapdata.buf);
-    }
-
-    fn complete(&self, pktid: i32) -> bool {
-        let map = match self.partial.get(&pktid) {
-            Some(m) => m,
-            None => {
-                return false;
-            }
-        };
-        let mut len = 0u16;
-        loop {
-            match map.pieces.get(&len) {
-                Some(buf) => {
-                    len += buf.len() as u16;
-                    if len == map.total_len {
-                        return true;
-                    }
-                }
-                None => {
-                    return false;
-                }
-            }
-        }
-    }
-
-    fn assemble(&mut self, pktid: i32) -> Vec<u8> /*TODO return Result*/ {
-        let map = match self.partial.remove(&pktid) {
-            Some(map) => map,
-            None => {
-                return Vec::new();
-            }
-        };
-        let mut len = 0;
-        let mut buf: Vec<u8> = Vec::new();
-        while let Some(b) = map.pieces.get(&len) {
-            buf.extend(b);
-            len += b.len() as u16;
-            if len == map.total_len {
-                break;
-            }
-        }
-        if buf.len() as u16 != map.total_len {
-            info!("ERROR: buf.len() as u16 != map.total_len");
-            // return Err(Error{source:"buf.len() as u16 != map.total_len",detail:None});
-        }
-        buf
-    }
-
-    // XXX ??? move to message ?
+impl Surface {
     fn from_buf <R:ReadBytesSac> (r: &mut R) -> Result<Surface> {
         //let mut r = Cursor::new(buf);
         let x = r.i32().chain_err(||"x")?;
@@ -317,8 +256,71 @@ impl Map {
     }
 }
 
+pub type PacketId = i32;
+
+pub struct Map {
+    pub partial: HashMap<PacketId, MapPieces>, // TODO somehow clean up from old pieces (periodically maybe)
+    pub grids: HashMap<Coord, Surface>,
+}
+
+impl Map {
+    fn append(&mut self, mapdata: MapData) {
+        let map = self.partial.entry(mapdata.pktid).or_insert(MapPieces {
+            total_len: mapdata.len,
+            pieces: HashMap::new(),
+        });
+        map.pieces.insert(mapdata.off, mapdata.buf);
+    }
+
+    fn complete(&self, pktid: i32) -> bool {
+        let map = match self.partial.get(&pktid) {
+            Some(m) => m,
+            None => {
+                return false;
+            }
+        };
+        let mut len = 0u16;
+        loop {
+            match map.pieces.get(&len) {
+                Some(buf) => {
+                    len += buf.len() as u16;
+                    if len == map.total_len {
+                        return true;
+                    }
+                }
+                None => {
+                    return false;
+                }
+            }
+        }
+    }
+
+    fn assemble(&mut self, pktid: i32) -> Vec<u8> /*TODO return Result*/ {
+        let map = match self.partial.remove(&pktid) {
+            Some(map) => map,
+            None => {
+                return Vec::new();
+            }
+        };
+        let mut len = 0;
+        let mut buf: Vec<u8> = Vec::new();
+        while let Some(b) = map.pieces.get(&len) {
+            buf.extend(b);
+            len += b.len() as u16;
+            if len == map.total_len {
+                break;
+            }
+        }
+        if buf.len() as u16 != map.total_len {
+            info!("ERROR: buf.len() as u16 != map.total_len");
+            // return Err(Error{source:"buf.len() as u16 != map.total_len",detail:None});
+        }
+        buf
+    }
+}
+
 pub enum Event {
-    Grid(i32, i32, Vec<u8>, Vec<i16>), // TODO struct Grid { x: i32, y: i32, tiles: Vec<u8>, z: Vec<i16> }
+    Grid(i32, i32),
     Obj(Coord),
 }
 
@@ -516,7 +518,7 @@ impl State {
                 if self.map.complete(pktid) {
                     // TODO let map = self.mapdata.assemble(pktid).to_map();
                     let map_buf = self.map.assemble(pktid);
-                    let map = Map::from_buf(&mut Cursor::new(map_buf))?;
+                    let map = Surface::from_buf(&mut Cursor::new(map_buf))?;
                     assert!(map.tiles.len() == 10_000);
                     assert!(map.z.len() == 10_000);
                     info!("MAP COMPLETE ({},{}) name='{}' id={}", map.x, map.y, map.name, map.id);
@@ -525,8 +527,8 @@ impl State {
                     match self.map.grids.get(&(map.x, map.y)) {
                         Some(_) => info!("MAP DUPLICATE"),
                         None => {
-                            self.events.push_front(Event::Grid(map.x, map.y, map.tiles, map.z));
-                            self.map.grids.insert((map.x, map.y), (map.name, map.id));
+                            self.events.push_front(Event::Grid(map.x, map.y));
+                            self.map.grids.insert((map.x, map.y), map);
                         }
                     }
                 }
@@ -1017,7 +1019,7 @@ impl State {
         }
     }
 
-    pub fn hero_grid(&self) -> Option<&(String, i64)> {
+    pub fn hero_grid(&self) -> Option<&Surface> {
         match self.hero_grid_xy() {
             Some(xy) => self.map.grids.get(&xy),
             None => None,

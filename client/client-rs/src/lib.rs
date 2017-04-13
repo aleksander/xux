@@ -1,11 +1,17 @@
 #![feature(associated_consts)]
 #![recursion_limit = "1024"]
-#![feature(zero_one)]
 
 #[macro_use]
 extern crate log;
 extern crate byteorder;
+extern crate openssl;
+#[macro_use]
+extern crate error_chain;
+extern crate ncurses;
+extern crate rustc_serialize;
+extern crate image;
 
+pub mod errors;
 pub mod proto;
 pub mod state;
 
@@ -17,12 +23,8 @@ pub mod ai;
 pub mod ai_decl;
 // FIXME pub mod ai_lua;
 
-//pub mod error;
-//pub use error::Error;
-#[macro_use]
-extern crate error_chain;
-mod errors {
-    // Create the Error, ErrorKind, ResultExt, and Result types
-    error_chain! { }
-}
-use errors::*;
+pub mod client;
+mod render;
+mod web;
+mod util;
+mod shift_to_unsigned;

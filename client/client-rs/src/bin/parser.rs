@@ -1,18 +1,18 @@
+#[macro_use]
+extern crate nom;
+extern crate pcap;
+extern crate sac;
+extern crate pnet;
+
 use std::env;
 use std::io::Cursor;
 
-#[macro_use]
-extern crate nom;
 use nom::IResult;
 use nom::{le_u8, le_u16};
 
-extern crate pcap;
-
-extern crate sac;
 use sac::proto;
 use sac::proto::message::*;
 
-extern crate pnet;
 use pnet::packet::ethernet::EthernetPacket;
 use pnet::packet::ethernet::EtherTypes::Ipv4;
 use pnet::packet::ipv4::Ipv4Packet;

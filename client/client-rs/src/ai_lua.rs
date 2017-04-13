@@ -1,4 +1,3 @@
-extern crate lua;
 use self::lua::ffi::lua_State;
 //use self::lua;
 
@@ -122,19 +121,19 @@ impl LuaAi {
         self.lua.push_string("client");
         self.lua.push_integer(42);
         self.lua.set_table(lua::REGISTRYINDEX);
-        
+
         self.lua.push_fn(Some(test_c_callback));
         self.lua.set_global("test_c_callback");
-        
+
         self.lua.push_fn(Some(out));
         self.lua.set_global("out");
-        
+
         self.lua.push_integer(WAIT);
         self.lua.set_global("WAIT");
-        
+
         self.lua.push_integer(GO);
         self.lua.set_global("GO");
-        
+
         self.lua.push_integer(QUIT);
         self.lua.set_global("QUIT");
 
@@ -163,7 +162,7 @@ impl LuaAi {
                     wait_100msec()
                 end
             end
-            
+
             go = function (x, y)
                 out('go (' .. x .. ',' .. y .. ')')
                 g_action = GO
@@ -183,7 +182,7 @@ impl LuaAi {
                 out('go_rel (' .. x .. ',' .. y .. ')')
                 go(hero_x + x, hero_y + y)
             end
-            
+
             quit = function ()
                 out('quit')
                 g_action = QUIT
@@ -217,7 +216,7 @@ impl LuaAi {
                     coroutine.yield()
                 end
             end
-            
+
             main = function ()
                 wait_while_char_enters_game()
                 -- TODO while user_script == nil do yield end user_script()
@@ -233,11 +232,11 @@ impl LuaAi {
                     wait(10)
                 end
             end
-            
+
             co = coroutine.create(main)
         ");
     }
-    
+
     fn update_environment (&mut self, state: &State) {
         self.check("UPDATE");
 
@@ -305,10 +304,10 @@ impl LuaAi {
         self.exec("coroutine.resume(co)");
         self.check("REACT");
     }
-    
+
     fn dispatch_pendings (&mut self, state: &mut State) {
         self.check("DISPATCH");
-        
+
         let action = self.get_number("g_action");
 
         match action {
@@ -324,7 +323,7 @@ impl LuaAi {
 
                 let x = self.get_number("g_x");
                 let y = self.get_number("g_y");
-                
+
                 if let Err(e) = state.go(x as i32, y as i32) {
                     info!("ERROR: state.go: {:?}", e);
                 }
@@ -345,18 +344,17 @@ impl Ai for LuaAi {
         self.react();
         self.dispatch_pendings(state);
     }
-    
+
     fn exec (&mut self, s: &str) {
         self.exec(s);
     }
-    
+
     fn init (&mut self) {
         self.init();
         info!("Lua AI initialised");
     }
-    
+
     fn new () -> LuaAi {
         Self::new()
     }
 }
-
