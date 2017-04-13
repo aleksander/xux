@@ -71,6 +71,8 @@ fn run() -> Result<()> {
     // TODO replace all unwraps and expects with normal error handling
     // TODO various formatters for Message and other structs output (full "{:f}", short "{:s}", type only "{:t}")
     // TODO use rustfmt precommit hook
+    // TODO add src/bin/stapler app for sew tiles to one big png
+    //      - background color for absent tiles #rrggbbaa
 
     let args: Vec<String> = std::env::args().collect();
     if args.len() != 3 {

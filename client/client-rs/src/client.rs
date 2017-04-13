@@ -89,7 +89,7 @@ pub fn authorize(host: &str, port: u16, user: String, pass: String) -> Result<(S
 }
 
 pub struct Client<'a, D: Driver + 'a, A: Ai + 'a> {
-    render: Render,
+    render: Render, // TODO Render trait
     state: State,
     ai: &'a mut A,
     driver: &'a mut D,
