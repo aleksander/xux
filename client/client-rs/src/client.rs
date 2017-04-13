@@ -1,4 +1,8 @@
 use errors::*;
+use driver::Driver;
+use ai::Ai;
+use render::Render;
+use state::State;
 
 pub fn authorize(host: &str, port: u16, user: String, pass: String) -> Result<(String, Vec<u8>)> {
 
@@ -15,23 +19,24 @@ pub fn authorize(host: &str, port: u16, user: String, pass: String) -> Result<(S
     type be = BigEndian;
 
     info!("authorize {} @ {}:{}", user, host, port);
-    let stream = net::TcpStream::connect((host, port)).expect("tcpstream::connect");
-    let mut ctx = ssl::SslContext::builder(ssl::SslMethod::tls()).expect("sslContext::builder");
+    let stream = net::TcpStream::connect((host, port)).chain_err(||"tcpstream.connect")?;
+    let mut ctx = ssl::SslContext::builder(ssl::SslMethod::tls()).chain_err(||"sslContext.builder")?;
     ctx.set_verify(ssl::SSL_VERIFY_NONE);
     let ctx = ctx.build();
-    let ssl = ssl::Ssl::new(&ctx).expect("Ssl::new");
-    let mut stream = ssl.connect(stream).expect("Ssl::connect");
+    let ssl = ssl::Ssl::new(&ctx).chain_err(||"Ssl.new")?;
+    let mut stream = ssl.connect(stream).chain_err(||"Ssl::connect")?;
 
-    fn msg(buf: Vec<u8>) -> Vec<u8> {
+    fn msg(buf: Vec<u8>) -> Result<Vec<u8>> {
         let mut msg = Vec::new();
-        msg.write_u16::<be>(buf.len() as u16).expect("authorize.msg.write(buf.len)");
+        msg.write_u16::<be>(buf.len() as u16).chain_err(||"authorize.msg.write(buf.len)")?;
         msg.extend(buf);
-        msg
+        Ok(msg)
     }
 
     // TODO use closure instead (no need to pass stream)
     fn command<S:Read+Write>(mut stream: S, cmd: Vec<u8>) -> Result<Vec<u8>> {
-        stream.write(msg(cmd).as_slice()).chain_err(||"unable to write cmd")?;
+        let cmd = msg(cmd).chain_err(||"unable to create msg")?;
+        stream.write(&cmd).chain_err(||"unable to write cmd")?;
         stream.flush().chain_err(||"unable to flush")?;
 
         let len = {
@@ -44,40 +49,44 @@ pub fn authorize(host: &str, port: u16, user: String, pass: String) -> Result<(S
         let mut msg = vec![0; len as usize];
         stream.read_exact(msg.as_mut_slice()).chain_err(||"unable to read msg")?;
         debug!("msg: {:?}", msg);
-        if (msg.len() < "ok\0".len()) || (msg[0] != b'o') || (msg[1] != b'k') || (msg[2] != 0) {
-            Err(format!("unexpected answer: '{}'",
-                String::from_utf8(msg).chain_err(||"unable to decode msg")?).into())
-        } else {
-            Ok(msg[3..].to_vec())
+        if msg.len() < b"ok\0".len() {
+            return Err(format!("too short answer: {:?}", msg).into());
+        }
+        match &msg[..3] {
+            b"ok\0" => Ok(msg[3..].to_vec()),
+            b"no\0" => {
+                let msg = str::from_utf8(&msg[3..]).chain_err(||"unable to decode msg")?;
+                //TODO add errors::AuthError(msg)
+                Err(msg.into())
+            }
+            _ => {
+                let msg = str::from_utf8(&msg).chain_err(||"unable to decode msg")?;
+                Err(format!("unexpected answer: '{}'", msg).into())
+            }
         }
     }
 
     let login = {
         let mut buf = Vec::new();
-        buf.extend("pw".as_bytes());
-        buf.push(0);
+        buf.extend(b"pw\0");
         buf.extend(user.as_bytes());
         buf.push(0);
-        buf.extend(hash(MessageDigest::sha256(), pass.as_bytes()).expect("hash").as_slice());
-        let msg = command(&mut stream, buf).chain_err(||"unable to 'pw'")?;
+        let hash = hash(MessageDigest::sha256(), pass.as_bytes()).chain_err(||"unable to hash(pass)")?;
+        buf.extend(&hash);
+        let msg = command(&mut stream, buf).chain_err(||"unable to pw")?;
         // FIXME use read_strz analog
         str::from_utf8(&msg[..msg.len() - 1]).chain_err(||"unable to decode login")?.to_string()
     };
 
     let cookie = {
         let mut buf = Vec::new();
-        buf.extend("cookie".as_bytes());
+        buf.extend(b"cookie");
         buf.push(0);
         command(&mut stream, buf)?
     };
 
     Ok((login, cookie))
 }
-
-use driver::Driver;
-use ai::Ai;
-use render::Render;
-use state::State;
 
 pub struct Client<'a, D: Driver + 'a, A: Ai + 'a> {
     render: Render,
@@ -96,24 +105,26 @@ impl<'a, D: Driver, A: Ai> Client<'a, D, A> {
         }
     }
 
-    fn send_all_enqueued(&mut self) {
+    fn send_all_enqueued(&mut self) -> Result<()> {
         // TODO use iterator
         while let Some(ebuf) = self.state.tx() {
-            self.driver.tx(&ebuf.buf).expect("send_all_enqueued");
+            self.driver.tx(&ebuf.buf).chain_err(||"send_all_enqueued")?;
             if let Some(timeout) = ebuf.timeout {
                 self.driver.timeout(timeout.seq, timeout.ms);
             }
         }
+        Ok(())
     }
 
-    fn dispatch_single_event(&mut self) {
+    fn dispatch_single_event(&mut self) -> Result<()> {
         use driver;
         use web;
 
-        match self.driver.event().expect("dispatch_single_event.event") {
+        let event = self.driver.event().chain_err(||"unable to get event")?;
+        match event {
             driver::Event::Rx(buf) => {
                 // info!("event::rx: {} bytes", buf.len());
-                self.state.rx(&buf).expect("dispatch_single_event.rx");
+                self.state.rx(&buf).chain_err(||"unable to rx")?;
             }
             driver::Event::Timeout(seq) => {
                 // info!("event::timeout: {} seq", seq);
@@ -121,7 +132,7 @@ impl<'a, D: Driver, A: Ai> Client<'a, D, A> {
             }
             driver::Event::Tcp((tx, buf)) => {
                 let reply = web::responce(&buf, &self.state);
-                tx.send(reply).expect("dispatch_single_event.send");
+                tx.send(reply).chain_err(||"unable to send")?;
                 // self.driver.reply(reply);
             }
             // TODO:
@@ -130,6 +141,7 @@ impl<'a, D: Driver, A: Ai> Client<'a, D, A> {
             // }
             //
         }
+        Ok(())
     }
 
     pub fn run(&mut self, login: &str, cookie: &[u8]) -> Result<()> {
@@ -160,8 +172,8 @@ impl<'a, D: Driver, A: Ai> Client<'a, D, A> {
                 };
                 self.render.update(event).chain_err(||"unable to undate render")?;
             }
-            self.send_all_enqueued();
-            self.dispatch_single_event();
+            self.send_all_enqueued().chain_err(||"unable to send_all_enqueued")?;
+            self.dispatch_single_event().chain_err(||"unable to dispatch_single_event")?;
             self.ai.update(&mut self.state);
         }
 

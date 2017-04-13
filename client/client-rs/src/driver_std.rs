@@ -3,21 +3,22 @@ use std::thread;
 use std::sync::mpsc::channel;
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::Sender;
-use std::sync::mpsc::RecvError;
 use std::io::Read;
 use std::io::Write;
 
 use driver::{Driver, Event};
 
+use errors::*;
+
 impl Driver for DriverStd {
-    // fn new (ip: std::net::IpAddr, port: u16) -> std::io::Result<&'a Driver>;
-    fn tx(&self, buf: &[u8]) -> std::io::Result<()> {
+    // fn new (ip: std::net::IpAddr, port: u16) -> Result<&'a Driver>;
+    fn tx(&self, buf: &[u8]) -> Result<()> {
         self.tx(buf)
     }
     fn timeout(&self, seq: usize, ms: u64) {
         self.timeout(seq, ms);
     }
-    fn event(&mut self) -> Result<Event, RecvError> {
+    fn event(&mut self) -> Result<Event> {
         self.event()
     }
 }
@@ -29,13 +30,13 @@ pub struct DriverStd {
 }
 
 impl DriverStd {
-    pub fn new(host: &str, port: u16) -> std::io::Result<DriverStd> {
-        let sock = std::net::UdpSocket::bind("0.0.0.0:0")?;
+    pub fn new(host: &str, port: u16) -> Result<DriverStd> {
+        let sock = std::net::UdpSocket::bind("0.0.0.0:0").chain_err(||"driverstd.new bind")?;
         let (tx, rx) = channel();
-        sock.connect((host, port)).expect("udp_sock::connect");
+        sock.connect((host, port)).chain_err(||"udp_sock::connect")?;
 
         let receiver_tx = tx.clone();
-        let sock_rx = sock.try_clone().expect("driver::new.try_clone(sock)");
+        let sock_rx = sock.try_clone().chain_err(||"driver::new.try_clone(sock)")?;
         thread::spawn(move || {
             let mut buf = vec![0; 65535];
             loop {
@@ -80,11 +81,11 @@ impl DriverStd {
         })
     }
 
-    pub fn tx(&self, buf: &[u8]) -> std::io::Result<()> {
+    pub fn tx(&self, buf: &[u8]) -> Result<()> {
         // info!("driver.tx: {} bytes", buf.len());
-        let len = self.sock.send(buf)?;
+        let len = self.sock.send(buf).chain_err(||"driver.tx")?;
         if len != buf.len() {
-            return Err(std::io::Error::new(std::io::ErrorKind::Other, "sent len != buf len"));
+            return Err("sent len != buf len".into());
         }
         Ok(())
     }
@@ -100,8 +101,8 @@ impl DriverStd {
         });
     }
 
-    pub fn event(&mut self) -> Result<Event, std::sync::mpsc::RecvError> {
-        self.rx.recv()
+    pub fn event(&mut self) -> Result<Event> {
+        self.rx.recv().chain_err(||"driverstd.event recv")
     }
 
     // pub fn reply (&self, _: String) {

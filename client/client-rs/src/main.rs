@@ -11,6 +11,34 @@ use sac::ai_decl::AiDecl;
 use sac::driver_std::DriverStd;
 use sac::client::Client;
 
+// TODO
+// extern crate nix;
+// use nix::sys::socket::setsockopt;
+// use nix::sys::socket::SockLevel;
+// use nix::sys::socket::SockOpt;
+//
+// #[derive(Debug,Copy,Clone)]
+// struct BindToDevice {
+//     dev_name: &'static str
+// }
+//
+// impl BindToDevice {
+//     fn new (dev_name: &'static str) -> BindToDevice {
+//         BindToDevice{ dev_name: dev_name}
+//     }
+// }
+//
+// impl SockOpt for BindToDevice {
+//     type Val = &'static str;
+//     fn get (&self, fd: RawFd, level: c_int) -> Result<&'static str> { ... }
+//     fn set () -> ? { ... }
+// }
+//
+// //char *opt;
+// //opt = "eth0";
+// //setsockopt(sd, SOL_SOCKET, SO_BINDTODEVICE, opt, 4);
+// nix::sys::socket::setsockopt(sock.as_raw_fd, SockLevel::Socket, BindToDevice::new("wlan0"));
+
 // TODO fn run_std_lua() { run::<Std,Lua>() }
 // TODO fn run<D,A>(ip: IpAddr, username: String, password: String) where D:Driver,A:Ai {
 fn run() -> Result<()> {
@@ -59,7 +87,7 @@ fn run() -> Result<()> {
 
     // run::<DriverMio,AiLua>(ip, username, password);
     //run(host, username, password);
-    let (login, cookie) = sac::client::authorize(host, auth_port, username, password)?;
+    let (login, cookie) = sac::client::authorize(host, auth_port, username, password).chain_err(||"authorization failed")?;
 
     let mut ai = AiDecl::new();
     ai.init();
