@@ -67,6 +67,8 @@ fn run() -> Result<()> {
     warn!("Starting...");
     error!("Starting...");
 
+    // TODO handle both 'salem' and 'hafen' protocols
+    // TODO arg parsing with 'clap'
     // TODO handle keyboard interrupt
     // TODO replace all unwraps and expects with normal error handling
     // TODO various formatters for Message and other structs output (full "{:f}", short "{:s}", type only "{:t}")
