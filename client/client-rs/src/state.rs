@@ -1,5 +1,4 @@
-use std::collections::hash_map::HashMap;
-use std::collections::LinkedList;
+use std::collections::{HashMap, LinkedList, BTreeSet};
 
 use std::vec::Vec;
 use std::io::Cursor;
@@ -340,6 +339,7 @@ pub struct State {
     pub map: Map,
     events: LinkedList<Event>,
     origin: Option<Coord>,
+    requested_grids: BTreeSet<(i32, i32)>
 }
 
 impl State {
@@ -380,6 +380,7 @@ impl State {
             },
             events: LinkedList::new(),
             origin: None,
+            requested_grids: BTreeSet::new(),
         }
     }
 
@@ -538,14 +539,20 @@ impl State {
                 self.enqueue_to_send(ClientMessage::OBJACK(ObjAck::from_objdata(&objdata)))?; // send OBJACKs
                 for o in &objdata.obj {
                     // FIXME ??? do NOT add hero object
-                    // TODO  if o.id == self.hero.id {
-                    //          ... do something with hero, not in objects ...
-                    //          if odMOVE {
-                    //              if hero.grid.is_changed() {
-                    //                  self.request_grids_around();
-                    //              }
-                    //          }
-                    //      }
+                    if let Some(id) = self.hero.obj {
+                        if o.id == id {
+                            //TODO ... do something with hero, not in objects ...
+                            if let Some((x, y)) = o.prop_odmove() {
+                                info!("HERO MOVE: ({}, {})", x, y);
+                                let hero_grid = grid((x, y));
+                                self.request_grids_around(hero_grid);
+                                //TODO detect grid change and only request grids in this case
+                                //if hero.grid.is_changed() {
+                                //    self.request_grids_around();
+                                //}
+                            }
+                        }
+                    }
 
                     match ObjProp::from_obj_data_elem_prop(&o.prop) {
                         Some(new_obj_prop) => {
@@ -688,7 +695,7 @@ impl State {
                         None => panic!("we have received hero object ID, but hero XY is None"),
                     };
 
-                    self.update_grids_around();
+                    self.request_grids_around_hero();
                 }
             }
             "mapview" => {
@@ -766,25 +773,36 @@ impl State {
         }
     }
 
-    fn update_grids_around(&mut self) {
+    fn request_grids_around_hero (&mut self) {
         // TODO move to fn client.update_grids_around(...) { ... }
         //     if client.hero.current_grid_is_changed() { client.update_grids_around(); }
-        // TODO if grids.not_contains(xy) and requests.not_contains(xy) then add_map_request(xy)
         match self.hero_grid_xy() {
             Some((x, y)) => {
-                self.mapreq(x, y).unwrap();
-                self.mapreq(x - 1, y).unwrap();
-                self.mapreq(x + 1, y).unwrap();
-
-                self.mapreq(x - 1, y - 1).unwrap();
-                self.mapreq(x, y - 1).unwrap();
-                self.mapreq(x + 1, y - 1).unwrap();
-
-                self.mapreq(x - 1, y + 1).unwrap();
-                self.mapreq(x, y + 1).unwrap();
-                self.mapreq(x + 1, y + 1).unwrap();
+                self.request_grids_around((x, y));
             }
             None => panic!("update_grids_around when hero_grid_xy is None"),
+        }
+    }
+
+    fn request_grids_around (&mut self, (x, y): Coord) {
+        self.request_grid((x,     y));
+        self.request_grid((x - 1, y));
+        self.request_grid((x + 1, y));
+
+        self.request_grid((x - 1, y - 1));
+        self.request_grid((x,     y - 1));
+        self.request_grid((x + 1, y - 1));
+
+        self.request_grid((x - 1, y + 1));
+        self.request_grid((x,     y + 1));
+        self.request_grid((x + 1, y + 1));
+    }
+
+    fn request_grid (&mut self, (x, y): Coord) {
+        if ! self.requested_grids.contains(&(x,y)) {
+            info!("request grid ({},{})", x, y);
+            self.mapreq(x, y).unwrap();
+            self.requested_grids.insert((x,y));
         }
     }
 
@@ -905,8 +923,7 @@ impl State {
     }
 
     pub fn close(&mut self) -> Result<()> {
-        self.enqueue_to_send(ClientMessage::CLOSE(Close))?;
-        Ok(())
+        self.enqueue_to_send(ClientMessage::CLOSE(Close))
     }
 
     // pub fn ready_to_go (&self) -> bool {

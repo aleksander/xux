@@ -73,9 +73,6 @@ fn run() -> Result<()> {
     // TODO replace all unwraps and expects with normal error handling
     // TODO various formatters for Message and other structs output (full "{:f}", short "{:s}", type only "{:t}")
     // TODO use rustfmt precommit hook
-    // TODO add src/bin/stapler app for sew tiles to one big png
-    //      - background color for absent tiles #rrggbbaa
-    //      - save as palette PNG (not rgba) because it's much smaller
     // TODO add src/bin/mapmerger app to merge sessions (rewrite mapmerger in rust)
     //      (implement when PNGs will be saved in user/char/session subdirs)
 

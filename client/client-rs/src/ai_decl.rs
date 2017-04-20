@@ -36,12 +36,12 @@ impl AiDecl {
 }
 
 impl Ai for AiDecl {
-    fn update(&mut self, state: &mut State) {
+    fn update(&mut self, state: &mut State) /*TODO -> Result<> */ {
         info!("AI: {:?}", self.state);
         match self.state {
             AiState::WaitForCharList => {
                 if !state.charlist.is_empty() {
-                    state.send_play(0).unwrap();
+                    state.send_play(0).expect("ai waitforcharlist state.send_play");
                     self.state = AiState::WaitForWorld;
                 }
             }
@@ -54,10 +54,14 @@ impl Ai for AiDecl {
                 match state.hero_xy() {
                     Some((x, y)) => {
                         let (dx, dy) = match self.step {
-                            Step::A => (100, 0),
-                            Step::B => (0, 100),
+                            Step::A => (10, 0),
+                            Step::B => (0, 10),
                             Step::C => (-100, 0),
-                            Step::D => (0, -100),
+                            Step::D => (0, -1000),
+                            //Step::A => (100, 0),
+                            //Step::B => (0, 100),
+                            //Step::C => (-100, 0),
+                            //Step::D => (0, -100),
                         };
                         if let Step::D = self.step {
                             self.cycle += 1;
@@ -68,7 +72,7 @@ impl Ai for AiDecl {
                             Step::C => Step::D,
                             Step::D => Step::A,
                         };
-                        state.go(x + dx, y + dy).unwrap();
+                        state.go(x + dx, y + dy).expect("ai walking state.go");
                         self.state = AiState::Walking1;
                     }
                     None => {}
@@ -81,10 +85,10 @@ impl Ai for AiDecl {
             }
             AiState::Walking2 => {
                 if !state.hero_is_moving() {
-                    if self.cycle < 2 {
+                    if self.cycle < 400 {
                         self.state = AiState::Walking;
                     } else {
-                        state.close().unwrap();
+                        state.close().expect("ai walking2 state.close");
                         self.state = AiState::WaitForEnd;
                     }
                 }

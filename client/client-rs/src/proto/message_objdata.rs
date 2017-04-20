@@ -61,6 +61,18 @@ pub struct ObjDataElem {
     pub prop: Vec<ObjDataElemProp>,
 }
 
+impl ObjDataElem {
+    //TODO fn prop(odMOVE) -> Option<odMOVE> { ... }
+    pub fn prop_odmove(&self) -> Option<(i32, i32)> {
+        for p in &self.prop {
+            if let &ObjDataElemProp::odMOVE((x, y), _) = p {
+                return Some((x, y));
+            }
+        }
+        None
+    }
+}
+
 #[allow(non_camel_case_types)]
 #[derive(Debug)]
 // TODO replace with plain struct variants
