@@ -159,6 +159,7 @@ impl<'a, D: Driver, A: Ai> Client<'a, D, A> {
                     state::Event::Grid(x, y) => {
                         match self.state.map.grids.get(&(x, y)) {
                             Some(ref grid) => {
+                                //TODO save to 'account name'/'character name'/'session id(or login timestamp)'/ subdir
                                 util::grid_to_png(grid.x, grid.y, &grid.tiles, &grid.z);
                                 render::Event::Grid(x, y, grid.tiles.clone(), grid.z.clone())
                             }

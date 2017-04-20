@@ -325,7 +325,7 @@ pub enum Event {
 }
 
 pub struct State {
-    // TODO do all fileds PRIVATE and use callback interface
+    // TODO do all fields PRIVATE and use callback interface
     pub widgets: HashMap<u16, Widget>,
     pub objects: HashMap<u32, Obj>,
     pub charlist: Vec<String>,

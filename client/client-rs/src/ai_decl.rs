@@ -37,7 +37,7 @@ impl AiDecl {
 
 impl Ai for AiDecl {
     fn update(&mut self, state: &mut State) {
-        // info!("AI: {:?}", self.state);
+        info!("AI: {:?}", self.state);
         match self.state {
             AiState::WaitForCharList => {
                 if !state.charlist.is_empty() {
