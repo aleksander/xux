@@ -1,7 +1,7 @@
 use errors::*;
 use driver::Driver;
 use ai::Ai;
-use render::Render;
+use render::{Render, RenderKind};
 use state::State;
 
 pub fn authorize(host: &str, port: u16, user: String, pass: String) -> Result<(String, Vec<u8>)> {
@@ -98,7 +98,7 @@ pub struct Client<'a, D: Driver + 'a, A: Ai + 'a> {
 impl<'a, D: Driver, A: Ai> Client<'a, D, A> {
     pub fn new(driver: &'a mut D, ai: &'a mut A) -> Client<'a, D, A> {
         Client {
-            render: Render::new(), // TODO Render trait
+            render: Render::new(RenderKind::TwoD), // TODO Render trait
             state: State::new(),
             ai: ai,
             driver: driver,
@@ -171,7 +171,8 @@ impl<'a, D: Driver, A: Ai> Client<'a, D, A> {
                     }
                     state::Event::Obj((x, y)) => render::Event::Obj(x, y),
                 };
-                self.render.update(event).chain_err(||"unable to undate render")?;
+                //TODO state.send(CLOSE) before exit
+                self.render.update(event).chain_err(||"unable to update render")?;
             }
             self.send_all_enqueued().chain_err(||"unable to send_all_enqueued")?;
             self.dispatch_single_event().chain_err(||"unable to dispatch_single_event")?;

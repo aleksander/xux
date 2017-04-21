@@ -15,6 +15,7 @@ extern crate image;
 // #[macro_use]
 // extern crate glium;
 // extern crate lua;
+extern crate piston_window;
 
 pub mod errors;
 pub mod proto;
