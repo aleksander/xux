@@ -8,7 +8,7 @@ pub fn authorize(host: &str, port: u16, user: String, pass: String) -> Result<(S
 
     use std::net;
     use std::str;
-    use openssl::hash::{hash, MessageDigest};
+    use openssl::hash::{hash2, MessageDigest};
     use openssl::ssl;
     use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
     use std::io::Cursor;
@@ -71,8 +71,8 @@ pub fn authorize(host: &str, port: u16, user: String, pass: String) -> Result<(S
         buf.extend(b"pw\0");
         buf.extend(user.as_bytes());
         buf.push(0);
-        let hash = hash(MessageDigest::sha256(), pass.as_bytes()).chain_err(||"unable to hash(pass)")?;
-        buf.extend(&hash);
+        let hash = hash2(MessageDigest::sha256(), pass.as_bytes()).chain_err(||"unable to hash2(pass)")?;
+        buf.extend(&*hash);
         let msg = command(&mut stream, buf).chain_err(||"unable to pw")?;
         // FIXME use read_strz analog
         str::from_utf8(&msg[..msg.len() - 1]).chain_err(||"unable to decode login")?.to_string()
