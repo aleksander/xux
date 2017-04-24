@@ -156,7 +156,7 @@ impl<'a, D: Driver, A: Ai> Client<'a, D, A> {
         loop {
             while let Some(event) = self.state.next_event() {
                 let event = match event {
-                    state::Event::Grid(x, y) => {
+                    state::Event::Grid((x, y)) => {
                         match self.state.map.grids.get(&(x, y)) {
                             Some(ref grid) => {
                                 //TODO save to 'account name'/'character name'/'session id(or login timestamp)'/ subdir
@@ -169,10 +169,11 @@ impl<'a, D: Driver, A: Ai> Client<'a, D, A> {
                             }
                         }
                     }
-                    state::Event::Obj((x, y)) => render::Event::Obj(x, y),
+                    state::Event::Obj(id, xy) => render::Event::Obj(id, xy),
                 };
-                //TODO state.send(CLOSE) before exit
-                self.render.update(event).chain_err(||"unable to update render")?;
+                if let Err(_) = self.render.update(event) {
+                    self.state.close().chain_err(||"unable to enqueue CLOSE")?;
+                }
             }
             self.send_all_enqueued().chain_err(||"unable to send_all_enqueued")?;
             self.dispatch_single_event().chain_err(||"unable to dispatch_single_event")?;

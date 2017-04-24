@@ -9,7 +9,8 @@ use ncurses::*;
 #[derive(Debug)]
 pub enum Event {
     Grid(i32, i32, Vec<u8>, Vec<i16>),
-    Obj(i32, i32),
+    Obj(u32, (i32, i32)),
+    Hero((i32, i32)),
     // NewObj(i32,i32),
     // UpdObj(...),
     // DelObj(id),
@@ -95,8 +96,8 @@ impl Render {
                                     Event::Grid(x, y, _tiles, _z) => {
                                         last_event = format!("GRID: {} {}", x, y);
                                     }
-                                    Event::Obj(x, y) => {
-                                        last_event = format!("OBJ: {} {}", x, y);
+                                    Event::Obj(id, (x, y)) => {
+                                        last_event = format!("OBJ: {} {} {}", id, x, y);
                                     }
                                     Event::Input => {
                                         //last_event = format!("INPUT");
@@ -129,42 +130,69 @@ impl Render {
                     //use piston_window::WindowSettings;
                     use piston_window::*;
                     use std::sync::mpsc::TryRecvError;
+                    use std::collections::BTreeMap;
+
                     let mut window: PistonWindow =
-                        WindowSettings::new("Render", [640, 480])
+                        WindowSettings::new("Render", [1000, 1000])
                             //.exit_on_esc(true)
                             .vsync(true)
                             .build().unwrap();
-                    loop {
-                        match rx.try_recv() {
-                            Ok(event) => {
-                                match event {
-                                    Event::Grid(_,_,_,_) => {}
-                                    Event::Obj(_,_) => {}
-                                    Event::Input => break
+                    let mut origin = None;
+                    let mut objects = BTreeMap::new();
+                    let mut zoom = 1.0;
+                    let mut pivot = (0.0, 0.0);
+                    let mut dragging = false;
+                    while let Some(e) = window.next() {
+                        match e {
+                            Input::Update(_) => {
+                                loop {
+                                    //TODO use non-blocking queue (crossbeam etc)
+                                    match rx.try_recv() {
+                                        Ok(event) => {
+                                            //println!("RENDER: {:?}", event);
+                                            match event {
+                                                Event::Grid(_,_,_,_) => {}
+                                                Event::Obj(id,xy) => {
+                                                    if origin.is_none() {
+                                                        origin = Some(xy);
+                                                    }
+                                                    objects.insert(id, xy);
+                                                }
+                                                Event::Input => break
+                                            }
+                                        }
+                                        Err(TryRecvError::Disconnected) => {
+                                            info!("render: disconnected");
+                                            return;
+                                        }
+                                        Err(TryRecvError::Empty) => break
+                                    }
                                 }
                             }
-                            Err(TryRecvError::Disconnected) => {
-                                info!("render: disconnected");
-                                break;
+                            Input::Render(_) => {
+                                window.draw_2d(&e, |c, g| {
+                                    clear([0.0; 4], g);
+                                    if let Some((ox,oy)) = origin {
+                                        for &(x,y) in objects.values() {
+                                            let (cx,cy) = (x-ox,y-oy);
+                                            let rect = [
+                                                (cx - 2) as f64,
+                                                (cy - 2) as f64,
+                                                5.,
+                                                5.
+                                            ];
+                                            rectangle([1., 1., 1., 1.], rect, c.transform.trans(pivot.0, pivot.1).zoom(zoom), g);
+                                        }
+                                    }
+                                });
                             }
-                            Err(TryRecvError::Empty) => {}
-                        }
-                        while let Some(e) = window.next() {
-                            match e {
-                                Input::Render(_) => {
-                                    window.draw_2d(&e, |c, g| {
-                                        clear([0.0; 4], g); // Clear
-                                        rectangle([1.0, 0.5, 0.25, 1.0], // Color
-                                                  [0.0, 0.0, 100.0, 100.0], // Position/size
-                                                  c.transform, g);
-                                    });
-                                }
-                                Input::Update(_) => {}
-                                Input::Press(Button::Keyboard(Key::Escape)) => {
-                                    return;
-                                }
-                                _ => {}
-                            }
+                            Input::Press(Button::Mouse(MouseButton::Left)) => dragging = true,
+                            Input::Release(Button::Mouse(MouseButton::Left)) => dragging = false,
+                            Input::Move(Motion::MouseRelative(x,y)) => if dragging { pivot.0 += x; pivot.1 += y; },
+                            Input::Move(Motion::MouseScroll(_,y)) => zoom *= if y > 0.0 { 1.05 } else { 0.95 },
+                            Input::Press(Button::Keyboard(Key::Escape)) |
+                            Input::Close(_) => break,
+                            _ => {}
                         }
                     }
                 });

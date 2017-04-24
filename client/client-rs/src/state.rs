@@ -11,12 +11,13 @@ use errors::*;
 extern crate flate2;
 use self::flate2::read::ZlibDecoder;
 
-pub type Resid = u16;
+pub type ObjID = u32;
+pub type ResID = u16;
 pub type Coord = (i32, i32);
 
 struct ObjProp {
     xy: Option<Coord>,
-    resid: Option<Resid>, // TODO replace with Vec<resid> for composite objects
+    resid: Option<ResID>, // TODO replace with Vec<resid> for composite objects
     line: Option<(Coord, Coord, i32)>, // TODO replace with struct LinearMovement
     step: Option<i32>,
 }
@@ -62,15 +63,15 @@ impl ObjProp {
 
 #[derive(Debug)]
 pub struct Obj {
-    pub id: u32, // TODO maybe remove this? because this is also a key field in objects hashmap
+    pub id: ObjID, // TODO maybe remove this? because this is also a key field in objects hashmap
     pub frame: Option<i32>,
-    pub resid: Option<Resid>,
+    pub resid: Option<ResID>,
     pub xy: Option<Coord>,
     pub movement: Option<Movement>,
 }
 
 impl Obj {
-    fn new(id: u32, frame: Option<i32>, resid: Option<Resid>, xy: Option<Coord>, movement: Option<Movement>) -> Obj {
+    fn new(id: ObjID, frame: Option<i32>, resid: Option<ResID>, xy: Option<Coord>, movement: Option<Movement>) -> Obj {
         Obj {
             id: id,
             frame: frame,
@@ -166,13 +167,13 @@ pub struct Widget {
 
 pub struct Hero {
     pub name: Option<String>,
-    pub obj: Option<u32>,
+    pub id: Option<ObjID>,
     pub weight: Option<u16>,
     pub tmexp: Option<i32>,
     pub hearthfire: Option<Coord>,
     pub inventory: HashMap<Coord, u16>,
     pub equipment: HashMap<u8, u16>,
-    pub start_xy: Option<Coord>,
+    //pub start_xy: Option<Coord>,
 }
 
 pub struct MapPieces {
@@ -319,8 +320,8 @@ impl Map {
 }
 
 pub enum Event {
-    Grid(i32, i32),
-    Obj(Coord),
+    Grid(Coord),
+    Obj(ObjID, Coord),
 }
 
 pub struct State {
@@ -366,13 +367,13 @@ impl State {
             rel_cache: HashMap::new(),
             hero: Hero {
                 name: None,
-                obj: None,
+                id: None,
                 weight: None,
                 tmexp: None,
                 hearthfire: None,
                 inventory: HashMap::new(),
                 equipment: HashMap::new(),
-                start_xy: None,
+                //start_xy: None,
             },
             map: Map {
                 partial: HashMap::new(),
@@ -528,7 +529,7 @@ impl State {
                     match self.map.grids.get(&(map.x, map.y)) {
                         Some(_) => info!("MAP DUPLICATE"),
                         None => {
-                            self.events.push_front(Event::Grid(map.x, map.y));
+                            self.events.push_front(Event::Grid((map.x, map.y)));
                             self.map.grids.insert((map.x, map.y), map);
                         }
                     }
@@ -538,29 +539,27 @@ impl State {
                 // info!("RX: OBJDATA {:?}", objdata);
                 self.enqueue_to_send(ClientMessage::OBJACK(ObjAck::from_objdata(&objdata)))?; // send OBJACKs
                 for o in &objdata.obj {
-                    // FIXME ??? do NOT add hero object
-                    if let Some(id) = self.hero.obj {
-                        if o.id == id {
-                            //TODO ... do something with hero, not in objects ...
-                            if let Some((x, y)) = o.prop_odmove() {
-                                info!("HERO MOVE: ({}, {})", x, y);
-                                let hero_grid = grid((x, y));
-                                self.request_grids_around(hero_grid);
-                                //TODO detect grid change and only request grids in this case
-                                //if hero.grid.is_changed() {
-                                //    self.request_grids_around();
-                                //}
-                            }
-                        }
-                    }
 
                     match ObjProp::from_obj_data_elem_prop(&o.prop) {
                         Some(new_obj_prop) => {
-                            // TODO use Entry API:
-                            // let obj = match self.objects.entry(o.id) {
-                            //   Occupied(obj) { if obj.frame > o.frame { obj.update(o); } }
-                            //   Vacant(obj) { obj.insert(Obj::new(o.id, None, None, None, None)); }
-                            // }
+
+                            // FIXME do NOT add hero object
+                            if let Some(hero_id) = self.hero.id {
+                                //TODO if hero.id.is_some && hero.obj.is_none && objects(hero.id).is_some
+                                error!("FIXME!!");
+                                if o.id == hero_id {
+                                    if let Some((x, y)) = o.prop_odmove() {
+                                        info!("HERO MOVE: ({}, {})", x, y);
+                                        let hero_grid = grid((x, y));
+                                        self.request_grids_around(hero_grid);
+                                        //TODO detect grid change and only request grids in this case
+                                        //if hero.grid.is_changed() {
+                                        //    self.request_grids_around();
+                                        //}
+                                    }
+                                }
+                            }
+
                             let obj = self.objects
                                 .entry(o.id)
                                 .or_insert(Obj::new(o.id, None, None, None, None));
@@ -576,7 +575,7 @@ impl State {
                             obj.update(&new_obj_prop);
 
                             if let Some(xy) = obj.xy {
-                                self.events.push_front(Event::Obj(xy));
+                                self.events.push_front(Event::Obj(obj.id, xy));
 
                                 if let Some(_) = self.hero.obj {
                                     // TODO request_any_new_grids()
@@ -687,13 +686,13 @@ impl State {
                 if let Some(&MsgList::tINT(obj)) = wdg.cargs.get(1) {
                     // FIXME BUG: object ID is uint32 but here it is int32 WHY??? XXX
                     assert!(obj >= 0);
-                    self.hero.obj = Some(obj as u32);
+                    self.hero.id = Some(obj as u32);
                     info!("HERO: obj = '{:?}'", self.hero.obj);
 
-                    self.hero.start_xy = match self.hero_xy() {
-                        Some(xy) => Some(xy),
-                        None => panic!("we have received hero object ID, but hero XY is None"),
-                    };
+                    //self.hero.start_xy = match self.hero_xy() {
+                    //    Some(xy) => Some(xy),
+                    //    None => panic!("we have received hero object ID, but hero XY is None"),
+                    //};
 
                     self.request_grids_around_hero();
                 }
@@ -780,7 +779,12 @@ impl State {
             Some((x, y)) => {
                 self.request_grids_around((x, y));
             }
-            None => panic!("update_grids_around when hero_grid_xy is None"),
+            None => {
+                //NOTE at this point hero.id can be Some(id), but objects(id) can be None,
+                //     in that case we do nothing here and will request map grids later
+                //     when object with id == hero.id will be received
+                //panic!("update_grids_around when hero_grid_xy is None"),
+            }
         }
     }
 
@@ -938,8 +942,8 @@ impl State {
     // }
 
     pub fn go(&mut self, x: i32, y: i32) -> Result<()> /*TODO Option<Error>*/ {
-        info!("GO");
-        let id = self.widget_id("mapview", None).expect("mapview widget is not found");
+        info!("GO {} {}", x, y);
+        let id = self.widget_id("mapview", None).ok_or(ErrorKind::Msg("try to go with no mapview widget".into()))?;
         let name: String = "click".to_owned();
         let mut args: Vec<MsgList> = Vec::new();
         args.push(MsgList::tCOORD((907, 755))); //TODO set some random coords in the center of screen
