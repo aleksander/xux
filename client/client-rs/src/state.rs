@@ -16,6 +16,7 @@ pub type ResID = u16;
 pub type Coord = (i32, i32);
 
 struct ObjProp {
+    frame: i32,
     xy: Option<Coord>,
     resid: Option<ResID>, // TODO replace with Vec<resid> for composite objects
     line: Option<(Coord, Coord, i32)>, // TODO replace with struct LinearMovement
@@ -23,8 +24,9 @@ struct ObjProp {
 }
 
 impl ObjProp {
-    fn new() -> Self {
+    fn new(frame: i32) -> Self {
         ObjProp {
+            frame: frame,
             xy: None,
             resid: None,
             line: None,
@@ -32,9 +34,9 @@ impl ObjProp {
         }
     }
 
-    fn from_obj_data_elem_prop(odep: &[ObjDataElemProp]) -> Option<Self> {
-        let mut prop = Self::new();
-        for p in odep {
+    fn from_obj_data_elem(ode: &ObjDataElem) -> Option<Self> {
+        let mut prop = Self::new(ode.frame);
+        for p in &ode.prop {
             match *p {
                 ObjDataElemProp::odREM => {
                     return None;
@@ -81,7 +83,17 @@ impl Obj {
         }
     }
 
-    fn update(&mut self, prop: &ObjProp) {
+    fn update(&mut self, prop: &ObjProp) -> bool {
+
+        // FIXME consider o.frame overflow !!!
+        if let Some(frame) = self.frame {
+            if frame >= prop.frame {
+                return false;
+            }
+        }
+
+        self.frame = Some(prop.frame);
+
         if let Some(resid) = prop.resid {
             self.resid = Some(resid);
         }
@@ -113,6 +125,8 @@ impl Obj {
             };
             self.movement = movement;
         }
+
+        true
     }
 }
 
@@ -323,6 +337,7 @@ impl Map {
 pub enum Event {
     Grid(Coord),
     Obj(ObjID, Coord),
+    ObjRemove(ObjID),
     Hero,
 }
 
@@ -543,20 +558,20 @@ impl State {
                 self.enqueue_to_send(ClientMessage::OBJACK(ObjAck::from_objdata(&objdata)))?; // send OBJACKs
                 for o in &objdata.obj {
 
-                    match ObjProp::from_obj_data_elem_prop(&o.prop) {
+                    match ObjProp::from_obj_data_elem(&o) {
                         Some(ref new_obj_prop) => {
 
                             if let Some(hero_id) = self.hero.id {
                                 if o.id == hero_id {
                                     match self.hero.obj {
                                         Some(ref mut hero_obj) => {
-                                            //TODO update only if new_frame > frame
                                             hero_obj.update(new_obj_prop);
                                         }
                                         None => {
                                             if let Some(mut cached_hero_obj) = self.objects.remove(&hero_id) {
                                                 cached_hero_obj.update(new_obj_prop);
                                                 self.hero.obj = Some(cached_hero_obj);
+                                                self.events.push_front(Event::ObjRemove(hero_id));
                                             } else {
                                                 let mut hero_obj = Obj::new(o.id, None, None, None, None);
                                                 hero_obj.update(new_obj_prop);
@@ -575,26 +590,16 @@ impl State {
                                 .entry(o.id)
                                 .or_insert(Obj::new(o.id, None, None, None, None));
 
-                            // FIXME consider o.frame overflow !!!
-                            if let Some(frame) = obj.frame {
-                                if o.frame <= frame {
-                                    continue;
+                            if obj.update(&new_obj_prop) {
+                                if let Some(xy) = obj.xy {
+                                    self.events.push_front(Event::Obj(obj.id, xy));
                                 }
+                                info!("OBJ: {:?}", obj);
                             }
-
-                            obj.frame = Some(o.frame);
-                            obj.update(&new_obj_prop);
-
-                            if let Some(xy) = obj.xy {
-                                self.events.push_front(Event::Obj(obj.id, xy));
-                            }
-
-                            info!("OBJ: {:?}", obj);
                         }
                         None => {
                             self.objects.remove(&o.id);
-                            // TODO send Event::ObjRemove(id)
-
+                            self.events.push_front(Event::ObjRemove(o.id));
                             info!("OBJ: {} removed", o.id);
                         }
                     }
@@ -701,6 +706,7 @@ impl State {
                         self.hero.obj = cached_hero_obj;
                         info!("HERO: obj: {:?}", self.hero.obj);
                         self.request_grids_around_hero();
+                        self.events.push_front(Event::ObjRemove(id));
                         self.events.push_front(Event::Hero);
                     }
 

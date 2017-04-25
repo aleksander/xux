@@ -169,10 +169,8 @@ impl<'a, D: Driver, A: Ai> Client<'a, D, A> {
                             }
                         }
                     }
-                    //FIXME do not send Obj until hero.obj becomes Some(),
-                    //      because it's possible to have "fantom" hero obj.
-                    //second option is to have ObjRemove event which cleans up fantom hero obj
                     state::Event::Obj(id, xy) => render::Event::Obj(id, xy),
+                    state::Event::ObjRemove(id) => render::Event::ObjRemove(id),
                     state::Event::Hero => match self.state.hero.obj {
                         Some(ref hero) => {
                             match hero.xy {

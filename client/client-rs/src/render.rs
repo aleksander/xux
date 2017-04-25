@@ -10,10 +10,10 @@ use ncurses::*;
 pub enum Event {
     Grid(i32, i32, Vec<u8>, Vec<i16>),
     Obj(u32, (i32, i32)),
+    ObjRemove(u32),
     Hero((i32, i32)),
     // NewObj(i32,i32),
     // UpdObj(...),
-    // DelObj(id),
     // AI(...ai desigions...),
     // AI: going to pick obj (ID)
     // AI: going by path (PATH CHAIN)
@@ -62,6 +62,7 @@ impl Render {
                                 match event {
                                     Event::Grid(_,_,_,_) => {}
                                     Event::Obj(_,_) => {}
+                                    Event::ObjRemove(_) => {}
                                     Event::Hero(_xy) => {}
                                     Event::Input => {}
                                 }
@@ -100,6 +101,7 @@ impl Render {
                                     Event::Obj(id, (x, y)) => {
                                         last_event = format!("OBJ: {} {} {}", id, x, y);
                                     }
+                                    Event::ObjRemove(_id) => {}
                                     Event::Hero((x, y)) => {
                                         last_event = format!("HERO: {} {}", x, y);
                                     }
@@ -153,10 +155,11 @@ impl Render {
                                     //TODO use non-blocking queue (crossbeam etc)
                                     match rx.try_recv() {
                                         Ok(event) => {
-                                            //println!("RENDER: {:?}", event);
+                                            println!("RENDER: {:?}", event);
                                             match event {
                                                 Event::Grid(_,_,_,_) => { /*TODO*/ }
                                                 Event::Obj(id,xy) => { objects.insert(id, xy); }
+                                                Event::ObjRemove(ref id) => { objects.remove(id); }
                                                 Event::Hero(xy) => origin = Some(xy),
                                                 Event::Input => break
                                             }
