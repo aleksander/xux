@@ -1,3 +1,4 @@
+#![feature(inclusive_range_syntax)]
 #![feature(associated_consts)]
 #![recursion_limit = "1024"]
 

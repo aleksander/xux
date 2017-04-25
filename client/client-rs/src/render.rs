@@ -148,6 +148,8 @@ impl Render {
                     let mut zoom = 1.0;
                     let mut pivot = (500.0, 500.0);
                     let mut dragging = false;
+                    let mut hero = (0,0);
+                    let mut grids = BTreeMap::new();
                     'outer: while let Some(e) = window.next() {
                         match e {
                             Input::Update(_) => {
@@ -157,10 +159,13 @@ impl Render {
                                         Ok(event) => {
                                             println!("RENDER: {:?}", event);
                                             match event {
-                                                Event::Grid(_,_,_,_) => { /*TODO*/ }
+                                                Event::Grid(x,y,_,heights) => { grids.insert((x,y), heights); }
                                                 Event::Obj(id,xy) => { objects.insert(id, xy); }
                                                 Event::ObjRemove(ref id) => { objects.remove(id); }
-                                                Event::Hero(xy) => origin = Some(xy),
+                                                Event::Hero(xy) => {
+                                                    if origin.is_none() { origin = Some(xy); }
+                                                    hero = xy;
+                                                }
                                                 Event::Input => break
                                             }
                                         }
@@ -181,7 +186,35 @@ impl Render {
                                             let (cx,cy) = (x-ox,y-oy);
                                             rectangle([1.0, 1.0, 1.0, 1.0], [(cx - 2) as f64, (cy - 2) as f64, 5.0, 5.0], t, g);
                                         }
-                                        rectangle([0.2, 0.2, 1.0, 1.0], [-2.0, -2.0, 5.0, 5.0], t, g);
+                                        rectangle([0.2, 0.2, 1.0, 1.0], [(hero.0-ox-2) as f64, (hero.1-oy-2) as f64, 5.0, 5.0], t, g);
+                                        rectangle([1.0, 1.0, 1.0, 1.0], [(hero.0-ox) as f64, (hero.1-oy) as f64, 1.0, 1.0], t, g);
+
+                                        if let Some(ref heights) = grids.get(&::state::grid((ox,oy))) {
+                                            for y in 0..99 {
+                                                for x in 0..99 {
+                                                    use shift_to_unsigned::ShiftToUnsigned;
+
+                                                    let i = y*100+x;
+                                                    let z = heights[i].shift_to_unsigned();
+                                                    let zx = heights[i+1].shift_to_unsigned();
+                                                    let zy = heights[i+100].shift_to_unsigned();
+                                                    let dx = if z > zx { z - zx } else { zx - z };
+                                                    let dy = if z > zy { z - zy } else { zy - z };
+                                                    if dx > 5 { line([0.3, 0.3, 0.3, 1.0], 1.0/zoom, [(5+x*5) as f64, (5+y*5) as f64, (5+x*5+5) as f64, (5+y*5) as f64], t, g); }
+                                                    if dy > 5 { line([0.3, 0.3, 0.3, 1.0], 1.0/zoom, [(5+x*5) as f64, (5+y*5) as f64, (5+x*5) as f64, (5+y*5+5) as f64], t, g); }
+                                                }
+                                            }
+                                        }
+
+                                        /*
+                                        let nearx = (ox % 11) as f64;
+                                        let neary = (oy % 11) as f64;
+                                        for i in 0...40 {
+                                            let shift = (-220 + i * 11) as f64;
+                                            line([0.3, 0.3, 0.3, 1.0], 1.0/zoom, [nearx + shift, -500.0, nearx + shift, 500.0], t, g);
+                                            line([0.3, 0.3, 0.3, 1.0], 1.0/zoom, [-500.0, neary + shift, 500.0, neary + shift], t, g);
+                                        }
+                                        */
                                     }
                                 });
                             }
