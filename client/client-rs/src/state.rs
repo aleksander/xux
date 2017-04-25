@@ -168,6 +168,7 @@ pub struct Widget {
 pub struct Hero {
     pub name: Option<String>,
     pub id: Option<ObjID>,
+    pub obj: Option<Obj>,
     pub weight: Option<u16>,
     pub tmexp: Option<i32>,
     pub hearthfire: Option<Coord>,
@@ -322,6 +323,7 @@ impl Map {
 pub enum Event {
     Grid(Coord),
     Obj(ObjID, Coord),
+    Hero,
 }
 
 pub struct State {
@@ -368,6 +370,7 @@ impl State {
             hero: Hero {
                 name: None,
                 id: None,
+                obj: None,
                 weight: None,
                 tmexp: None,
                 hearthfire: None,
@@ -541,22 +544,30 @@ impl State {
                 for o in &objdata.obj {
 
                     match ObjProp::from_obj_data_elem_prop(&o.prop) {
-                        Some(new_obj_prop) => {
+                        Some(ref new_obj_prop) => {
 
-                            // FIXME do NOT add hero object
                             if let Some(hero_id) = self.hero.id {
-                                //TODO if hero.id.is_some && hero.obj.is_none && objects(hero.id).is_some
-                                error!("FIXME!!");
                                 if o.id == hero_id {
-                                    if let Some((x, y)) = o.prop_odmove() {
-                                        info!("HERO MOVE: ({}, {})", x, y);
-                                        let hero_grid = grid((x, y));
-                                        self.request_grids_around(hero_grid);
-                                        //TODO detect grid change and only request grids in this case
-                                        //if hero.grid.is_changed() {
-                                        //    self.request_grids_around();
-                                        //}
+                                    match self.hero.obj {
+                                        Some(ref mut hero_obj) => {
+                                            //TODO update only if new_frame > frame
+                                            hero_obj.update(new_obj_prop);
+                                        }
+                                        None => {
+                                            if let Some(mut cached_hero_obj) = self.objects.remove(&hero_id) {
+                                                cached_hero_obj.update(new_obj_prop);
+                                                self.hero.obj = Some(cached_hero_obj);
+                                            } else {
+                                                let mut hero_obj = Obj::new(o.id, None, None, None, None);
+                                                hero_obj.update(new_obj_prop);
+                                                self.hero.obj = Some(hero_obj);
+                                            }
+                                            info!("HERO: obj: {:?}", self.hero.obj);
+                                        }
                                     }
+                                    self.request_grids_around_hero();
+                                    self.events.push_front(Event::Hero);
+                                    continue;
                                 }
                             }
 
@@ -576,10 +587,6 @@ impl State {
 
                             if let Some(xy) = obj.xy {
                                 self.events.push_front(Event::Obj(obj.id, xy));
-
-                                if let Some(_) = self.hero.obj {
-                                    // TODO request_any_new_grids()
-                                }
                             }
 
                             info!("OBJ: {:?}", obj);
@@ -686,15 +693,21 @@ impl State {
                 if let Some(&MsgList::tINT(obj)) = wdg.cargs.get(1) {
                     // FIXME BUG: object ID is uint32 but here it is int32 WHY??? XXX
                     assert!(obj >= 0);
-                    self.hero.id = Some(obj as u32);
-                    info!("HERO: obj = '{:?}'", self.hero.obj);
+                    let id = obj as u32;
+                    self.hero.id = Some(id);
+                    info!("HERO: id: {:?}", self.hero.id);
+                    let cached_hero_obj = self.objects.remove(&id);
+                    if cached_hero_obj.is_some() {
+                        self.hero.obj = cached_hero_obj;
+                        info!("HERO: obj: {:?}", self.hero.obj);
+                        self.request_grids_around_hero();
+                        self.events.push_front(Event::Hero);
+                    }
 
                     //self.hero.start_xy = match self.hero_xy() {
                     //    Some(xy) => Some(xy),
                     //    None => panic!("we have received hero object ID, but hero XY is None"),
                     //};
-
-                    self.request_grids_around_hero();
                 }
             }
             "mapview" => {
@@ -761,9 +774,9 @@ impl State {
                 "ui/hrtptr:11" => {
                     if msg.name == "upd" {
                         if let Some(&MsgList::tCOORD((x, y))) = msg.args.get(0) {
-                            // self.objects.insert(0xffffffff, Obj{resid:0xffff, x:x, y:y});
                             self.hero.hearthfire = Some((x, y));
                             info!("HERO: heathfire = '{:?}'", self.hero.hearthfire);
+                            //TODO send Event::Hearthfire
                         }
                     }
                 }
@@ -776,15 +789,10 @@ impl State {
         // TODO move to fn client.update_grids_around(...) { ... }
         //     if client.hero.current_grid_is_changed() { client.update_grids_around(); }
         match self.hero_grid_xy() {
-            Some((x, y)) => {
-                self.request_grids_around((x, y));
+            Some(xy) => {
+                self.request_grids_around(xy);
             }
-            None => {
-                //NOTE at this point hero.id can be Some(id), but objects(id) can be None,
-                //     in that case we do nothing here and will request map grids later
-                //     when object with id == hero.id will be received
-                //panic!("update_grids_around when hero_grid_xy is None"),
-            }
+            None => {}
         }
     }
 
@@ -1019,16 +1027,9 @@ impl State {
     // TODO fn grid(Coord) {...}, fn xy(Grid) {...}
     //     and then we can do: hero.grid().xy();
 
-    pub fn hero_obj(&self) -> Option<&Obj> {
-        match self.hero.obj {
-            Some(id) => self.objects.get(&id),
-            None => None,
-        }
-    }
-
     pub fn hero_xy(&self) -> Option<Coord> {
-        match self.hero_obj() {
-            Some(hero) => hero.xy,
+        match self.hero.obj {
+            Some(ref hero) => hero.xy,
             None => None,
         }
     }
@@ -1048,7 +1049,7 @@ impl State {
     }
 
     pub fn hero_exists(&self) -> bool {
-        match self.hero_obj() {
+        match self.hero.obj {
             Some(_) => true,
             None => false,
         }
@@ -1062,8 +1063,8 @@ impl State {
     }
 
     pub fn hero_movement(&self) -> Option<Movement> {
-        match self.hero_obj() {
-            Some(hero) => hero.movement,
+        match self.hero.obj {
+            Some(ref hero) => hero.movement,
             None => None,
         }
     }
@@ -1075,10 +1076,9 @@ impl State {
         }
     }
 
-    #[allow(dead_code)]
-    pub fn start_point(&self) -> Option<Coord> {
-        self.hero.start_xy
-    }
+    //pub fn start_point(&self) -> Option<Coord> {
+    //    self.hero.start_xy
+    //}
 
     pub fn next_event(&mut self) -> Option<Event> {
         self.events.pop_back()

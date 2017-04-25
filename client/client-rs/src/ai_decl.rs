@@ -54,10 +54,10 @@ impl Ai for AiDecl {
                 match state.hero_xy() {
                     Some((x, y)) => {
                         let (dx, dy) = match self.step {
-                            Step::A => (-10, 0),
-                            Step::B => (0, -20),
-                            Step::C => (-30, 0),
-                            Step::D => (0, -40),
+                            Step::A => (10, 0),
+                            Step::B => (20, 0),
+                            Step::C => (0, 30),
+                            Step::D => (0, 40),
                             //Step::A => (100, 0),
                             //Step::B => (0, 100),
                             //Step::C => (-100, 0),

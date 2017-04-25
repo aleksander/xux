@@ -62,6 +62,7 @@ impl Render {
                                 match event {
                                     Event::Grid(_,_,_,_) => {}
                                     Event::Obj(_,_) => {}
+                                    Event::Hero(_xy) => {}
                                     Event::Input => {}
                                 }
                             }
@@ -98,6 +99,9 @@ impl Render {
                                     }
                                     Event::Obj(id, (x, y)) => {
                                         last_event = format!("OBJ: {} {} {}", id, x, y);
+                                    }
+                                    Event::Hero((x, y)) => {
+                                        last_event = format!("HERO: {} {}", x, y);
                                     }
                                     Event::Input => {
                                         //last_event = format!("INPUT");
@@ -140,9 +144,9 @@ impl Render {
                     let mut origin = None;
                     let mut objects = BTreeMap::new();
                     let mut zoom = 1.0;
-                    let mut pivot = (0.0, 0.0);
+                    let mut pivot = (500.0, 500.0);
                     let mut dragging = false;
-                    while let Some(e) = window.next() {
+                    'outer: while let Some(e) = window.next() {
                         match e {
                             Input::Update(_) => {
                                 loop {
@@ -151,19 +155,15 @@ impl Render {
                                         Ok(event) => {
                                             //println!("RENDER: {:?}", event);
                                             match event {
-                                                Event::Grid(_,_,_,_) => {}
-                                                Event::Obj(id,xy) => {
-                                                    if origin.is_none() {
-                                                        origin = Some(xy);
-                                                    }
-                                                    objects.insert(id, xy);
-                                                }
+                                                Event::Grid(_,_,_,_) => { /*TODO*/ }
+                                                Event::Obj(id,xy) => { objects.insert(id, xy); }
+                                                Event::Hero(xy) => origin = Some(xy),
                                                 Event::Input => break
                                             }
                                         }
                                         Err(TryRecvError::Disconnected) => {
                                             info!("render: disconnected");
-                                            return;
+                                            break 'outer;
                                         }
                                         Err(TryRecvError::Empty) => break
                                     }
@@ -173,16 +173,12 @@ impl Render {
                                 window.draw_2d(&e, |c, g| {
                                     clear([0.0; 4], g);
                                     if let Some((ox,oy)) = origin {
+                                        let t = c.transform.trans(pivot.0, pivot.1).zoom(zoom);
                                         for &(x,y) in objects.values() {
                                             let (cx,cy) = (x-ox,y-oy);
-                                            let rect = [
-                                                (cx - 2) as f64,
-                                                (cy - 2) as f64,
-                                                5.,
-                                                5.
-                                            ];
-                                            rectangle([1., 1., 1., 1.], rect, c.transform.trans(pivot.0, pivot.1).zoom(zoom), g);
+                                            rectangle([1.0, 1.0, 1.0, 1.0], [(cx - 2) as f64, (cy - 2) as f64, 5.0, 5.0], t, g);
                                         }
+                                        rectangle([0.2, 0.2, 1.0, 1.0], [-2.0, -2.0, 5.0, 5.0], t, g);
                                     }
                                 });
                             }
@@ -195,6 +191,7 @@ impl Render {
                             _ => {}
                         }
                     }
+                    drop(window);
                 });
             }
             RenderKind::ThreeD => {
