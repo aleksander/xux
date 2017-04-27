@@ -364,12 +364,13 @@ impl State {
     pub fn new() -> State {
         let mut widgets = HashMap::new();
         widgets.insert(0,
-                       Widget {
-                           id: 0,
-                           typ: "root".to_owned(),
-                           parent: 0,
-                           name: None,
-                       });
+            Widget {
+                id: 0,
+                typ: "root".to_owned(),
+                parent: 0,
+                name: None,
+            }
+        );
 
         State {
             widgets: widgets,

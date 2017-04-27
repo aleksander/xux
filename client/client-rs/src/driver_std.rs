@@ -1,25 +1,36 @@
 use std;
 use std::thread;
-use std::sync::mpsc::channel;
-use std::sync::mpsc::Receiver;
-use std::sync::mpsc::Sender;
-use std::io::Read;
-use std::io::Write;
-
+use std::sync::mpsc::{channel, Sender, Receiver};
+use std::io::{Read, Write};
 use driver::{Driver, Event};
-
 use errors::*;
 
 impl Driver for DriverStd {
+
     // fn new (ip: std::net::IpAddr, port: u16) -> Result<&'a Driver>;
+
     fn tx(&self, buf: &[u8]) -> Result<()> {
-        self.tx(buf)
+        // info!("driver.tx: {} bytes", buf.len());
+        let len = self.sock.send(buf).chain_err(||"driver.tx")?;
+        if len != buf.len() {
+            return Err("sent len != buf len".into());
+        }
+        Ok(())
     }
+
     fn timeout(&self, seq: usize, ms: u64) {
-        self.timeout(seq, ms);
+        use std::time::Duration;
+
+        // info!("driver.timeout: {} {}ms", seq, ms);
+        let tx = self.tx.clone();
+        thread::spawn(move || {
+            thread::sleep(Duration::from_millis(ms));
+            tx.send(Event::Timeout(seq)).expect("driver::timeout.send");
+        });
     }
+
     fn event(&mut self) -> Result<Event> {
-        self.event()
+        self.rx.recv().chain_err(||"driverstd.event recv")
     }
 }
 
@@ -32,8 +43,8 @@ pub struct DriverStd {
 impl DriverStd {
     pub fn new(host: &str, port: u16) -> Result<DriverStd> {
         let sock = std::net::UdpSocket::bind("0.0.0.0:0").chain_err(||"driverstd.new bind")?;
-        let (tx, rx) = channel();
         sock.connect((host, port)).chain_err(||"udp_sock::connect")?;
+        let (tx,rx) = channel();
 
         let receiver_tx = tx.clone();
         let sock_rx = sock.try_clone().chain_err(||"driver::new.try_clone(sock)")?;
@@ -81,29 +92,7 @@ impl DriverStd {
         })
     }
 
-    pub fn tx(&self, buf: &[u8]) -> Result<()> {
-        // info!("driver.tx: {} bytes", buf.len());
-        let len = self.sock.send(buf).chain_err(||"driver.tx")?;
-        if len != buf.len() {
-            return Err("sent len != buf len".into());
-        }
-        Ok(())
-    }
-
-    pub fn timeout(&self, seq: usize, ms: u64) {
-        use std::time::Duration;
-
-        // info!("driver.timeout: {} {}ms", seq, ms);
-        let tx = self.tx.clone();
-        thread::spawn(move || {
-            thread::sleep(Duration::from_millis(ms));
-            tx.send(Event::Timeout(seq)).expect("driver::timeout.send");
-        });
-    }
-
-    pub fn event(&mut self) -> Result<Event> {
-        self.rx.recv().chain_err(||"driverstd.event recv")
-    }
+    pub fn sender(&self) -> Sender<Event> { self.tx.clone() }
 
     // pub fn reply (&self, _: String) {
     // }

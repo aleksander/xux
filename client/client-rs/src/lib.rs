@@ -2,6 +2,14 @@
 #![feature(associated_consts)]
 #![recursion_limit = "1024"]
 
+#![warn(trivial_casts)]
+#![warn(trivial_numeric_casts)]
+#![warn(unused_import_braces)]
+#![warn(unused_qualifications)]
+//#![warn(unused_results)]
+#![warn(unused_extern_crates)]
+//#![warn(variant_size_differences)]
+
 #[macro_use]
 extern crate log;
 extern crate byteorder;
@@ -17,6 +25,8 @@ extern crate image;
 // extern crate glium;
 // extern crate lua;
 extern crate piston_window;
+//extern crate crossbeam;
+extern crate deque;
 
 pub mod errors;
 pub mod proto;
@@ -33,7 +43,7 @@ pub mod ai_decl;
 // FIXME pub mod ai_lua;
 
 pub mod client;
-mod render;
+pub mod render;
 mod web;
 mod util;
 mod shift_to_unsigned;

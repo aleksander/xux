@@ -1,7 +1,7 @@
 use errors::*;
 use driver::Driver;
 use ai::Ai;
-use render::{Render, RenderKind};
+use render::Render;
 use state::State;
 
 pub fn authorize(host: &str, port: u16, user: String, pass: String) -> Result<(String, Vec<u8>)> {
@@ -96,9 +96,9 @@ pub struct Client<'a, D: Driver + 'a, A: Ai + 'a> {
 }
 
 impl<'a, D: Driver, A: Ai> Client<'a, D, A> {
-    pub fn new(driver: &'a mut D, ai: &'a mut A) -> Client<'a, D, A> {
+    pub fn new(driver: &'a mut D, ai: &'a mut A, render: Render) -> Client<'a, D, A> {
         Client {
-            render: Render::new(RenderKind::TwoD), // TODO Render trait
+            render: render, // TODO Render trait
             state: State::new(),
             ai: ai,
             driver: driver,
@@ -135,11 +135,15 @@ impl<'a, D: Driver, A: Ai> Client<'a, D, A> {
                 tx.send(reply).chain_err(||"unable to send")?;
                 // self.driver.reply(reply);
             }
-            // TODO:
-            // Event::RenderQuit => {
-            // self.state.close();
-            // }
-            //
+            driver::Event::Render(re) => {
+                match re {
+                    driver::RenderEvent::Up    => if let Some((x,y)) = self.state.hero_xy() { self.state.go(x,y-100).chain_err(||"unable to go Up")?; },
+                    driver::RenderEvent::Down  => if let Some((x,y)) = self.state.hero_xy() { self.state.go(x,y+100).chain_err(||"unable to go Down")?; },
+                    driver::RenderEvent::Left  => if let Some((x,y)) = self.state.hero_xy() { self.state.go(x-100,y).chain_err(||"unable to go Left")?; },
+                    driver::RenderEvent::Right => if let Some((x,y)) = self.state.hero_xy() { self.state.go(x+100,y).chain_err(||"unable to go Right")?; },
+                    driver::RenderEvent::Quit  => self.state.close()?,
+                }
+            }
         }
         Ok(())
     }
@@ -181,9 +185,8 @@ impl<'a, D: Driver, A: Ai> Client<'a, D, A> {
                         None => panic!("received Event::Hero while hero.obj is None")
                     }
                 };
-                if let Err(_) = self.render.update(event) {
-                    self.state.close().chain_err(||"unable to enqueue CLOSE")?;
-                }
+                self.render.update(event)
+                //{ self.state.close().chain_err(||"unable to enqueue CLOSE")?; }
             }
             self.send_all_enqueued().chain_err(||"unable to send_all_enqueued")?;
             self.dispatch_single_event().chain_err(||"unable to dispatch_single_event")?;

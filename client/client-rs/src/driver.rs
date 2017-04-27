@@ -11,4 +11,13 @@ pub enum Event {
     Rx(Vec<u8>),
     Timeout(usize),
     Tcp((Sender<String>, Vec<u8>)),
+    Render(RenderEvent),
+}
+
+pub enum RenderEvent {
+    Up,
+    Down,
+    Left,
+    Right,
+    Quit,
 }

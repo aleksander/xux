@@ -55,9 +55,9 @@ impl Ai for AiDecl {
                     Some((x, y)) => {
                         let (dx, dy) = match self.step {
                             Step::A => (10, 0),
-                            Step::B => (20, 0),
-                            Step::C => (0, -30),
-                            Step::D => (0, -40),
+                            Step::B => (0, 10),
+                            Step::C => (-10, 0),
+                            Step::D => (0, -10),
                             //Step::A => (100, 0),
                             //Step::B => (0, 100),
                             //Step::C => (-100, 0),
@@ -73,7 +73,7 @@ impl Ai for AiDecl {
                             Step::D => Step::A,
                         };
                         info!("GO: {} {}, {} {}", x, y, dx, dy);
-                        state.go(x + dx, y + dy).expect("ai walking state.go");
+                        //state.go(x + dx, y + dy).expect("ai walking state.go");
                         self.state = AiState::Walking1;
                     }
                     None => {}
@@ -86,7 +86,7 @@ impl Ai for AiDecl {
             }
             AiState::Walking2 => {
                 if !state.hero_is_moving() {
-                    if self.cycle < 10 {
+                    if self.cycle < 1000 {
                         self.state = AiState::Walking;
                     } else {
                         state.close().expect("ai walking2 state.close");

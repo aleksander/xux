@@ -30,6 +30,8 @@ pnet = "*"
 pcap = "*"
 error-chain = "*"
 piston_window = "*"
+crossbeam = "*"
+deque = "*"
 
 [features]
 driver_std = []

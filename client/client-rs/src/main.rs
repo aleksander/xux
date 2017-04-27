@@ -9,6 +9,7 @@ use sac::errors::*;
 use sac::ai::Ai;
 use sac::ai_decl::AiDecl;
 use sac::driver_std::DriverStd;
+use sac::render::{Render, RenderKind};
 use sac::client::Client;
 
 // TODO
@@ -95,9 +96,12 @@ fn run() -> Result<()> {
 
     let mut ai = AiDecl::new();
     ai.init();
+
     let mut driver = DriverStd::new(host, game_port).chain_err(||"unable to create driver")?;
 
-    let mut client = Client::new(&mut driver, &mut ai);
+    let render = Render::new(RenderKind::TwoD, driver.sender());
+
+    let mut client = Client::new(&mut driver, &mut ai, render);
     client.run(&login, &cookie)
 }
 
