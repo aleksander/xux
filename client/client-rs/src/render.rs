@@ -7,9 +7,10 @@ use deque::{self, Stolen};
 
 #[derive(Debug)]
 pub enum Event {
-    Grid(i32, i32, Vec<u8>, Vec<i16>),
-    Obj(u32, (i32, i32)),
+    Grid(i32, i32, Vec<u8>, Vec<i16>, Vec<u8>),
+    Obj(u32, (i32, i32), u16),
     ObjRemove(u32),
+    Res(u16, String),
     Hero((i32, i32)),
     // NewObj(i32,i32),
     // UpdObj(...),
@@ -60,11 +61,7 @@ impl Render {
                         match stealer.steal() {
                             Stolen::Data(event) => {
                                 match event {
-                                    Event::Grid(_,_,_,_) => {}
-                                    Event::Obj(_,_) => {}
-                                    Event::ObjRemove(_) => {}
-                                    Event::Hero(_xy) => {}
-                                    Event::Input => {}
+                                    _ => {}
                                 }
                             }
                             Stolen::Empty => {}
@@ -93,10 +90,10 @@ impl Render {
                             Stolen::Data(value) => {
                                 counter += 1;
                                 match value {
-                                    Event::Grid(x, y, _tiles, _z) => {
+                                    Event::Grid(x, y, _tiles, _z, _ol) => {
                                         last_event = format!("GRID: {} {}", x, y);
                                     }
-                                    Event::Obj(id, (x, y)) => {
+                                    Event::Obj(id, (x, y), _resid) => {
                                         last_event = format!("OBJ: {} {} {}", id, x, y);
                                     }
                                     Event::ObjRemove(_id) => {}
@@ -107,6 +104,7 @@ impl Render {
                                         //last_event = format!("INPUT");
                                         return;
                                     }
+                                    _ => {}
                                 }
                             }
                             Stolen::Empty => {
@@ -138,22 +136,24 @@ impl Render {
                     use std::collections::BTreeMap;
 
                     let mut window: PistonWindow =
-                        WindowSettings::new("Render", [1000, 800])
+                        WindowSettings::new("Render", [800, 600])
                             .vsync(true)
                             .build().unwrap();
-                    let font = "/usr/share/fonts/TTF/DejaVuSansMono-Bold.ttf";
+                    let font = "/usr/share/fonts/TTF/DejaVuSansMono.ttf";
                     let factory = window.factory.clone();
                     let mut glyphs = Glyphs::new(font, factory).unwrap();
                     let mut origin = None;
                     let mut objects = BTreeMap::new();
                     let mut zoom = 1.0;
-                    let mut pivot = (500.0, 400.0);
                     let mut dragging = false;
                     let mut hero = (0,0);
                     let mut grids = BTreeMap::new();
                     let mut delta_height = 0;
                     let mut command_line = false;
                     let mut command = ":: ".to_string();
+                    let mut show_objtypes = false;
+                    let mut resources = BTreeMap::new();
+                    let mut highlighted_tiles = 0u8;
                     'outer: while let Some(e) = window.next() {
                         match e {
                             Input::Update(_) => {
@@ -162,9 +162,10 @@ impl Render {
                                         Stolen::Data(event) => {
                                             //println!("RENDER: {:?}", event);
                                             match event {
-                                                Event::Grid(x,y,tiles,heights) => { grids.insert((x,y), (tiles,heights)); }
-                                                Event::Obj(id,xy) => { objects.insert(id, xy); }
+                                                Event::Grid(x,y,tiles,heights,owning) => { grids.insert((x,y), (tiles,heights,owning)); }
+                                                Event::Obj(id,xy,resid) => { objects.insert(id, (xy,resid)); }
                                                 Event::ObjRemove(ref id) => { objects.remove(id); }
+                                                Event::Res(id,name) => { resources.insert(id, name); }
                                                 Event::Hero(xy) => {
                                                     if origin.is_none() { origin = Some(xy); }
                                                     hero = xy;
@@ -177,89 +178,114 @@ impl Render {
                                     }
                                 }
                             }
-                            Input::Render(_render) => {
+                            Input::Render(render) => {
                                 window.draw_2d(&e, |c, g| {
                                     clear([0.0; 4], g);
                                     if let Some((ox,oy)) = origin {
 
-                                        let t = c.transform.trans(pivot.0, pivot.1).zoom(zoom);
+                                        let t = c.transform.trans(render.width as f64 / 2.0, render.height as f64 / 2.0).zoom(zoom);
 
-                                        let (gridx,gridy) = ::state::grid((hero.0,hero.1));
-                                        if let Some(&(ref tiles, ref heights)) = grids.get(&(gridx,gridy)) {
-                                            for y in 0..100 {
-                                                for x in 0..100 {
-                                                    let i = y*100+x;
-                                                    rectangle(
-                                                        [
-                                                        tiles[i] as f32 / 256.0,
-                                                        tiles[i] as f32 / 256.0,
-                                                        tiles[i] as f32 / 256.0,
-                                                        1.0
-                                                        ],
-                                                        [
-                                                        (gridx*1100+(x*11) as i32-ox) as f64,
-                                                        (gridy*1100+(y*11) as i32-oy) as f64,
-                                                        11.0, 11.0
-                                                        ],
-                                                        t, g);
-                                                }
-                                            }
-                                            for y in 0..99 {
-                                                for x in 0..99 {
-                                                    use shift_to_unsigned::ShiftToUnsigned;
-
-                                                    let i = y*100+x;
-                                                    let z = heights[i].shift_to_unsigned();
-                                                    let zx = heights[i+1].shift_to_unsigned();
-                                                    let zy = heights[i+100].shift_to_unsigned();
-                                                    let dx = if z > zx { z - zx } else { zx - z };
-                                                    let dy = if z > zy { z - zy } else { zy - z };
-                                                    if dx > delta_height {
-                                                        line(
-                                                            [0.3, 0.3, 0.3, 1.0],
-                                                            1.0/zoom,
-                                                            [
-                                                            (gridx*1100+(x*11)as i32-ox) as f64,
-                                                            (gridy*1100+(y*11)as i32-oy) as f64,
-                                                            (gridx*1100+(x*11)as i32-ox+11) as f64,
-                                                            (gridy*1100+(y*11)as i32-oy) as f64
-                                                            ],
-                                                            t, g
-                                                        );
+                                        let (gx,gy) = ::state::grid((hero.0,hero.1));
+                                        for &(gridx,gridy) in [(gx-1,gy-1),(gx,gy-1),(gx+1,gy-1),
+                                                               (gx-1,gy  ),(gx,gy  ),(gx+1,gy  ),
+                                                               (gx-1,gy+1),(gx,gy+1),(gx+1,gy+1)].iter() {
+                                            if let Some(&(ref tiles, ref heights, ref owning)) = grids.get(&(gridx,gridy)) {
+                                                for y in 0..100 {
+                                                    for x in 0..100 {
+                                                        let i = y*100+x;
+                                                        let tile = tiles[i];
+                                                        let owning = owning[i];
+                                                        //TODO do filter of what tile types is shown
+                                                        if tile == 66 || tile == highlighted_tiles || owning > 0 {
+                                                            let color =
+                                                                if tile == 66 {
+                                                                    let c = tile as f32 / 256.0;
+                                                                    [c,c,c,1.0]
+                                                                } else if tile == highlighted_tiles {
+                                                                    [0.0,0.3,0.0,0.5]
+                                                                } else {
+                                                                    [0.6,0.0,0.0,0.5]
+                                                                };
+                                                            rectangle(
+                                                                color,
+                                                                [(gridx*1100+(x*11) as i32-ox) as f64,
+                                                                 (gridy*1100+(y*11) as i32-oy) as f64,
+                                                                 11.0, 11.0],
+                                                            t, g);
+                                                        }
                                                     }
-                                                    if dy > delta_height {
-                                                        line([0.3, 0.3, 0.3, 1.0], 1.0/zoom,
-                                                             [
-                                                            (gridx*1100+(x*11)as i32-ox) as f64,
-                                                            (gridy*1100+(y*11)as i32-oy) as f64,
-                                                            (gridx*1100+(x*11)as i32-ox) as f64,
-                                                            (gridy*1100+(y*11)as i32-oy+11) as f64
-                                                             ],
-                                                             t, g); }
                                                 }
-                                            }
-                                            if command_line {
-                                                text::Text::new_color([0.3, 1.0, 0.4, 1.0], 12).draw(
-                                                    &command,
-                                                    &mut glyphs,
-                                                    &c.draw_state,
-                                                    //TODO draw at the bottom of the window
-                                                    c.transform.trans(10.0, 10.0), g);
+                                                for y in 0..99 {
+                                                    for x in 0..99 {
+                                                        use shift_to_unsigned::ShiftToUnsigned;
+
+                                                        let i = y*100+x;
+                                                        let z = heights[i].shift_to_unsigned();
+                                                        let zx = heights[i+1].shift_to_unsigned();
+                                                        let zy = heights[i+100].shift_to_unsigned();
+                                                        let dx = if z > zx { z - zx } else { zx - z };
+                                                        let dy = if z > zy { z - zy } else { zy - z };
+                                                        if dx > delta_height && dy > delta_height {
+                                                            let lx = (gridx * 1100 + (x * 11) as i32 - ox) as f64;
+                                                            let ly = (gridy * 1100 + (y * 11) as i32 - oy) as f64;
+                                                            let lcolor = [0.3, 0.3, 0.3, 1.0];
+                                                            let lsize = 1.0 / zoom;
+                                                            if dx > delta_height {
+                                                                line(lcolor, lsize, [lx, ly, lx + 11.0, ly], t, g);
+                                                            }
+                                                            if dy > delta_height {
+                                                                line(lcolor, lsize, [lx, ly, lx, ly + 11.0], t, g);
+                                                            }
+                                                        }
+                                                    }
+                                                }
                                             }
                                         }
 
-                                        for &(x,y) in objects.values() {
+                                        for &((x,y),resid) in objects.values() {
                                             let (cx,cy) = (x-ox,y-oy);
-                                            rectangle([1.0, 1.0, 1.0, 1.0], [(cx - 2) as f64, (cy - 2) as f64, 5.0, 5.0], t, g);
+                                            rectangle(if resid == 2951 {[1.0, 0.0, 0.0, 1.0]} else {[1.0, 1.0, 1.0, 1.0]}, [(cx - 2) as f64, (cy - 2) as f64, 5.0, 5.0], t, g);
                                         }
                                         rectangle([0.2, 0.2, 1.0, 1.0], [(hero.0-ox-2) as f64, (hero.1-oy-2) as f64, 5.0, 5.0], t, g);
                                         rectangle([1.0, 1.0, 1.0, 1.0], [(hero.0-ox) as f64, (hero.1-oy) as f64, 1.0, 1.0], t, g);
+
+                                        if show_objtypes {
+                                            let mut objtypes = BTreeMap::new();
+                                            for &(_,resid) in objects.values() {
+                                                let mut obj = objtypes.entry(resid).or_insert(0);
+                                                *obj += 1;
+                                            }
+
+                                            let mut i = 0;
+                                            for (resid,count) in objtypes.iter() {
+                                                let res = if let Some(name) = resources.get(resid) { name } else { "???" };
+                                                text::Text::new_color([0.3, 1.0, 0.4, 1.0], 9).draw(
+                                                    &format!("{:6} {:6} {}", count, resid, res),
+                                                    &mut glyphs,
+                                                    &c.draw_state,
+                                                    c.transform.trans(200.0, 20.0 + i as f64), g);
+                                                i += 9; //TODO += font.height
+                                            }
+                                        }
+
+                                        if command_line {
+                                            text::Text::new_color([0.3, 1.0, 0.4, 1.0], 12).draw(
+                                                &command,
+                                                &mut glyphs,
+                                                &c.draw_state,
+                                                //TODO draw at the bottom of the window
+                                                c.transform.trans(10.0, 20.0), g);
+                                        }
                                     }
                                 });
                             }
                             Input::Press(Button::Mouse(MouseButton::Left)) => dragging = true,
                             Input::Release(Button::Mouse(MouseButton::Left)) => dragging = false,
-                            Input::Move(Motion::MouseRelative(x,y)) => if dragging { pivot.0 += x; pivot.1 += y; },
+                            Input::Move(Motion::MouseRelative(x,y)) => if dragging {
+                                if let Some((ox,oy)) = origin {
+                                    origin = Some((ox - (x / zoom) as i32, oy - (y / zoom) as i32));
+                                }
+                            },
                             Input::Move(Motion::MouseScroll(_,y)) => zoom *= if y > 0.0 { 1.05 } else { 0.95 },
                             Input::Press(Button::Keyboard(key)) => {
                                 match key {
@@ -282,14 +308,13 @@ impl Render {
                                     Key::Q => if command_line { command += "q"; },
                                     Key::R => if command_line { command += "r"; },
                                     Key::S => if command_line { command += "s"; },
-                                    Key::T => if command_line { command += "t"; },
+                                    Key::T => if command_line { command += "t"; } else { show_objtypes = ! show_objtypes; },
                                     Key::U => if command_line { command += "u"; },
                                     Key::V => if command_line { command += "v"; },
                                     Key::W => if command_line { command += "w"; },
                                     Key::X => if command_line { command += "x"; },
                                     Key::Y => if command_line { command += "y"; },
                                     Key::Z => if command_line { command += "z"; },
-                                    Key::D0 => if command_line { command += "0"; },
                                     Key::D1 => if command_line { command += "1"; },
                                     Key::D2 => if command_line { command += "2"; },
                                     Key::D3 => if command_line { command += "3"; },
@@ -298,7 +323,8 @@ impl Render {
                                     Key::D6 => if command_line { command += "6"; },
                                     Key::D7 => if command_line { command += "7"; },
                                     Key::D8 => if command_line { command += "8"; },
-                                    Key::D9 => if command_line { command += "9"; },
+                                    Key::D9 => if command_line { command += "9"; } else { highlighted_tiles = highlighted_tiles.wrapping_sub(1); },
+                                    Key::D0 => if command_line { command += "0"; } else { highlighted_tiles = highlighted_tiles.wrapping_add(1); },
                                     Key::Space => if command_line { command += " "; },
                                     Key::PageUp => delta_height += 1,
                                     Key::PageDown => if delta_height > 0 { delta_height -= 1; },

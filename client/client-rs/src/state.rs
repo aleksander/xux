@@ -204,7 +204,7 @@ pub struct Surface {
     pub id: i64,
     pub tiles: Vec<u8>,
     pub z: Vec<i16>,
-    //pub ol: Vec<u8>,
+    pub ol: Vec<u8>,
 }
 
 impl Surface {
@@ -213,14 +213,13 @@ impl Surface {
         let x = r.i32().chain_err(||"x")?;
         let y = r.i32().chain_err(||"y")?;
         let mmname = r.strz()?;
-        // let mut pfl = vec![0; 256];
+        let mut pfl = vec![0; 256];
         loop {
             let pidx = r.u8().chain_err(||"pidx")?;
             if pidx == 255 {
                 break;
             }
-            // pfl[pidx as usize]
-            let _ = r.u8().chain_err(||"y")?;
+            pfl[pidx as usize] = r.u8().chain_err(||"pfl[pidx]")?;
         }
         let mut decoder = ZlibDecoder::new(r);
         let mut unzipped = Vec::new();
@@ -228,45 +227,44 @@ impl Surface {
         // TODO check unzipped_len
         let mut r = Cursor::new(unzipped);
 
+        Self::surface(&mut r, &pfl, x, y, mmname)
+    }
 
-        fn tmp <R:ReadBytesSac> (r: &mut R) -> Result<(i64,Vec<u8>,Vec<i16>)> {
-            let id = r.i64()?;
-            let tiles = (0..100*100).map(|_|r.u8()).collect::<Result<Vec<u8>>>()?;
-            let z = (0..100*100).map(|_|r.i16()).collect::<Result<Vec<i16>>>()?;
-            Ok((id,tiles,z))
+    fn surface <R:ReadBytesSac> (r: &mut R, pfl: &[u8], x: i32, y: i32, name: String) -> Result<Surface> {
+        let id = r.i64()?;
+        let tiles = (0..100*100).map(|_|r.u8()).collect::<Result<Vec<u8>>>()?;
+        let z = (0..100*100).map(|_|r.i16()).collect::<Result<Vec<i16>>>()?;
+
+        let mut ol = vec![0; 100*100];
+        loop {
+            let pidx = r.u8()?;
+            if pidx == 255 { break; }
+            let fl = pfl[pidx as usize];
+            let typ = r.u8()?;
+            let (x1,y1) = (r.u8()? as usize, r.u8()? as usize);
+            let (x2,y2) = (r.u8()? as usize, r.u8()? as usize);
+            //info!("#### {} ({},{}) - ({},{})", typ, x1, y1, x2, y2);
+            let oli = match typ {
+                0 => if (fl & 1) == 1 { 2 } else { 1 },
+                1 => if (fl & 1) == 1 { 8 } else { 4 },
+                2 => 16,
+                _ => { return Err(format!("ERROR: unknown plot type {}", typ).into()); }
+            };
+            for y in y1..y2+1 {
+                for x in x1..x2+1 {
+                    ol[y*100+x] |= oli;
+                }
+            }
         }
-        let (id,tiles,z) = tmp(&mut r)?;
 
-
-        // let mut ol = vec![0; 100*100];
-        // loop {
-        //     let pidx = r.read_u8().unwrap();
-        //     if pidx == 255 { break; }
-        //     let fl = pfl[pidx as usize];
-        //     let typ = r.read_u8().unwrap();
-        //     let (x1,y1) = (r.read_u8().unwrap() as usize, r.read_u8().unwrap() as usize);
-        //     let (x2,y2) = (r.read_u8().unwrap() as usize, r.read_u8().unwrap() as usize);
-        //     info!("#### {} ({},{}) - ({},{})", typ, x1, y1, x2, y2);
-        //     let oli = match typ {
-        //         0 => if (fl & 1) == 1 { 2 } else { 1 },
-        //         1 => if (fl & 1) == 1 { 8 } else { 4 },
-        //         2 => 16,
-        //         _ => { info!("ERROR: unknown plot type {}", typ); break; }
-        //     };
-        //     for y in y1..y2+1 {
-        //         for x in x1..x2+1 {
-        //             ol[x+y*100] |= oli;
-        //         }
-        //     }
-        // }
         Ok(Surface {
             x: x,
             y: y,
-            name: mmname,
+            name: name,
             id: id,
             tiles: tiles,
             z: z,
-            //ol: ol
+            ol: ol
         })
     }
 }
@@ -336,8 +334,9 @@ impl Map {
 
 pub enum Event {
     Grid(Coord),
-    Obj(ObjID, Coord),
+    Obj(ObjID, Coord, ResID),
     ObjRemove(ObjID),
+    Res(ResID, String),
     Hero,
 }
 
@@ -515,7 +514,7 @@ impl State {
                 // info!("RX: REL {}", rel.seq);
                 if rel.seq == self.rx_rel_seq {
                     self.dispatch_rel_cache(&rel)?;
-                    //TODO shuold we clean up cache here (remove RELs that in the past) ?
+                    //TODO should we clean up cache here (remove RELs that in the past) ?
                 } else if rel.seq.wrapping_sub(self.rx_rel_seq) < u16::MAX/2 {
                     // future REL
                     self.cache_rel(rel);
@@ -593,7 +592,7 @@ impl State {
 
                             if obj.update(&new_obj_prop) {
                                 if let Some(xy) = obj.xy {
-                                    self.events.push_front(Event::Obj(obj.id, xy));
+                                    self.events.push_front(Event::Obj(obj.id, xy, obj.resid.unwrap_or(0)));
                                 }
                                 info!("OBJ: {:?}", obj);
                             }
@@ -669,7 +668,8 @@ impl State {
                 RelElem::PAGINAE(_) => {}
                 RelElem::RESID(ref res) => {
                     // info!("      {:?}", res);
-                    self.resources.insert(res.id, res.name.clone() /* FIXME String -> &str */);
+                    self.resources.insert(res.id, res.name.clone());
+                    self.events.push_front(Event::Res(res.id, res.name.clone()));
                 }
                 RelElem::PARTY(_) => {}
                 RelElem::SFX(_) => {}

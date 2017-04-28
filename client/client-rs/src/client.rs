@@ -165,7 +165,7 @@ impl<'a, D: Driver, A: Ai> Client<'a, D, A> {
                             Some(ref grid) => {
                                 //TODO save to 'account name'/'character name'/'session id(or login timestamp)'/ subdir
                                 util::grid_to_png(grid.x, grid.y, &grid.tiles, &grid.z);
-                                render::Event::Grid(x, y, grid.tiles.clone(), grid.z.clone())
+                                render::Event::Grid(x, y, grid.tiles.clone(), grid.z.clone(), grid.ol.clone())
                             }
                             None => {
                                 warn!("Event::Grig received, but no such grid!");
@@ -173,8 +173,9 @@ impl<'a, D: Driver, A: Ai> Client<'a, D, A> {
                             }
                         }
                     }
-                    state::Event::Obj(id, xy) => render::Event::Obj(id, xy),
+                    state::Event::Obj(id, xy, resid) => render::Event::Obj(id, xy, resid),
                     state::Event::ObjRemove(id) => render::Event::ObjRemove(id),
+                    state::Event::Res(resid,name) => render::Event::Res(resid,name),
                     state::Event::Hero => match self.state.hero.obj {
                         Some(ref hero) => {
                             match hero.xy {
