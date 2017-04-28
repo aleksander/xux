@@ -52,6 +52,7 @@ impl Drop for Render {
 impl Render {
     pub fn new(kind: RenderKind, render_tx: Sender<driver::Event>) -> Render {
 
+        //TODO try coco::deque instead
         let (worker, stealer) = deque::new();
 
         match kind {
