@@ -184,9 +184,9 @@ fn test_parse_csess() {
     );
 }
 
-fn parse_rel(i: &[u8]) -> IResult<&[u8], proto::Rel> {
+fn parse_rel(i: &[u8]) -> IResult<&[u8], proto::Rels> {
     //TODO do parse
-    IResult::Done(i, proto::Rel::new(0))
+    IResult::Done(i, proto::Rels::new(0))
 }
 
 fn parse_ack(i: &[u8]) -> IResult<&[u8], proto::Ack> {

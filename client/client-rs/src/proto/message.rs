@@ -13,7 +13,7 @@ use errors::*;
 #[derive(Debug)]
 pub enum ClientMessage {
     SESS( cSess ),
-    REL( Rel ),
+    REL( Rels ),
     ACK( Ack ),
     BEAT( Beat ),
     MAPREQ( MapReq ),
@@ -24,29 +24,19 @@ pub enum ClientMessage {
 #[derive(Debug)]
 pub enum ServerMessage {
     SESS( sSess ),
-    REL( Rel ),
+    REL( Rels ),
     ACK( Ack ),
     MAPDATA( MapData ),
     OBJDATA( ObjData ),
     CLOSE( Close ),
 }
 
-//pub const SESS: u8 = 0;
-//pub const REL: u8 = 1;
-//pub const ACK: u8 = 2;
-//pub const BEAT: u8 = 3;
-//pub const MAPREQ: u8 = 4;
-//pub const MAPDATA: u8 = 5;
-//pub const OBJDATA: u8 = 6;
-//pub const OBJACK: u8 = 7;
-//pub const CLOSE: u8 = 8;
-
 impl ClientMessage {
     // TODO impl FromBuf for ClientMessage
     pub fn from_buf <R:ReadBytesSac> (r: &mut R) -> Result<(ClientMessage, Option<Vec<u8>>)> {
         let msg = match r.u8().chain_err(||"cmsg.from msg type")? {
             cSess::ID => ClientMessage::SESS(cSess::from_buf(r)?),
-            Rel::ID => ClientMessage::REL(Rel::from_buf(r)?),
+            Rels::ID => ClientMessage::REL(Rels::from_buf(r)?),
             Ack::ID => ClientMessage::ACK(Ack::from_buf(r)?),
             Beat::ID => ClientMessage::BEAT(Beat),
             MapReq::ID => ClientMessage::MAPREQ(MapReq::from_buf(r)?),
@@ -75,11 +65,11 @@ impl ClientMessage {
                 Ok(())
             }
             ClientMessage::REL(ref rel) => {
-                w.u8(Rel::ID).chain_err(||"cmsg.to REL")?;
+                w.u8(Rels::ID).chain_err(||"cmsg.to REL")?;
                 w.u16(rel.seq).chain_err(||"cmsg.to REL sequence")?;
-                for i in 0 .. rel.rel.len() {
-                    let rel_elem = &rel.rel[i];
-                    let last_one = i == (rel.rel.len() - 1);
+                for i in 0 .. rel.rels.len() {
+                    let rel_elem = &rel.rels[i];
+                    let last_one = i == (rel.rels.len() - 1);
                     let rel_elem_buf = rel_elem.to_buf(last_one)?;
                     w.write(&rel_elem_buf).chain_err(||"cmsg.to REL buf")?;
                 }
@@ -113,7 +103,7 @@ impl ServerMessage {
         let mtype = r.u8().chain_err(||"smsg.from type")?;
         let msg = match mtype {
             sSess::ID => ServerMessage::SESS(sSess::from_buf(r)?),
-            Rel::ID => ServerMessage::REL(Rel::from_buf(r)?),
+            Rels::ID => ServerMessage::REL(Rels::from_buf(r)?),
             Ack::ID => ServerMessage::ACK(Ack::from_buf(r)?),
             MapData::ID => ServerMessage::MAPDATA(MapData::from_buf(r)?),
             ObjData::ID => ServerMessage::OBJDATA(ObjData::from_buf(r)?),

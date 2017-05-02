@@ -351,7 +351,7 @@ pub struct State {
     pub que: LinkedList<EnqueuedBuffer>,
     pub tx_buf: LinkedList<EnqueuedBuffer>,
     pub enqueue_seq: usize,
-    pub rel_cache: HashMap<u16, Rel>, //TODO unify with rx_rel_seq to have more consistent entity (struct Rel { ... })
+    pub rel_cache: HashMap<u16, Rels>, //TODO unify with rx_rel_seq to have more consistent entity (struct Rel { ... })
     pub hero: Hero,
     pub map: Map,
     events: LinkedList<Event>,
@@ -411,7 +411,7 @@ impl State {
         if let ClientMessage::REL(ref mut rel) = msg {
             assert!(rel.seq == 0);
             rel.seq = self.seq;
-            self.seq += rel.rel.len() as u16;
+            self.seq += rel.rels.len() as u16;
         }
         let mut buf = vec!();
         match msg.to_buf(&mut buf) {
@@ -617,22 +617,22 @@ impl State {
     }
 
     //TODO add struct Rel { ... } and move this to self.rel.cache(rel)
-    fn cache_rel(&mut self, rel: Rel) {
-        info!("cache REL {}-{}", rel.seq, rel.seq + ((rel.rel.len() as u16) - 1));
+    fn cache_rel(&mut self, rel: Rels) {
+        info!("cache REL {}-{}", rel.seq, rel.seq + ((rel.rels.len() as u16) - 1));
         self.rel_cache.insert(rel.seq, rel);
     }
 
     //TODO add struct Rel { ... } and move this to self.rel.dispatch_cache(rel)
-    fn dispatch_rel_cache(&mut self, rel: &Rel) -> Result<()> {
+    fn dispatch_rel_cache(&mut self, rel: &Rels) -> Result<()> {
         // XXX FIXME do we handle seq right in the case of overflow ???
         //           to do refactor this code and replace add with wrapping_add
-        let mut next_rel_seq = rel.seq + ((rel.rel.len() as u16) - 1);
+        let mut next_rel_seq = rel.seq + ((rel.rels.len() as u16) - 1);
         self.dispatch_rel(rel);
         loop {
             let next_rel = self.rel_cache.remove(&(next_rel_seq + 1));
             match next_rel {
                 Some(rel) => {
-                    next_rel_seq = rel.seq + ((rel.rel.len() as u16) - 1);
+                    next_rel_seq = rel.seq + ((rel.rels.len() as u16) - 1);
                     self.dispatch_rel(&rel);
                 }
                 None => {
@@ -646,38 +646,38 @@ impl State {
     }
 
     //TODO add struct Rel { ... } and move this to self.rel.dispatch(rel)
-    fn dispatch_rel(&mut self, rel: &Rel) {
-        info!("dispatch REL {}-{}", rel.seq, rel.seq + ((rel.rel.len() as u16) - 1));
+    fn dispatch_rel(&mut self, rel: &Rels) {
+        info!("dispatch REL {}-{}", rel.seq, rel.seq + ((rel.rels.len() as u16) - 1));
         // info!("RX: {:?}", rel);
-        for r in &rel.rel {
+        for r in &rel.rels {
             match *r {
-                RelElem::NEWWDG(ref wdg) => {
+                Rel::NEWWDG(ref wdg) => {
                     // info!("      {:?}", wdg);
                     self.dispatch_newwdg(wdg);
                 }
-                RelElem::WDGMSG(ref msg) => {
+                Rel::WDGMSG(ref msg) => {
                     // info!("      {:?}", msg);
                     self.dispatch_wdgmsg(msg);
                 }
-                RelElem::DSTWDG(ref wdg) => {
+                Rel::DSTWDG(ref wdg) => {
                     // info!("      {:?}", wdg);
                     self.widgets.remove(&wdg.id);
                 }
-                RelElem::MAPIV(_) => {}
-                RelElem::GLOBLOB(_) => {}
-                RelElem::PAGINAE(_) => {}
-                RelElem::RESID(ref res) => {
+                Rel::MAPIV(_) => {}
+                Rel::GLOBLOB(_) => {}
+                Rel::PAGINAE(_) => {}
+                Rel::RESID(ref res) => {
                     // info!("      {:?}", res);
                     self.resources.insert(res.id, res.name.clone());
                     self.events.push_front(Event::Res(res.id, res.name.clone()));
                 }
-                RelElem::PARTY(_) => {}
-                RelElem::SFX(_) => {}
-                RelElem::CATTR(_) => {}
-                RelElem::MUSIC(_) => {}
-                RelElem::TILES(_) => {}
-                RelElem::BUFF(_) => {}
-                RelElem::SESSKEY(_) => {}
+                Rel::PARTY(_) => {}
+                Rel::SFX(_) => {}
+                Rel::CATTR(_) => {}
+                Rel::MUSIC(_) => {}
+                Rel::TILES(_) => {}
+                Rel::BUFF(_) => {}
+                Rel::SESSKEY(_) => {}
             }
         }
     }
@@ -867,10 +867,7 @@ impl State {
         // TODO get username from server responce, not from auth username
         // let cookie = self.cookie.clone();
         // let user = self.user.clone();
-        self.enqueue_to_send(ClientMessage::SESS(cSess {
-                login: login.to_owned(),
-                cookie: cookie.to_vec(),
-            }))?;
+        self.enqueue_to_send(ClientMessage::SESS(cSess::new(login.to_owned(), cookie.to_vec())))?;
         Ok(())
     }
 
@@ -881,15 +878,9 @@ impl State {
         info!("send play '{}'", charname);
         let mut args: Vec<MsgList> = Vec::new();
         args.push(MsgList::tSTR(charname));
-        // TODO rel.append(RelElem::new())
-        let elem = RelElem::WDGMSG(WdgMsg {
-            id: id,
-            name: name,
-            args: args,
-        });
-        let mut rel = Rel::new(0);
-        rel.append(elem);
-        self.enqueue_to_send(ClientMessage::REL(rel))
+        let mut rels = Rels::new(0);
+        rels.append(Rel::WDGMSG(WdgMsg::new(id, name, args)));
+        self.enqueue_to_send(ClientMessage::REL(rels))
     }
 
     pub fn mapreq(&mut self, x: i32, y: i32) -> Result<()> {
@@ -965,14 +956,9 @@ impl State {
         args.push(MsgList::tCOORD((x, y)));
         args.push(MsgList::tINT(1));
         args.push(MsgList::tINT(0));
-        let elem = RelElem::WDGMSG(WdgMsg {
-            id: id,
-            name: name,
-            args: args,
-        });
-        let mut rel = Rel::new(0);
-        rel.append(elem);
-        self.enqueue_to_send(ClientMessage::REL(rel))?;
+        let mut rels = Rels::new(0);
+        rels.append(Rel::WDGMSG(WdgMsg::new(id, name, args)));
+        self.enqueue_to_send(ClientMessage::REL(rels))?;
         Ok(())
     }
 
@@ -1002,14 +988,9 @@ impl State {
         args.push(MsgList::tCOORD((obj_x, obj_y)));
         args.push(MsgList::tINT(0));
         args.push(MsgList::tINT(-1));
-        let elem = RelElem::WDGMSG(WdgMsg {
-            id: id,
-            name: name,
-            args: args,
-        });
-        let mut rel = Rel::new(0);
-        rel.append(elem);
-        self.enqueue_to_send(ClientMessage::REL(rel))?;
+        let mut rels = Rels::new(0);
+        rels.append(Rel::WDGMSG(WdgMsg::new(id, name, args)));
+        self.enqueue_to_send(ClientMessage::REL(rels))?;
         Ok(())
     }
 
@@ -1020,14 +1001,9 @@ impl State {
         let mut args = Vec::new();
         args.push(MsgList::tINT(0));
         args.push(MsgList::tINT(0));
-        let elem = RelElem::WDGMSG(WdgMsg {
-            id: wdg_id,
-            name: name,
-            args: args,
-        });
-        let mut rel = Rel::new(0);
-        rel.append(elem);
-        self.enqueue_to_send(ClientMessage::REL(rel))?;
+        let mut rels = Rels::new(0);
+        rels.append(Rel::WDGMSG(WdgMsg::new(wdg_id, name, args)));
+        self.enqueue_to_send(ClientMessage::REL(rels))?;
         Ok(())
     }
 

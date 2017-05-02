@@ -54,6 +54,9 @@ impl sSess {
 #[allow(non_camel_case_types)]
 #[derive(Debug,PartialEq)]
 pub struct cSess {
+    unknown: u16,
+    proto: String,
+    version: u16,
     pub login: String,
     pub cookie: Vec<u8>,
 }
@@ -63,6 +66,9 @@ impl cSess {
 
     pub fn new (login: String, cookie: Vec<u8>) -> cSess {
         cSess {
+            unknown: 2,
+            proto: "Salem".into(),
+            version: 36,
             login: login,
             cookie: cookie,
         }
@@ -70,9 +76,9 @@ impl cSess {
 
     // TODO impl FromBuf for cSess {}
     pub fn from_buf <R:ReadBytesSac> (r: &mut R) -> Result<cSess> {
-        let _unknown = r.u16().chain_err(||"csess.from unk")?;
-        let _proto = r.strz().chain_err(||"csess.from proto")?;
-        let _version = r.u16().chain_err(||"csess.from version")?;
+        let unknown = r.u16().chain_err(||"csess.from unk")?;
+        let proto = r.strz().chain_err(||"csess.from proto")?;
+        let version = r.u16().chain_err(||"csess.from version")?;
         let login = r.strz().chain_err(||"csess.from login")?;
         let cookie_len = r.u16().chain_err(||"csess.from cookie len")?;
         let cookie = {
@@ -80,7 +86,10 @@ impl cSess {
             r.read_exact(&mut tmp).chain_err(||"csess.from cookie")?;
             tmp
         };
-        Ok(cSess {
+        Ok(cSess{
+            unknown: unknown,
+            proto: proto,
+            version: version,
             login: login,
             cookie: cookie,
         })
@@ -88,12 +97,10 @@ impl cSess {
 
     pub fn to_buf <W:WriteBytesSac> (&self, w: &mut W) -> Result<()> {
         w.u8(Self::ID).chain_err(||"csess.to id")?;
-        w.u16(2).chain_err(||"csess.to unk")?; // unknown
-        w.strz("Salem").chain_err(||"csess.to proto")?;//w.write("Salem".as_bytes()).chain_err(||"csess.to proto")?; // proto
-        //w.u8(0).chain_err(||"csess.to 0")?;
-        w.u16(36).chain_err(||"csess.to version")?; // version
-        w.strz(&self.login).chain_err(||"csess.to login")?;//w.write(self.login.as_bytes()).chain_err(||"csess.to login")?; // login
-        //w.u8(0).chain_err(||"csess.to 0")?;
+        w.u16(self.unknown).chain_err(||"csess.to unk")?;
+        w.strz(&self.proto).chain_err(||"csess.to proto")?; // proto
+        w.u16(self.version).chain_err(||"csess.to version")?; // version
+        w.strz(&self.login).chain_err(||"csess.to login")?; // login
         w.u16(32).chain_err(||"csess.to cookie len")?; // cookie length
         w.write(self.cookie.as_slice()).chain_err(||"csess.to cookie")?; // cookie
         Ok(())
