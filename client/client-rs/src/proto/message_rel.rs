@@ -83,13 +83,14 @@ pub enum Rel {
 impl Rel {
     //TODO impl FromBuf for RelElem
     pub fn from_buf(kind: u8, r: &[u8]) -> Result<Rel> {
+        let mut r = ::std::io::Cursor::new(r);
         // XXX RemoteUI.java +53
         match kind {
             NewWdg::ID => Ok(Rel::NEWWDG(NewWdg::from_buf(r)?)),
             WdgMsg::ID => Ok(Rel::WDGMSG(WdgMsg::from_buf(r)?)),
             DstWdg::ID => Ok(Rel::DSTWDG(DstWdg::from_buf(r)?)),
             MapIv::ID => Ok(Rel::MAPIV(MapIv)),
-            Globs::ID => Ok(Rel::GLOBLOB(Globs::from_buf(r)?)),
+            Globs::ID => Ok(Rel::GLOBLOB(Globs::from_buf(&mut r)?)),
             Paginae::ID => Ok(Rel::PAGINAE(Paginae)),
             ResId::ID => Ok(Rel::RESID(ResId::from_buf(r)?)),
             Party::ID => Ok(Rel::PARTY(Party)),
@@ -111,23 +112,23 @@ impl Rel {
         match *self {
             Rel::WDGMSG(ref msg) => {
                 let mut tmp = vec![];
-                tmp.u16(msg.id).chain_err(||"relelem.to WDGMSG id")?; // widget ID
-                tmp.strz(&msg.name).chain_err(||"relelem.to WDGMSG name")?;
+                tmp.u16(msg.id).chain_err(||"rel.to WDGMSG id")?; // widget ID
+                tmp.strz(&msg.name).chain_err(||"rel.to WDGMSG name")?;
                 let args_buf = {
                     let mut v = Vec::new();
                     msg.args.to_buf(&mut v)?;
                     v
                 };
-                tmp.write(&args_buf).chain_err(||"relelem.to WDGMSG args")?;
+                tmp.write(&args_buf).chain_err(||"rel.to WDGMSG args")?;
                 if last {
-                    w.u8(WdgMsg::ID).chain_err(||"relelem.to WDGMSG")?;
+                    w.u8(WdgMsg::ID).chain_err(||"rel.to WDGMSG")?;
                 } else {
                     use std::u16;
-                    w.u8(WdgMsg::ID | Rels::MORE_RELS_ATTACHED_BIT).chain_err(||"relelem.to WDGMSG+m")?;
-                    if tmp.len() > u16::MAX as usize { return Err("relelem.to WDGMSG rel buf > u16.max".into()); }
-                    w.u16(tmp.len() as u16).chain_err(||"relelem.to WDGMSG len")?; // rel length
+                    w.u8(WdgMsg::ID | Rels::MORE_RELS_ATTACHED_BIT).chain_err(||"rel.to WDGMSG+m")?;
+                    if tmp.len() > u16::MAX as usize { return Err("rel.to WDGMSG rel buf > u16.max".into()); }
+                    w.u16(tmp.len() as u16).chain_err(||"rel.to WDGMSG len")?; // rel length
                 }
-                w.write(&tmp).chain_err(||"relelem.to WDGMSG buf")?;
+                w.write(&tmp).chain_err(||"rel.to WDGMSG buf")?;
 
                 Ok(w)
             }
@@ -225,62 +226,36 @@ pub struct Globs {
 impl Globs {
     pub const ID: u8 = 4;
 
-    const GMSG_TIME: u8 = 0;
-    //const GMSG_ASTRO: u8 = 1; //TODO
-    const GMSG_LIGHT: u8 = 2;
-    const GMSG_SKY: u8 = 3;
-
-
-    fn from_buf <R:ReadBytesSac> (mut r: R) -> Result<Globs> {
+    #[cfg(feature = "salem")]
+    fn from_buf <R:ReadBytesSac> (r: &mut R) -> Result<Globs> {
         let mut globs = Vec::new();
-        let inc = r.u8().chain_err(||"GLOBLOB inc")?;
+        let inc = r.u8().chain_err(||"Globs.from inc")?;
         loop {
             let t = match r.u8() {
                 Ok(b) => b,
                 Err(_) => break, //TODO check error type
             };
-            globs.push(match t {
-                Self::GMSG_TIME => {
-                    Glob::Time {
-                        time: r.i32().chain_err(||"relelem.from GLOBLOB TIME time")?,
-                        season: r.u8().chain_err(||"relelem.from GLOBLOB TIME season")?,
-                        inc: inc,
-                    }
-                }
-                // GMSG_ASTRO =>
-                Self::GMSG_LIGHT => {
-                    Glob::Light {
-                        amb: r.color().chain_err(||"relelem.from GLOBLOB LIGHT amb")?,
-                        dif: r.color().chain_err(||"relelem.from GLOBLOB LIGHT dif")?,
-                        spc: r.color().chain_err(||"relelem.from GLOBLOB LIGHT spc")?,
-                        ang: r.i32().chain_err(||"relelem.from GLOBLOB LIGHT ang")?,
-                        ele: r.i32().chain_err(||"relelem.from GLOBLOB LIGHT ele")?,
-                        inc: inc,
-                    }
-                }
-                Self::GMSG_SKY => {
-                    use std::u16;
-                    let id1 = r.u16().chain_err(||"relelem.from GLOBLOB SKY id1")?;
-                    Glob::Sky(if id1 == u16::MAX {
-                        None
-                    } else {
-                        let id2 = r.u16().chain_err(||"relelem.from GLOBLOB SKY id2")?;
-                        if id2 == u16::MAX {
-                            Some((id1, None))
-                        } else {
-                            Some((id1, Some((id2, r.i32().chain_err(||"relelem.from GLOBLOB SKY id3")?))))
-                        }
-                    })
-                }
-                id => {
-                    return Err(format!("unknown GLOBLOB type: {}", id).into())
-                }
-            });
+            globs.push(Glob::from_buf(r, t, inc)?);
+        }
+        Ok(Globs{ globs: globs })
+    }
+
+    #[cfg(feature = "hafen")]
+    fn from_buf <R:ReadBytesSac> (r: &mut R) -> Result<Globs> {
+        let mut globs = Vec::new();
+        let inc = r.u8().chain_err(||"Globs.from inc")?;
+        loop {
+            let t = match r.strz() {
+                Ok(b) => b,
+                Err(_) => break, //TODO check error type
+            };
+            globs.push(Glob::from_buf(r, &t, inc)?);
         }
         Ok(Globs{ globs: globs })
     }
 }
 
+#[cfg(feature = "salem")]
 #[derive(Debug)]
 pub enum Glob {
     Time {
@@ -297,6 +272,82 @@ pub enum Glob {
         inc: u8,
     },
     Sky(Option<(u16, Option<(u16, i32)>)>), // (resid1,resid2,blend)
+}
+
+#[cfg(feature = "hafen")]
+#[derive(Debug)]
+pub enum Glob {
+    Tm,
+    Astro,
+    Light,
+    Sky,
+    Wth,
+}
+
+impl Glob {
+    #[cfg(feature = "salem")]
+    const GMSG_TIME: u8 = 0;
+    //const GMSG_ASTRO: u8 = 1; //TODO
+    #[cfg(feature = "salem")]
+    const GMSG_LIGHT: u8 = 2;
+    #[cfg(feature = "salem")]
+    const GMSG_SKY: u8 = 3;
+
+    #[cfg(feature = "salem")]
+    fn from_buf <R:ReadBytesSac> (r: &mut R, t: u8, inc: u8) -> Result<Glob> {
+        Ok(match t {
+            Self::GMSG_TIME => {
+                Glob::Time {
+                    time: r.i32().chain_err(||"Glob.from TIME time")?,
+                    season: r.u8().chain_err(||"Glob.from TIME season")?,
+                    inc: inc,
+                }
+            }
+            // GMSG_ASTRO =>
+            Self::GMSG_LIGHT => {
+                Glob::Light {
+                    amb: r.color().chain_err(||"Glob.from LIGHT amb")?,
+                    dif: r.color().chain_err(||"Glob.from LIGHT dif")?,
+                    spc: r.color().chain_err(||"Glob.from LIGHT spc")?,
+                    ang: r.i32().chain_err(||"Glob.from LIGHT ang")?,
+                    ele: r.i32().chain_err(||"Glob.from LIGHT ele")?,
+                    inc: inc,
+                }
+            }
+            Self::GMSG_SKY => {
+                use std::u16;
+                let id1 = r.u16().chain_err(||"Glob.from SKY id1")?;
+                Glob::Sky(if id1 == u16::MAX {
+                    None
+                } else {
+                    let id2 = r.u16().chain_err(||"Glob.from SKY id2")?;
+                    if id2 == u16::MAX {
+                        Some((id1, None))
+                    } else {
+                        Some((id1, Some((id2, r.i32().chain_err(||"Glob.from SKY id3")?))))
+                    }
+                })
+            }
+            id => {
+                return Err(format!("unknown GLOBLOB type: {}", id).into())
+            }
+        })
+    }
+
+    #[cfg(feature = "hafen")]
+    fn from_buf <R:ReadBytesSac> (r: &mut R, t: &str, inc: u8) -> Result<Glob> {
+        let _list = MsgList::from_buf(r)?;
+        Ok(match t {
+            "tm" => {Glob::Tm}
+            "astro" => {Glob::Astro}
+            "light" => {Glob::Light}
+            "sky" => {Glob::Sky}
+            "wth" => {Glob::Wth}
+            _ => {
+                return Err(format!("unknown GLOBLOB type: '{:?}'", t.as_bytes()).into())
+            }
+        })
+    }
 }
 
 #[derive(Debug)]
@@ -317,9 +368,9 @@ impl ResId {
     pub const ID: u8 = 6;
 
     fn from_buf <R:ReadBytesSac> (mut r: R) -> Result<ResId> {
-        let id = r.u16().chain_err(||"relelem.from RESID id")?;
-        let name = r.strz().chain_err(||"relelem.from RESID name")?;
-        let ver = r.u16().chain_err(||"relelem.from RESID ver")?;
+        let id = r.u16().chain_err(||"ResId.from id")?;
+        let name = r.strz().chain_err(||"ResId.from name")?;
+        let ver = r.u16().chain_err(||"ResId.from ver")?;
         Ok(ResId {
             id: id,
             name: name,

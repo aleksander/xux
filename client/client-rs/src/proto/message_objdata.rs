@@ -2,6 +2,7 @@ use errors::*;
 use std::fmt;
 use std::fmt::Formatter;
 use proto::serialization::*;
+use proto::Coord;
 
 pub struct ObjData {
     pub obj: Vec<ObjDataElem>,
@@ -19,25 +20,9 @@ impl ObjData {
     // TODO impl FromBuf for ObjData {}
     pub fn from_buf <R:ReadBytesSac> (r: &mut R) -> Result<ObjData> {
         let mut obj = Vec::new();
-        loop {
-            let fl = match r.u8() {
-                Ok(b) => b,
-                Err(_) => {
-                    break;
-                }
-            };
-            let id = r.u32()?;
-            let frame = r.i32()?;
-            let mut prop = Vec::new();
-            while let Some(p) = ObjDataElemProp::from_buf(r)? {
-                prop.push(p)
-            }
-            obj.push(ObjDataElem {
-                fl: fl,
-                id: id,
-                frame: frame,
-                prop: prop,
-            });
+        //TODO let obj = ObjDataElem::iter(r).collect::<Result<Vec<ObjDataElem>>>().chain_err(||"")?;
+        while let Some(o) = ObjDataElem::from_buf(r).chain_err(||"ObjDataElem::from_buf")? {
+            obj.push(o);
         }
         Ok(ObjData { obj: obj })
     }
@@ -62,68 +47,175 @@ pub struct ObjDataElem {
 }
 
 impl ObjDataElem {
-    //TODO fn prop(odMOVE) -> Option<odMOVE> { ... }
-    pub fn prop_odmove(&self) -> Option<(i32, i32)> {
-        for p in &self.prop {
-            if let &ObjDataElemProp::odMOVE((x, y), _) = p {
-                return Some((x, y));
+    pub fn from_buf <R:ReadBytesSac> (r: &mut R) -> Result<Option<ObjDataElem>> {
+        let fl = match r.u8() {
+            Ok(b) => b,
+            Err(_) => { //TODO check error type
+                return Ok(None);
             }
+        };
+        let id = r.u32()?;
+        let frame = r.i32()?;
+        let mut prop = Vec::new();
+        //TODO let props = ObjDataElemProp::iter(r).collect::<Result<Vec<ObjDataElemProp>>>().chain_err(||"")?;
+        while let Some(p) = ObjDataElemProp::from_buf(r).chain_err(||"ObjDataElemProp::from_buf")? {
+            prop.push(p);
         }
-        None
+        Ok(Some(ObjDataElem{
+            fl: fl,
+            id: id,
+            frame: frame,
+            prop: prop,
+        }))
     }
 }
 
-#[allow(non_camel_case_types)]
 #[derive(Debug)]
-// TODO replace with plain struct variants
 pub enum ObjDataElemProp {
-    odREM,
-    odMOVE((i32, i32), u16),
-    odRES(u16),
-    odLINBEG((i32, i32), (i32, i32), i32),
-    odLINSTEP(i32),
-    odSPEECH(u16, String),
-    odCOMPOSE(u16),
-    odDRAWOFF((i32, i32)),
-    odLUMIN((i32, i32), u16, u8),
-    odAVATAR(Vec<u16>),
-    odFOLLOW(odFOLLOW),
-    odHOMING(odHOMING),
-    odOVERLAY(u16),
-    odAUTH,
-    odHEALTH(u8),
-    odBUDDY(odBUDDY),
-    odCMPPOSE(u8, Option<Vec<u16>>, Option<(Option<Vec<u16>>, u8)>),
-    odCMPMOD(Option<Vec<Vec<u16>>>),
-    odCMPEQU(Option<Vec<(u8, String, u16, Option<(u16, u16, u16)>)>>),
-    odICON(odICON),
+    Rem,
+    Move((i32, i32), u16),
+    Res(u16),
+    Linbeg(Linbeg),
+    Linstep(Linstep),
+    Speech(u16, String),
+    Compose(u16),
+    #[cfg(feature = "salem")]
+    Drawoff(Drawoff),
+    #[cfg(feature = "hafen")]
+    Zoff(Zoff),
+    Lumin((i32, i32), u16, u8),
+    Avatar(Vec<u16>),
+    Follow(Follow),
+    Homing(Homing),
+    Overlay(u16),
+    Auth,
+    Health(u8),
+    Buddy(Buddy),
+    Cmppose(u8, Option<Vec<u16>>, Option<(Option<Vec<u16>>, u8)>),
+    Cmpmod(Option<Vec<Vec<u16>>>),
+    Cmpequ(Option<Vec<(u8, String, u16, Option<(u16, u16, u16)>)>>),
+    Icon(Icon),
+    #[cfg(feature = "hafen")]
+    Resattr(u16,Option<Vec<u8>>)
 }
 
-#[allow(non_camel_case_types)]
+#[cfg(feature = "salem")]
+#[derive(Clone,Copy,Debug)]
+pub struct Linbeg {
+    pub from: Coord,
+    pub to: Coord,
+    pub steps: i32,
+}
+
+#[cfg(feature = "hafen")]
+#[derive(Clone,Copy,Debug)]
+pub struct Linbeg {
+    pub from: Coord,
+    pub to: Coord,
+}
+
+impl Linbeg {
+    #[cfg(feature = "salem")]
+    pub fn from_buf <R:ReadBytesSac> (r: &mut R) -> Result<Linbeg> {
+        Ok(Linbeg{
+            from: (r.i32()?, r.i32()?),
+            to: (r.i32()?, r.i32()?),
+            steps: r.i32()?
+        })
+    }
+
+    #[cfg(feature = "hafen")]
+    pub fn from_buf <R:ReadBytesSac> (r: &mut R) -> Result<Linbeg> {
+        Ok(Linbeg{
+            from: (r.i32()?, r.i32()?),
+            to: (r.i32()?, r.i32()?)
+        })
+    }
+}
+
+#[cfg(feature = "salem")]
+#[derive(Clone,Copy,Debug)]
+pub struct Linstep {
+    pub step: i32
+}
+
+#[cfg(feature = "hafen")]
+#[derive(Clone,Copy,Debug)]
+pub struct Linstep {
+    pub t: f64,
+    pub e: f64,
+}
+
+impl Linstep {
+    #[cfg(feature = "salem")]
+    pub fn from_buf <R:ReadBytesSac> (r: &mut R) -> Result<Linstep> {
+        Ok(Linstep{ step: r.i32()? })
+    }
+
+    #[cfg(feature = "hafen")]
+    pub fn from_buf <R:ReadBytesSac> (r: &mut R) -> Result<Linstep> {
+        let w = r.u32()?;
+        let hex_1p_10 = 0.0009765625; // hexfloat!(0x1p-10)
+        let (t, e) =
+        if w == 0xff_ff_ff_ff {
+            (-1.0, -1.0)
+        } else if (w & 0x80000000) == 0 {
+            (w as f64 * hex_1p_10, -1.0)
+        } else {
+            let w2 = r.i32()?;
+            ((w & !0x80000000) as f64 * hex_1p_10, if w2 < 0 { -1.0 } else { w2 as f64 * hex_1p_10 })
+        };
+        Ok(Linstep{ t: t, e: e })
+    }
+}
+
+#[cfg(feature = "salem")]
+#[derive(Clone,Copy,Debug)]
+pub struct Drawoff {
+    off: Coord,
+}
+
+#[cfg(feature = "salem")]
+impl Drawoff {
+    pub fn from_buf <R:ReadBytesSac> (r: &mut R) -> Result<Drawoff> {
+        Ok(Drawoff{ off: (r.i32()?, r.i32()?) })
+    }
+}
+
+#[cfg(feature = "hafen")]
+#[derive(Clone,Copy,Debug)]
+pub struct Zoff {
+    zoff: i16,
+}
+
+#[cfg(feature = "hafen")]
+impl Zoff {
+    pub fn from_buf <R:ReadBytesSac> (r: &mut R) -> Result<Zoff> {
+        Ok(Zoff{ zoff: r.i16()? })
+    }
+}
+
 #[derive(Debug)]
-pub enum odFOLLOW {
+pub enum Follow {
     Stop,
     To(u32, u16, String),
 }
 
-#[allow(non_camel_case_types)]
 #[derive(Debug)]
-pub enum odHOMING {
+pub enum Homing {
     New((i32, i32), u16),
     Change((i32, i32), u16),
     Delete,
 }
 
-#[allow(non_camel_case_types)]
 #[derive(Debug)]
-pub enum odBUDDY {
+pub enum Buddy {
     Update(String, u8, u8),
     Delete,
 }
 
-#[allow(non_camel_case_types)]
 #[derive(Debug)]
-pub enum odICON {
+pub enum Icon {
     Set(u16),
     Del,
 }
@@ -135,7 +227,10 @@ const OD_LINBEG: u8 = 3;
 const OD_LINSTEP: u8 = 4;
 const OD_SPEECH: u8 = 5;
 const OD_COMPOSE: u8 = 6;
+#[cfg(feature = "salem")]
 const OD_DRAWOFF: u8 = 7;
+#[cfg(feature = "hafen")]
+const OD_ZOFF: u8 = 7;
 const OD_LUMIN: u8 = 8;
 const OD_AVATAR: u8 = 9;
 const OD_FOLLOW: u8 = 10;
@@ -148,17 +243,19 @@ const OD_CMPPOSE: u8 = 16;
 const OD_CMPMOD: u8 = 17;
 const OD_CMPEQU: u8 = 18;
 const OD_ICON: u8 = 19;
+#[cfg(feature = "hafen")]
+const OD_RESATTR: u8 = 20;
 const OD_END: u8 = 255;
 
 impl ObjDataElemProp {
     pub fn from_buf <R:ReadBytesSac> (r: &mut R) -> Result<Option<ObjDataElemProp>> {
-        let t = r.u8()?;
+        let t = r.u8().chain_err(||"unable to get ObjDataElemProp type")?;
         match t {
-            OD_REM => Ok(Some(ObjDataElemProp::odREM)),
+            OD_REM => Ok(Some(ObjDataElemProp::Rem)),
             OD_MOVE => {
                 let xy = (r.i32()?, r.i32()?);
                 let ia = r.u16()?;
-                Ok(Some(ObjDataElemProp::odMOVE(xy, ia)))
+                Ok(Some(ObjDataElemProp::Move(xy, ia)))
             }
             OD_RES => {
                 let mut resid = r.u16()?;
@@ -171,36 +268,28 @@ impl ObjDataElemProp {
                         tmp
                     };
                 }
-                Ok(Some(ObjDataElemProp::odRES(resid)))
+                Ok(Some(ObjDataElemProp::Res(resid)))
             }
-            OD_LINBEG => {
-                let s = (r.i32()?, r.i32()?);
-                let t = (r.i32()?, r.i32()?);
-                let c = r.i32()?;
-                Ok(Some(ObjDataElemProp::odLINBEG(s, t, c)))
-            }
-            OD_LINSTEP => {
-                let l = r.i32()?;
-                Ok(Some(ObjDataElemProp::odLINSTEP(l)))
-            }
+            OD_LINBEG => Ok(Some(ObjDataElemProp::Linbeg(Linbeg::from_buf(r).chain_err(||"Linbeg.from")?))),
+            OD_LINSTEP => Ok(Some(ObjDataElemProp::Linstep(Linstep::from_buf(r).chain_err(||"Linstep.from")?))),
             OD_SPEECH => {
                 let zo = r.u16()?;
                 let text = r.strz()?;
-                Ok(Some(ObjDataElemProp::odSPEECH(zo, text)))
+                Ok(Some(ObjDataElemProp::Speech(zo, text)))
             }
             OD_COMPOSE => {
                 let resid = r.u16()?;
-                Ok(Some(ObjDataElemProp::odCOMPOSE(resid)))
+                Ok(Some(ObjDataElemProp::Compose(resid)))
             }
-            OD_DRAWOFF => {
-                let off = (r.i32()?, r.i32()?);
-                Ok(Some(ObjDataElemProp::odDRAWOFF(off)))
-            }
+            #[cfg(feature = "salem")]
+            OD_DRAWOFF => Ok(Some(ObjDataElemProp::Drawoff(Drawoff::from_buf(r).chain_err(||"Drawoff.from")?))),
+            #[cfg(feature = "hafen")]
+            OD_ZOFF => Ok(Some(ObjDataElemProp::Zoff(Zoff::from_buf(r).chain_err(||"Zoff.from")?))),
             OD_LUMIN => {
                 let off = (r.i32()?, r.i32()?);
                 let sz = r.u16()?;
                 let str_ = r.u8()?;
-                Ok(Some(ObjDataElemProp::odLUMIN(off, sz, str_)))
+                Ok(Some(ObjDataElemProp::Lumin(off, sz, str_)))
             }
             OD_AVATAR => {
                 let mut layers = Vec::new();
@@ -211,31 +300,31 @@ impl ObjDataElemProp {
                     }
                     layers.push(layer);
                 }
-                Ok(Some(ObjDataElemProp::odAVATAR(layers)))
+                Ok(Some(ObjDataElemProp::Avatar(layers)))
             }
             OD_FOLLOW => {
                 let oid = r.u32()?;
                 if oid == 0xff_ff_ff_ff {
-                    Ok(Some(ObjDataElemProp::odFOLLOW(odFOLLOW::Stop)))
+                    Ok(Some(ObjDataElemProp::Follow(Follow::Stop)))
                 } else {
                     let xfres = r.u16()?;
                     let xfname = r.strz()?;
-                    Ok(Some(ObjDataElemProp::odFOLLOW(odFOLLOW::To(oid, xfres, xfname))))
+                    Ok(Some(ObjDataElemProp::Follow(Follow::To(oid, xfres, xfname))))
                 }
             }
             OD_HOMING => {
                 let oid = r.u32()?;
                 match oid {
-                    0xff_ff_ff_ff => Ok(Some(ObjDataElemProp::odHOMING(odHOMING::Delete))),
+                    0xff_ff_ff_ff => Ok(Some(ObjDataElemProp::Homing(Homing::Delete))),
                     0xff_ff_ff_fe => {
                         let tgtc = (r.i32()?, r.i32()?);
                         let v = r.u16()?;
-                        Ok(Some(ObjDataElemProp::odHOMING(odHOMING::Change(tgtc, v))))
+                        Ok(Some(ObjDataElemProp::Homing(Homing::Change(tgtc, v))))
                     }
                     _ => {
                         let tgtc = (r.i32()?, r.i32()?);
                         let v = r.u16()?;
-                        Ok(Some(ObjDataElemProp::odHOMING(odHOMING::New(tgtc, v))))
+                        Ok(Some(ObjDataElemProp::Homing(Homing::New(tgtc, v))))
                     }
                 }
             }
@@ -250,14 +339,14 @@ impl ObjDataElemProp {
                         tmp
                     };
                 }
-                Ok(Some(ObjDataElemProp::odOVERLAY(resid & (!0x8000))))
+                Ok(Some(ObjDataElemProp::Overlay(resid & (!0x8000))))
             }
             OD_AUTH => {
-                Ok(Some(ObjDataElemProp::odAUTH)) // Removed
+                Ok(Some(ObjDataElemProp::Auth)) // Removed
             }
             OD_HEALTH => {
                 let hp = r.u8()?;
-                Ok(Some(ObjDataElemProp::odHEALTH(hp)))
+                Ok(Some(ObjDataElemProp::Health(hp)))
             }
             OD_BUDDY => {
                 let name = r.strz()?;
@@ -265,11 +354,11 @@ impl ObjDataElemProp {
                 //          so this check is incorrect, I SUPPOSE.
                 //          MOST PROBABLY we will crash here because 2 more readings.
                 if name.is_empty() {
-                    Ok(Some(ObjDataElemProp::odBUDDY(odBUDDY::Delete)))
+                    Ok(Some(ObjDataElemProp::Buddy(Buddy::Delete)))
                 } else {
                     let group = r.u8()?;
                     let btype = r.u8()?;
-                    Ok(Some(ObjDataElemProp::odBUDDY(odBUDDY::Update(name, group, btype))))
+                    Ok(Some(ObjDataElemProp::Buddy(Buddy::Update(name, group, btype))))
                 }
             }
             OD_CMPPOSE => {
@@ -313,7 +402,7 @@ impl ObjDataElemProp {
                             let sdt_len = r.u8()? as usize;
                             let _sdt = {
                                 let mut tmp = vec![0; sdt_len];
-                                r.read_exact(&mut tmp).chain_err(||"ObjDataElemProp OVERLAY sdt2")?;
+                                r.read_exact(&mut tmp).chain_err(||"ObjDataElemProp CMPPOSE sdt2")?;
                                 tmp
                             };
                         }
@@ -328,7 +417,7 @@ impl ObjDataElemProp {
                 } else {
                     None
                 };
-                Ok(Some(ObjDataElemProp::odCMPPOSE(seq, ids1, ids2)))
+                Ok(Some(ObjDataElemProp::Cmppose(seq, ids1, ids2)))
             }
             OD_CMPMOD => {
                 let mut m = Vec::new();
@@ -339,9 +428,18 @@ impl ObjDataElemProp {
                     }
                     let mut ids = Vec::new();
                     loop {
-                        let resid = r.u16()?;
+                        let mut resid = r.u16()?;
                         if resid == 65535 {
                             break;
+                        }
+                        if (resid & 0x8000) != 0 {
+                            resid &= !0x8000;
+                            let sdt_len = r.u8()? as usize;
+                            let _sdt = {
+                                let mut tmp = vec![0; sdt_len];
+                                r.read_exact(&mut tmp).chain_err(||"ObjDataElemProp CMPMOD sdt2")?;
+                                tmp
+                            };
                         }
                         ids.push(resid);
                     }
@@ -354,7 +452,7 @@ impl ObjDataElemProp {
                 } else {
                     None
                 };
-                Ok(Some(ObjDataElemProp::odCMPMOD(mods)))
+                Ok(Some(ObjDataElemProp::Cmpmod(mods)))
             }
             OD_CMPEQU => {
                 let mut e = Vec::new();
@@ -380,20 +478,35 @@ impl ObjDataElemProp {
                 } else {
                     None
                 };
-                Ok(Some(ObjDataElemProp::odCMPEQU(equ)))
+                Ok(Some(ObjDataElemProp::Cmpequ(equ)))
             }
             OD_ICON => {
                 let resid = r.u16()?;
                 if resid == 65535 {
-                    Ok(Some(ObjDataElemProp::odICON(odICON::Del)))
+                    Ok(Some(ObjDataElemProp::Icon(Icon::Del)))
                 } else {
                     let _ifl = r.u8()?;
-                    Ok(Some(ObjDataElemProp::odICON(odICON::Set(resid))))
+                    Ok(Some(ObjDataElemProp::Icon(Icon::Set(resid))))
+                }
+            }
+            #[cfg(feature = "hafen")]
+            OD_RESATTR => {
+                let resid = r.u16()?;
+                let len = r.u8()?;
+                if len > 0 {
+                    let dat = {
+                        let mut tmp = vec![0; len as usize];
+                        r.read_exact(&mut tmp).chain_err(||"ObjDataElemProp RESATTR dat")?;
+                        tmp
+                    };
+                    Ok(Some(ObjDataElemProp::Resattr(resid, Some(dat))))
+                } else {
+                    Ok(Some(ObjDataElemProp::Resattr(resid, None)))
                 }
             }
             OD_END => Ok(None),
             _ => {
-                Ok(None) /*TODO return error*/
+                Err(format!("unknown ObjDataElemProp: {}", t).into())
             }
         }
     }

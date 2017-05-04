@@ -38,6 +38,8 @@ driver_std = []
 driver_mio = []
 ai_decl = []
 ai_lua = []
+hafen = []
+salem = []
 default = ["driver_std","ai_decl"]
 mio_lua = ["driver_mio","ai_lua"]
 

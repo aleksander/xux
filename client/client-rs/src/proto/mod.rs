@@ -23,3 +23,5 @@ pub use proto::message_mapdata::*;
 pub use proto::message_objdata::*;
 pub use proto::message_objack::*;
 pub use proto::message_close::*;
+
+pub type Coord = (i32, i32);

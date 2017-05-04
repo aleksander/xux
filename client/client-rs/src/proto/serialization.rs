@@ -36,7 +36,8 @@ pub trait ReadBytesSac : ReadBytesExt + BufRead {
     }
     fn strz(&mut self) -> Result<String> {
         let mut tmp = Vec::new();
-        self.read_until(0, &mut tmp).chain_err(||"strz read_until")?;
+        let count = self.read_until(0, &mut tmp).chain_err(||"strz read_until")?;
+        if count == 0 { return Err("unexpected EOF".into()); }
         tmp.pop();
         Ok(String::from_utf8(tmp).chain_err(||"strz from_utf8")?)
     }

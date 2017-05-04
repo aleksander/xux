@@ -13,14 +13,13 @@ use self::flate2::read::ZlibDecoder;
 
 pub type ObjID = u32;
 pub type ResID = u16;
-pub type Coord = (i32, i32);
 
 struct ObjProp {
     frame: i32,
     xy: Option<Coord>,
     resid: Option<ResID>, // TODO replace with Vec<resid> for composite objects
-    line: Option<(Coord, Coord, i32)>, // TODO replace with struct LinearMovement
-    step: Option<i32>,
+    line: Option<Linbeg>,
+    step: Option<Linstep>,
 }
 
 impl ObjProp {
@@ -36,25 +35,25 @@ impl ObjProp {
 
     fn from_obj_data_elem(ode: &ObjDataElem) -> Option<Self> {
         let mut prop = Self::new(ode.frame);
-        for p in &ode.prop {
-            match *p {
-                ObjDataElemProp::odREM => {
+        for p in ode.prop.iter() {
+            match p {
+                &ObjDataElemProp::Rem => {
                     return None;
                 }
-                ObjDataElemProp::odMOVE(xy, _) => {
+                &ObjDataElemProp::Move(xy, _) => {
                     prop.xy = Some(xy);
                 }
-                ObjDataElemProp::odRES(resid) => {
+                &ObjDataElemProp::Res(resid) => {
                     prop.resid = Some(resid);
                 }
-                ObjDataElemProp::odCOMPOSE(resid) => {
+                &ObjDataElemProp::Compose(resid) => {
                     prop.resid = Some(resid);
                 }
-                ObjDataElemProp::odLINBEG(from, to, steps) => {
-                    prop.line = Some((from, to, steps));
+                &ObjDataElemProp::Linbeg(linbeg) => {
+                    prop.line = Some(linbeg);
                 }
-                ObjDataElemProp::odLINSTEP(step) => {
-                    prop.step = Some(step);
+                &ObjDataElemProp::Linstep(linstep) => {
+                    prop.step = Some(linstep);
                 }
                 _ => {}
             }
@@ -83,6 +82,7 @@ impl Obj {
         }
     }
 
+    #[cfg(feature = "salem")]
     fn update(&mut self, prop: &ObjProp) -> bool {
 
         // FIXME consider o.frame overflow !!!
@@ -102,11 +102,11 @@ impl Obj {
             self.xy = Some(xy);
         }
 
-        if let Some((from, to, steps)) = prop.line {
+        if let Some(Linbeg{from, to, steps}) = prop.line {
             self.movement = Some(Movement::new(from, to, steps, 0));
         }
 
-        if let Some(step) = prop.step {
+        if let Some(Linstep{ step }) = prop.step {
             let movement = match self.movement {
                 Some(ref m) => {
                     if (step > 0) && (step < m.steps) {
@@ -125,6 +125,32 @@ impl Obj {
             };
             self.movement = movement;
         }
+
+        true
+    }
+
+    #[cfg(feature = "hafen")]
+    fn update(&mut self, prop: &ObjProp) -> bool {
+
+        // FIXME consider o.frame overflow !!!
+        if let Some(frame) = self.frame {
+            if frame >= prop.frame {
+                return false;
+            }
+        }
+
+        self.frame = Some(prop.frame);
+
+        if let Some(resid) = prop.resid {
+            self.resid = Some(resid);
+        }
+
+        if let Some(xy) = prop.xy {
+            self.xy = Some(xy);
+        }
+
+        //TODO update linbeg
+        //TODO update linstep
 
         true
     }
