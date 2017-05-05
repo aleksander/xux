@@ -25,3 +25,5 @@ pub use proto::message_objack::*;
 pub use proto::message_close::*;
 
 pub type Coord = (i32, i32);
+pub type Color = (u8, u8, u8, u8);
+

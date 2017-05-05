@@ -86,7 +86,10 @@ fn run() -> Result<()> {
 
     let username = args[1].clone();
     let password = args[2].clone();
+    #[cfg(feature = "salem")]
     let host = "game.salemthegame.com";
+    #[cfg(feature = "hafen")]
+    let host = "game.havenandhearth.com";
     let auth_port = 1871;
     let game_port = 1870;
 

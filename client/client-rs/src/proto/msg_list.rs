@@ -1,23 +1,22 @@
 use ::errors::*;
 use proto::serialization::*;
+use proto::{Coord, Color};
 
-#[allow(non_camel_case_types)]
 #[derive(Debug)]
-// TODO replace with plain struct variants
 pub enum MsgList {
-    tINT(i32),
-    tSTR(String),
-    tCOORD((i32, i32)),
-    tUINT8(u8),
-    tUINT16(u16),
-    tCOLOR((u8, u8, u8, u8)),
-    tTTOL(Vec<MsgList>),
-    tINT8(i8),
-    tINT16(i16),
-    tNIL,
-    tBYTES(Vec<u8>),
-    tFLOAT32(f32),
-    tFLOAT64(f64),
+    Int(i32),
+    Str(String),
+    Coord(Coord),
+    Uint8(u8),
+    Uint16(u16),
+    Color(Color),
+    Ttol(Vec<MsgList>),
+    Int8(i8),
+    Int16(i16),
+    Nil,
+    Bytes(Vec<u8>),
+    Float32(f32),
+    Float64(f64),
 }
 
 const T_END: u8 = 0;
@@ -47,7 +46,7 @@ impl FromBuf for MsgList {
                     while deep > 0 {
                         let tmp = list.remove(deep);
                         deep -= 1;
-                        list[deep].push(MsgList::tTTOL(tmp));
+                        list[deep].push(MsgList::Ttol(tmp));
                     }
                     return Ok(list.remove(0));
                 }
@@ -57,7 +56,7 @@ impl FromBuf for MsgList {
                     if deep > 0 {
                         let tmp = list.remove(deep);
                         deep -= 1;
-                        list[deep].push(MsgList::tTTOL(tmp));
+                        list[deep].push(MsgList::Ttol(tmp));
                     } else {
                         return Ok(list.remove(0));
                     }
@@ -67,31 +66,31 @@ impl FromBuf for MsgList {
                     deep += 1;
                 }
                 T_INT => {
-                    list[deep].push(MsgList::tINT(r.i32().chain_err(||"list INT")?));
+                    list[deep].push(MsgList::Int(r.i32().chain_err(||"list INT")?));
                 }
                 T_STR => {
-                    list[deep].push(MsgList::tSTR(r.strz()?));
+                    list[deep].push(MsgList::Str(r.strz()?));
                 }
                 T_COORD => {
-                    list[deep].push(MsgList::tCOORD(r.coord().chain_err(||"list COORD")?));
+                    list[deep].push(MsgList::Coord(r.coord().chain_err(||"list COORD")?));
                 }
                 T_UINT8 => {
-                    list[deep].push(MsgList::tUINT8(r.u8().chain_err(||"list UINT8")?));
+                    list[deep].push(MsgList::Uint8(r.u8().chain_err(||"list UINT8")?));
                 }
                 T_UINT16 => {
-                    list[deep].push(MsgList::tUINT16(r.u16().chain_err(||"list UINT16")?));
+                    list[deep].push(MsgList::Uint16(r.u16().chain_err(||"list UINT16")?));
                 }
                 T_COLOR => {
-                    list[deep].push(MsgList::tCOLOR(r.color().chain_err(||"list COLOR")?));
+                    list[deep].push(MsgList::Color(r.color().chain_err(||"list COLOR")?));
                 }
                 T_INT8 => {
-                    list[deep].push(MsgList::tINT8(r.i8().chain_err(||"list INT8")?));
+                    list[deep].push(MsgList::Int8(r.i8().chain_err(||"list INT8")?));
                 }
                 T_INT16 => {
-                    list[deep].push(MsgList::tINT16(r.i16().chain_err(||"list INT16")?));
+                    list[deep].push(MsgList::Int16(r.i16().chain_err(||"list INT16")?));
                 }
                 T_NIL => {
-                    list[deep].push(MsgList::tNIL);
+                    list[deep].push(MsgList::Nil);
                 }
                 T_BYTES => {
                     let len = r.u8().chain_err(||"list BYTES len")?;
@@ -99,25 +98,24 @@ impl FromBuf for MsgList {
                         let len = r.i32().chain_err(||"list BYTES len2")?;
                         if len <= 0 { return Err("MsgList.from_buf: len <= 0".into()); }
                         //TODO this magic 65535 const should be set to some adequate default (but what is adequate?)
-                        if len > 65535 { return Err("MsgList.from_buf: len > 65535".into()); }
+                        if len > 1024*1024 { return Err("MsgList.from_buf: len > MiB".into()); }
                         let mut bytes = vec![0; len as usize];
                         r.read_exact(&mut bytes).chain_err(||"list read bytes")?;
-                        list[deep].push(MsgList::tBYTES(bytes));
+                        list[deep].push(MsgList::Bytes(bytes));
                     } else {
                         let mut bytes = vec![0; len as usize];
                         r.read_exact(&mut bytes).chain_err(||"list read bytes2")?;
-                        list[deep].push(MsgList::tBYTES(bytes));
+                        list[deep].push(MsgList::Bytes(bytes));
                     }
                 }
                 T_FLOAT32 => {
-                    list[deep].push(MsgList::tFLOAT32(r.f32().chain_err(||"list FLOAT32")?));
+                    list[deep].push(MsgList::Float32(r.f32().chain_err(||"list FLOAT32")?));
                 }
                 T_FLOAT64 => {
-                    list[deep].push(MsgList::tFLOAT64(r.f64().chain_err(||"list FLOAT64")?));
+                    list[deep].push(MsgList::Float64(r.f64().chain_err(||"list FLOAT64")?));
                 }
                 _ => {
-                    info!("    !!! UNKNOWN LIST ELEMENT !!!");
-                    return Ok(list.remove(0));
+                    return Err(format!("unknown MstList type: {}", t).into());
                 }
             }
         }
@@ -137,52 +135,52 @@ impl ToBuf for [MsgList] {
 impl ToBuf for MsgList {
     fn to_buf <W:WriteBytesSac> (&self, w: &mut W) -> Result<()> {
         match *self {
-            MsgList::tINT(i) => {
+            MsgList::Int(i) => {
                 w.u8(T_INT).chain_err(||"list to_buf INT")?;
                 w.i32(i).chain_err(||"list to_buf INT value")?;
             }
-            MsgList::tSTR(ref s) => {
+            MsgList::Str(ref s) => {
                 w.u8(T_STR).chain_err(||"list to_buf STR")?;
                 w.strz(s).chain_err(||"list to_buf STR value")?;
             }
-            MsgList::tCOORD((x, y)) => {
+            MsgList::Coord((x, y)) => {
                 w.u8(T_COORD).chain_err(||"list to_buf COORD")?;
                 w.coord(x, y).chain_err(||"list to_buf COORD value")?;
             }
-            MsgList::tUINT8(u) => {
+            MsgList::Uint8(u) => {
                 w.u8(T_UINT8).chain_err(||"list to_buf UINT8")?;
                 w.u8(u).chain_err(||"list to_buf UINT8 value")?;
             }
-            MsgList::tUINT16(u) => {
+            MsgList::Uint16(u) => {
                 w.u8(T_UINT16).chain_err(||"list to_buf UINT16")?;
                 w.u16(u).chain_err(||"list to_buf UINT16 value")?;
             }
-            MsgList::tCOLOR((r, g, b, a)) => {
+            MsgList::Color((r, g, b, a)) => {
                 w.u8(T_COLOR).chain_err(||"list to_buf COLOR")?;
                 w.color(r, g, b, a).chain_err(||"list to_buf COLOR value")?;
             }
-            MsgList::tTTOL(_) => {
+            MsgList::Ttol(_) => {
                 return Err("list.to_buf is NOT implemented for TTOL".into());
             }
-            MsgList::tINT8(i) => {
+            MsgList::Int8(i) => {
                 w.u8(T_INT8).chain_err(||"list to_buf INT8")?;
                 w.i8(i).chain_err(||"list to_buf INT8 value")?;
             }
-            MsgList::tINT16(i) => {
+            MsgList::Int16(i) => {
                 w.u8(T_INT16).chain_err(||"list to_buf INT16")?;
                 w.i16(i).chain_err(||"list to_buf INT16 value")?;
             }
-            MsgList::tNIL => {
+            MsgList::Nil => {
                 w.u8(T_NIL).chain_err(||"list to_buf NIL")?;
             }
-            MsgList::tBYTES(_) => {
+            MsgList::Bytes(_) => {
                 return Err("list.to_buf is NOT implemented for BYTES".into());
             }
-            MsgList::tFLOAT32(f) => {
+            MsgList::Float32(f) => {
                 w.u8(T_FLOAT32).chain_err(||"list to_buf FLOAT32")?;
                 w.f32(f).chain_err(||"list to_buf FLOAT32 value")?;
             }
-            MsgList::tFLOAT64(f) => {
+            MsgList::Float64(f) => {
                 w.u8(T_FLOAT64).chain_err(||"list to_buf FLOAT64")?;
                 w.f64(f).chain_err(||"list to_buf FLOAT64 value")?;
             }

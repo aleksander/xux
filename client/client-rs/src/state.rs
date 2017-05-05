@@ -718,11 +718,11 @@ impl State {
                             });
         match wdg.name.as_str() {
             "gameui" => {
-                if let Some(&MsgList::tSTR(ref name)) = wdg.cargs.get(0) {
+                if let Some(&MsgList::Str(ref name)) = wdg.cargs.get(0) {
                     self.hero.name = Some(name.clone());
                     info!("HERO: name = '{:?}'", self.hero.name);
                 }
-                if let Some(&MsgList::tINT(obj)) = wdg.cargs.get(1) {
+                if let Some(&MsgList::Int(obj)) = wdg.cargs.get(1) {
                     // FIXME BUG: object ID is uint32 but here it is int32 WHY??? XXX
                     assert!(obj >= 0);
                     let id = obj as u32;
@@ -744,7 +744,7 @@ impl State {
                 }
             }
             "mapview" => {
-                if let Some(&MsgList::tCOORD(xy)) = wdg.cargs.get(0) {
+                if let Some(&MsgList::Coord(xy)) = wdg.cargs.get(0) {
                     self.origin = Some(xy);
                     info!("origin = '{:?}'", self.origin);
                 }
@@ -753,16 +753,16 @@ impl State {
                 if let Some(parent) = self.widgets.get(&(wdg.parent)) {
                     match &*parent.typ {
                         "inv" => {
-                            if let Some(&MsgList::tCOORD((x, y))) = wdg.pargs.get(0) {
-                                if let Some(&MsgList::tUINT16(id)) = wdg.cargs.get(0) {
+                            if let Some(&MsgList::Coord((x, y))) = wdg.pargs.get(0) {
+                                if let Some(&MsgList::Uint16(id)) = wdg.cargs.get(0) {
                                     self.hero.inventory.insert((x, y), id);
                                     info!("HERO: inventory: {:?}", self.hero.inventory);
                                 }
                             }
                         }
                         "epry" => {
-                            if let Some(&MsgList::tUINT8(i)) = wdg.pargs.get(0) {
-                                if let Some(&MsgList::tUINT16(id)) = wdg.cargs.get(0) {
+                            if let Some(&MsgList::Uint8(i)) = wdg.pargs.get(0) {
+                                if let Some(&MsgList::Uint16(id)) = wdg.cargs.get(0) {
                                     self.hero.equipment.insert(i, id);
                                     info!("HERO: equipment: {:?}", self.hero.equipment);
                                 }
@@ -781,7 +781,7 @@ impl State {
             match w.typ.as_str() {
                 "charlist" => {
                     if msg.name == "add" {
-                        if let Some(&MsgList::tSTR(ref name)) = msg.args.get(0) {
+                        if let Some(&MsgList::Str(ref name)) = msg.args.get(0) {
                             info!("    add char '{}'", name);
                             // FIXME rewrite without cloning
                             self.charlist.push(name.clone());
@@ -790,7 +790,7 @@ impl State {
                 }
                 "gameui" => {
                     if msg.name == "weight" {
-                        if let Some(&MsgList::tUINT16(w)) = msg.args.get(0) {
+                        if let Some(&MsgList::Uint16(w)) = msg.args.get(0) {
                             self.hero.weight = Some(w);
                             info!("HERO: weight = '{:?}'", self.hero.weight);
                         }
@@ -798,7 +798,7 @@ impl State {
                 }
                 "chr" => {
                     if msg.name == "tmexp" {
-                        if let Some(&MsgList::tINT(i)) = msg.args.get(0) {
+                        if let Some(&MsgList::Int(i)) = msg.args.get(0) {
                             self.hero.tmexp = Some(i);
                             info!("HERO: tmexp = '{:?}'", self.hero.tmexp);
                         }
@@ -806,7 +806,7 @@ impl State {
                 }
                 "ui/hrtptr:11" => {
                     if msg.name == "upd" {
-                        if let Some(&MsgList::tCOORD((x, y))) = msg.args.get(0) {
+                        if let Some(&MsgList::Coord((x, y))) = msg.args.get(0) {
                             self.hero.hearthfire = Some((x, y));
                             info!("HERO: heathfire = '{:?}'", self.hero.hearthfire);
                             //TODO send Event::Hearthfire
@@ -903,7 +903,7 @@ impl State {
         let charname = self.charlist[i].clone();
         info!("send play '{}'", charname);
         let mut args: Vec<MsgList> = Vec::new();
-        args.push(MsgList::tSTR(charname));
+        args.push(MsgList::Str(charname));
         let mut rels = Rels::new(0);
         rels.append(Rel::WDGMSG(WdgMsg::new(id, name, args)));
         self.enqueue_to_send(ClientMessage::REL(rels))
@@ -978,10 +978,10 @@ impl State {
         let id = self.widget_id("mapview", None).ok_or(ErrorKind::Msg("try to go with no mapview widget".into()))?;
         let name: String = "click".to_owned();
         let mut args: Vec<MsgList> = Vec::new();
-        args.push(MsgList::tCOORD((907, 755))); //TODO set some random coords in the center of screen
-        args.push(MsgList::tCOORD((x, y)));
-        args.push(MsgList::tINT(1));
-        args.push(MsgList::tINT(0));
+        args.push(MsgList::Coord((907, 755))); //TODO set some random coords in the center of screen
+        args.push(MsgList::Coord((x, y)));
+        args.push(MsgList::Int(1));
+        args.push(MsgList::Int(0));
         let mut rels = Rels::new(0);
         rels.append(Rel::WDGMSG(WdgMsg::new(id, name, args)));
         self.enqueue_to_send(ClientMessage::REL(rels))?;
@@ -1005,15 +1005,15 @@ impl State {
                 None => panic!("pick(): picking object is not found"),
             }
         };
-        args.push(MsgList::tCOORD((863, 832))); //TODO set some random coords in the center of screen
-        args.push(MsgList::tCOORD((obj_x - 1, obj_y + 1)));
-        args.push(MsgList::tINT(3));
-        args.push(MsgList::tINT(0));
-        args.push(MsgList::tINT(0));
-        args.push(MsgList::tINT(obj_id as i32));
-        args.push(MsgList::tCOORD((obj_x, obj_y)));
-        args.push(MsgList::tINT(0));
-        args.push(MsgList::tINT(-1));
+        args.push(MsgList::Coord((863, 832))); //TODO set some random coords in the center of screen
+        args.push(MsgList::Coord((obj_x - 1, obj_y + 1)));
+        args.push(MsgList::Int(3));
+        args.push(MsgList::Int(0));
+        args.push(MsgList::Int(0));
+        args.push(MsgList::Int(obj_id as i32));
+        args.push(MsgList::Coord((obj_x, obj_y)));
+        args.push(MsgList::Int(0));
+        args.push(MsgList::Int(-1));
         let mut rels = Rels::new(0);
         rels.append(Rel::WDGMSG(WdgMsg::new(id, name, args)));
         self.enqueue_to_send(ClientMessage::REL(rels))?;
@@ -1025,8 +1025,8 @@ impl State {
         info!("GO");
         let name = "cl".to_owned();
         let mut args = Vec::new();
-        args.push(MsgList::tINT(0));
-        args.push(MsgList::tINT(0));
+        args.push(MsgList::Int(0));
+        args.push(MsgList::Int(0));
         let mut rels = Rels::new(0);
         rels.append(Rel::WDGMSG(WdgMsg::new(wdg_id, name, args)));
         self.enqueue_to_send(ClientMessage::REL(rels))?;
