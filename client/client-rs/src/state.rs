@@ -11,12 +11,12 @@ use errors::*;
 extern crate flate2;
 use self::flate2::read::ZlibDecoder;
 
-pub type ObjID = u32;
-pub type ResID = u16;
-
 struct ObjProp {
     frame: i32,
+    #[cfg(feature = "salem")]
     xy: Option<Coord>,
+    #[cfg(feature = "hafen")]
+    xy: Option<(f64,f64)>,
     resid: Option<ResID>, // TODO replace with Vec<resid> for composite objects
     line: Option<Linbeg>,
     step: Option<Linstep>,
@@ -67,12 +67,27 @@ pub struct Obj {
     pub id: ObjID, // TODO maybe remove this? because this is also a key field in objects hashmap
     pub frame: Option<i32>,
     pub resid: Option<ResID>,
+    #[cfg(feature = "salem")]
     pub xy: Option<Coord>,
+    #[cfg(feature = "hafen")]
+    pub xy: Option<(f64,f64)>,
     pub movement: Option<Movement>,
 }
 
 impl Obj {
+    #[cfg(feature = "salem")]
     fn new(id: ObjID, frame: Option<i32>, resid: Option<ResID>, xy: Option<Coord>, movement: Option<Movement>) -> Obj {
+        Obj {
+            id: id,
+            frame: frame,
+            resid: resid,
+            xy: xy,
+            movement: movement,
+        }
+    }
+
+    #[cfg(feature = "hafen")]
+    fn new(id: ObjID, frame: Option<i32>, resid: Option<ResID>, xy: Option<(f64,f64)>, movement: Option<Movement>) -> Obj {
         Obj {
             id: id,
             frame: frame,
@@ -236,9 +251,8 @@ pub struct Surface {
 impl Surface {
     fn from_buf <R:ReadBytesSac> (r: &mut R) -> Result<Surface> {
         //let mut r = Cursor::new(buf);
-        let x = r.i32().chain_err(||"x")?;
-        let y = r.i32().chain_err(||"y")?;
-        let mmname = r.strz()?;
+        let (x,y) = r.coord().chain_err(||"surface coord")?;
+        let mmname = r.strz().chain_err(||"surface name")?;
         let mut pfl = vec![0; 256];
         loop {
             let pidx = r.u8().chain_err(||"pidx")?;
@@ -249,13 +263,14 @@ impl Surface {
         }
         let mut decoder = ZlibDecoder::new(r);
         let mut unzipped = Vec::new();
-        let _unzipped_len = decoder.read_to_end(&mut unzipped).chain_err(||"decoder.read_to_end")?;
+        let _unzipped_len = decoder.read_to_end(&mut unzipped).chain_err(||"unable to unpack")?;
         // TODO check unzipped_len
         let mut r = Cursor::new(unzipped);
 
         Self::surface(&mut r, &pfl, x, y, mmname)
     }
 
+    #[cfg(feature = "salem")]
     fn surface <R:ReadBytesSac> (r: &mut R, pfl: &[u8], x: i32, y: i32, name: String) -> Result<Surface> {
         let id = r.i64()?;
         let tiles = (0..100*100).map(|_|r.u8()).collect::<Result<Vec<u8>>>()?;
@@ -274,6 +289,57 @@ impl Surface {
                 0 => if (fl & 1) == 1 { 2 } else { 1 },
                 1 => if (fl & 1) == 1 { 8 } else { 4 },
                 2 => 16,
+                _ => { return Err(format!("ERROR: unknown plot type {}", typ).into()); }
+            };
+            for y in y1..y2+1 {
+                for x in x1..x2+1 {
+                    ol[y*100+x] |= oli;
+                }
+            }
+        }
+
+        Ok(Surface {
+            x: x,
+            y: y,
+            name: name,
+            id: id,
+            tiles: tiles,
+            z: z,
+            ol: ol
+        })
+    }
+
+    #[cfg(feature = "hafen")]
+    fn surface <R:ReadBytesSac> (r: &mut R, pfl: &[u8], x: i32, y: i32, name: String) -> Result<Surface> {
+        let id = r.i64()?;
+
+        let mut tileres = vec![("".into(),0); 256];
+        loop {
+            let tileid = r.u8().chain_err(||"tileid")?;
+            if tileid == 255 {
+                break;
+            }
+            let resname = r.strz().chain_err(||"surface tile resname")?;
+            let resver = r.u16().chain_err(||"surface tile resver")?;
+            tileres[tileid as usize] = (resname,resver);
+        }
+
+        let tiles = (0..100*100).map(|_|r.u8()).collect::<Result<Vec<u8>>>()?;
+        let z = (0..100*100).map(|_|r.i16()).collect::<Result<Vec<i16>>>()?;
+
+        let mut ol = vec![0; 100*100];
+        loop {
+            let pidx = r.u8()?;
+            if pidx == 255 { break; }
+            let fl = pfl[pidx as usize];
+            let typ = r.u8()?;
+            let (x1,y1) = (r.u8()? as usize, r.u8()? as usize);
+            let (x2,y2) = (r.u8()? as usize, r.u8()? as usize);
+            //info!("#### {} ({},{}) - ({},{})", typ, x1, y1, x2, y2);
+            let oli = match typ {
+                0 => if (fl & 1) == 1 { 2 } else { 1 },
+                1 => if (fl & 1) == 1 { 8 } else { 4 },
+                2 => if (fl & 1) == 1 { 32 } else { 16 },
                 _ => { return Err(format!("ERROR: unknown plot type {}", typ).into()); }
             };
             for y in y1..y2+1 {
@@ -360,7 +426,10 @@ impl Map {
 
 pub enum Event {
     Grid(Coord),
+    #[cfg(feature = "salem")]
     Obj(ObjID, Coord, ResID),
+    #[cfg(feature = "hafen")]
+    Obj(ObjID, (f64,f64), ResID),
     ObjRemove(ObjID),
     Res(ResID, String),
     Hero,
@@ -973,13 +1042,14 @@ impl State {
     //     return ret;
     // }
 
-    pub fn go(&mut self, x: i32, y: i32) -> Result<()> /*TODO Option<Error>*/ {
-        info!("GO {} {}", x, y);
+    #[cfg(feature = "salem")]
+    pub fn go(&mut self, xy: Coord) -> Result<()> {
+        info!("GO ({}, {})", xy.0, xy.1);
         let id = self.widget_id("mapview", None).ok_or(ErrorKind::Msg("try to go with no mapview widget".into()))?;
         let name: String = "click".to_owned();
         let mut args: Vec<MsgList> = Vec::new();
         args.push(MsgList::Coord((907, 755))); //TODO set some random coords in the center of screen
-        args.push(MsgList::Coord((x, y)));
+        args.push(MsgList::Coord(xy));
         args.push(MsgList::Int(1));
         args.push(MsgList::Int(0));
         let mut rels = Rels::new(0);
@@ -988,7 +1058,23 @@ impl State {
         Ok(())
     }
 
-    #[allow(dead_code)]
+    #[cfg(feature = "hafen")]
+    pub fn go(&mut self, (x,y): (f64,f64)) -> Result<()> {
+        info!("GO ({}, {})", x, y);
+        let id = self.widget_id("mapview", None).ok_or(ErrorKind::Msg("try to go with no mapview widget".into()))?;
+        let name: String = "click".to_owned();
+        let mut args: Vec<MsgList> = Vec::new();
+        args.push(MsgList::Coord((907, 755))); //TODO set some random coords in the center of screen
+        args.push(MsgList::Coord(((x / POSRES) as i32, (y / POSRES) as i32)));
+        args.push(MsgList::Int(1));
+        args.push(MsgList::Int(0));
+        let mut rels = Rels::new(0);
+        rels.append(Rel::WDGMSG(WdgMsg::new(id, name, args)));
+        self.enqueue_to_send(ClientMessage::REL(rels))?;
+        Ok(())
+    }
+
+    #[cfg(feature = "salem")]
     pub fn pick(&mut self, obj_id: u32) -> Result<()> {
         info!("PICK");
         let id = self.widget_id("mapview", None).expect("mapview widget is not found");
@@ -1020,7 +1106,6 @@ impl State {
         Ok(())
     }
 
-    #[allow(dead_code)]
     pub fn choose_pick(&mut self, wdg_id: u16) -> Result<()> {
         info!("GO");
         let name = "cl".to_owned();
@@ -1036,7 +1121,16 @@ impl State {
     // TODO fn grid(Coord) {...}, fn xy(Grid) {...}
     //     and then we can do: hero.grid().xy();
 
+    #[cfg(feature = "salem")]
     pub fn hero_xy(&self) -> Option<Coord> {
+        match self.hero.obj {
+            Some(ref hero) => hero.xy,
+            None => None,
+        }
+    }
+
+    #[cfg(feature = "hafen")]
+    pub fn hero_xy(&self) -> Option<(f64,f64)> {
         match self.hero.obj {
             Some(ref hero) => hero.xy,
             None => None,
@@ -1094,6 +1188,7 @@ impl State {
     }
 }
 
+#[cfg(feature = "salem")]
 pub fn grid((x, y): Coord) -> Coord {
     let mut gx = x / 1100;
     if x < 0 {
@@ -1101,6 +1196,19 @@ pub fn grid((x, y): Coord) -> Coord {
     }
     let mut gy = y / 1100;
     if y < 0 {
+        gy -= 1;
+    }
+    (gx, gy)
+}
+
+#[cfg(feature = "hafen")]
+pub fn grid((x, y): (f64,f64)) -> Coord {
+    let mut gx = (x / 1100.0) as i32;
+    if x < 0.0 {
+        gx -= 1;
+    }
+    let mut gy = (y / 1100.0) as i32;
+    if y < 0.0 {
         gy -= 1;
     }
     (gx, gy)

@@ -25,5 +25,16 @@ pub use proto::message_objack::*;
 pub use proto::message_close::*;
 
 pub type Coord = (i32, i32);
+//TODO
+//#[cfg(feature = "salem")]
+//ObjXY = (i32,i32)
+//GridXY = (i32,i32)
+//#[cfg(feature = "hafen")]
+//ObjXY = (f64,f64)
+//GridXY = (i32,i32)
 pub type Color = (u8, u8, u8, u8);
+pub type ObjID = u32;
+pub type ResID = u16;
+
+pub const POSRES: f64 = 1.0 / 1024.0 * 11.0;
 

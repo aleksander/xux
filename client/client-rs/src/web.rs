@@ -66,7 +66,10 @@ fn _responce(state: &State, buf: &str) -> Option<String> {
             };
             let (x, y) = match o.xy {
                 Some(xy) => xy,
+                #[cfg(feature = "salem")]
                 None => (0, 0),
+                #[cfg(feature = "hafen")]
+                None => (0.0, 0.0),
             };
             let resid = match o.resid {
                 Some(resid) => resid,
@@ -124,7 +127,10 @@ fn _responce(state: &State, buf: &str) -> Option<String> {
             };
             let (x, y) = match o.xy {
                 Some(xy) => xy,
+                #[cfg(feature = "salem")]
                 None => (0, 0),
+                #[cfg(feature = "hafen")]
+                None => (0.0, 0.0),
             };
             body = body + &format!("{{\"x\":{},\"y\":{},\"resid\":{},\"resname\":\"{}\"}},", x, y, resid, resname);
         }

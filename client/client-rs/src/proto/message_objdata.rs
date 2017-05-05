@@ -2,7 +2,8 @@ use errors::*;
 use std::fmt;
 use std::fmt::Formatter;
 use proto::serialization::*;
-use proto::Coord;
+use proto::{Coord, POSRES};
+use std::f64::consts::PI;
 
 pub struct ObjData {
     pub obj: Vec<ObjDataElem>,
@@ -73,7 +74,10 @@ impl ObjDataElem {
 #[derive(Debug)]
 pub enum ObjDataElemProp {
     Rem,
+    #[cfg(feature = "salem")]
     Move((i32, i32), u16),
+    #[cfg(feature = "hafen")]
+    Move((f64, f64), f64),
     Res(u16),
     Linbeg(Linbeg),
     Linstep(Linstep),
@@ -252,9 +256,16 @@ impl ObjDataElemProp {
         let t = r.u8().chain_err(||"unable to get ObjDataElemProp type")?;
         match t {
             OD_REM => Ok(Some(ObjDataElemProp::Rem)),
+            #[cfg(feature = "salem")]
             OD_MOVE => {
                 let xy = (r.i32()?, r.i32()?);
                 let ia = r.u16()?;
+                Ok(Some(ObjDataElemProp::Move(xy, ia)))
+            }
+            #[cfg(feature = "hafen")]
+            OD_MOVE => {
+                let xy = (r.i32()? as f64 * POSRES, r.i32()? as f64 * POSRES);
+                let ia = (r.u16()? as f64 / 65536.0) * PI * 2.0;
                 Ok(Some(ObjDataElemProp::Move(xy, ia)))
             }
             OD_RES => {

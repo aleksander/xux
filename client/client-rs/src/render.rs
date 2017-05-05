@@ -4,14 +4,21 @@ use std::thread;
 use driver;
 use ncurses::*;
 use deque::{self, Stolen};
+use proto::*;
 
 #[derive(Debug)]
 pub enum Event {
     Grid(i32, i32, Vec<u8>, Vec<i16>, Vec<u8>),
-    Obj(u32, (i32, i32), u16),
-    ObjRemove(u32),
-    Res(u16, String),
-    Hero((i32, i32)),
+    #[cfg(feature = "salem")]
+    Obj(ObjID, Coord, ResID),
+    #[cfg(feature = "hafen")]
+    Obj(ObjID, (f64,f64), ResID),
+    ObjRemove(ObjID),
+    Res(ResID, String),
+    #[cfg(feature = "salem")]
+    Hero(Coord),
+    #[cfg(feature = "hafen")]
+    Hero((f64,f64)),
     // NewObj(i32,i32),
     // UpdObj(...),
     // AI(...ai desigions...),
@@ -147,7 +154,10 @@ impl Render {
                     let mut objects = BTreeMap::new();
                     let mut zoom = 1.0;
                     let mut dragging = false;
+                    #[cfg(feature = "salem")]
                     let mut hero = (0,0);
+                    #[cfg(feature = "hafen")]
+                    let mut hero = (0.0,0.0);
                     let mut grids = BTreeMap::new();
                     let mut delta_height = 0;
                     let mut command_line = false;
@@ -207,15 +217,24 @@ impl Render {
                                                                 } else {
                                                                     [0.6,0.0,0.0,0.5]
                                                                 };
+                                                            #[cfg(feature = "salem")]
                                                             rectangle(
                                                                 color,
                                                                 [(gridx*1100+(x*11) as i32-ox) as f64,
                                                                  (gridy*1100+(y*11) as i32-oy) as f64,
                                                                  11.0, 11.0],
                                                             t, g);
+                                                            //#[cfg(feature = "hafen")]
+                                                            //rectangle(
+                                                            //    color,
+                                                            //    [(gridx*1100+(x*11) as i32) as f64 - ox,
+                                                            //     (gridy*1100+(y*11) as i32) as f64 - oy,
+                                                            //     11.0, 11.0],
+                                                            //t, g);
                                                         }
                                                     }
                                                 }
+                                                #[cfg(feature = "salem")]
                                                 for y in 0..99 {
                                                     for x in 0..99 {
                                                         use shift_to_unsigned::ShiftToUnsigned;
@@ -240,15 +259,51 @@ impl Render {
                                                         }
                                                     }
                                                 }
+                                                #[cfg(feature = "hafen")]
+                                                for y in 0..99 {
+                                                    for x in 0..99 {
+                                                        use shift_to_unsigned::ShiftToUnsigned;
+
+                                                        let i = y*100+x;
+                                                        let z = heights[i].shift_to_unsigned();
+                                                        let zx = heights[i+1].shift_to_unsigned();
+                                                        let zy = heights[i+100].shift_to_unsigned();
+                                                        let dx = if z > zx { z - zx } else { zx - z };
+                                                        let dy = if z > zy { z - zy } else { zy - z };
+                                                        if dx > delta_height && dy > delta_height {
+                                                            let lx = (gridx * 1100 + (x * 11) as i32) as f64 - ox;
+                                                            let ly = (gridy * 1100 + (y * 11) as i32) as f64 - oy;
+                                                            let lcolor = [0.3, 0.3, 0.3, 1.0];
+                                                            let lsize = 1.0 / zoom;
+                                                            if dx > delta_height {
+                                                                line(lcolor, lsize, [lx, ly, lx + 11.0, ly], t, g);
+                                                            }
+                                                            if dy > delta_height {
+                                                                line(lcolor, lsize, [lx, ly, lx, ly + 11.0], t, g);
+                                                            }
+                                                        }
+                                                    }
+                                                }
                                             }
                                         }
 
                                         for &((x,y),resid) in objects.values() {
                                             let (cx,cy) = (x-ox,y-oy);
+                                            #[cfg(feature = "salem")]
+                                            //FIXME check res_name=="*claim" but not ID==2951
                                             rectangle(if resid == 2951 {[1.0, 0.0, 0.0, 1.0]} else {[1.0, 1.0, 1.0, 1.0]}, [(cx - 2) as f64, (cy - 2) as f64, 5.0, 5.0], t, g);
+                                            #[cfg(feature = "hafen")]
+                                            rectangle([1.0, 1.0, 1.0, 1.0], [cx - 2.0, cy - 2.0, 5.0, 5.0], t, g);
                                         }
+                                        #[cfg(feature = "salem")]
                                         rectangle([0.2, 0.2, 1.0, 1.0], [(hero.0-ox-2) as f64, (hero.1-oy-2) as f64, 5.0, 5.0], t, g);
+                                        #[cfg(feature = "salem")]
                                         rectangle([1.0, 1.0, 1.0, 1.0], [(hero.0-ox) as f64, (hero.1-oy) as f64, 1.0, 1.0], t, g);
+
+                                        #[cfg(feature = "hafen")]
+                                        rectangle([0.2, 0.2, 1.0, 1.0], [hero.0-ox-2.0, hero.1-oy-2.0, 5.0, 5.0], t, g);
+                                        #[cfg(feature = "hafen")]
+                                        rectangle([1.0, 1.0, 1.0, 1.0], [hero.0-ox, hero.1-oy, 1.0, 1.0], t, g);
 
                                         if show_objtypes {
                                             let mut objtypes = BTreeMap::new();
@@ -282,9 +337,16 @@ impl Render {
                             }
                             Input::Press(Button::Mouse(MouseButton::Left)) => dragging = true,
                             Input::Release(Button::Mouse(MouseButton::Left)) => dragging = false,
+                            #[cfg(feature = "salem")]
                             Input::Move(Motion::MouseRelative(x,y)) => if dragging {
                                 if let Some((ox,oy)) = origin {
                                     origin = Some((ox - (x / zoom) as i32, oy - (y / zoom) as i32));
+                                }
+                            },
+                            #[cfg(feature = "hafen")]
+                            Input::Move(Motion::MouseRelative(x,y)) => if dragging {
+                                if let Some((ox,oy)) = origin {
+                                    origin = Some((ox - (x / zoom), oy - (y / zoom)));
                                 }
                             },
                             Input::Move(Motion::MouseScroll(_,y)) => zoom *= if y > 0.0 { 1.05 } else { 0.95 },
