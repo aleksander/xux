@@ -1,15 +1,16 @@
 # Salem and Hafen alternative client and tools #
 
 This repo contains:
-- Two-in-one client for:
-  - Hafen (havenandhearth.com) MMOG
-  - Salem (salemthegame.com) MMOG
-- stapler tool to staple map tiles to one big picture
+
+* Two-in-one client for:
+    * Hafen (havenandhearth.com) MMOG
+    * Salem (salemthegame.com) MMOG
+* stapler tool to staple map tiles to one big picture
 
 ## Prerequisites ##
 
-- Rust compiler
-- Cargo package manager
+* Rust compiler
+* Cargo package manager
 
 ## Building and running ##
 
