@@ -1,11 +1,18 @@
-# Salem alternative client. #
+# Salem (salemthegame.com) and "Hafen" (havenandhearth.com) MMORPGs alternative client #
 
-The purpose is to implement console client for "Salem" (salemthegame.com) and "Haven and Hearth" (havenandhearth.com) MMORPGs with strong automation capabilities done by scripting.
+## Prerequisites ##
 
-# Building and running #
+- Rust compiler
+- Cargo package manager
 
+## Building and running ##
+
+To build and run Salem flavored version do:
 ```
-cd client/client-rs
-cargo build --release
-cargo run --release --bin sac -- [USERNAME] [PASSWORD]
+cargo run --release --features salem --bin xux -- [USERNAME] [PASSWORD]
+```
+
+To build and run Hafen flavored version do:
+```
+cargo run --release --features hafen --bin xux -- [USERNAME] [PASSWORD]
 ```

@@ -2,16 +2,16 @@ extern crate chrono;
 #[macro_use]
 extern crate log;
 extern crate fern;
-extern crate sac;
+extern crate xux;
 
 use std::process;
 
-use sac::errors::*;
-use sac::ai::Ai;
-use sac::ai_decl::AiDecl;
-use sac::driver_std::DriverStd;
-use sac::render::{Render, RenderKind};
-use sac::client::Client;
+use xux::errors::*;
+use xux::ai::Ai;
+use xux::ai_decl::AiDecl;
+use xux::driver_std::DriverStd;
+use xux::render::{Render, RenderKind};
+use xux::client::Client;
 
 // TODO
 // extern crate nix;
@@ -61,7 +61,7 @@ fn run() -> Result<()> {
         */
         .level(log::LogLevelFilter::Debug)
         .chain(std::io::stdout())
-        .chain(fern::log_file("sac.log").chain_err(||"unable to create log file")?)
+        .chain(fern::log_file("xux.log").chain_err(||"unable to create log file")?)
         .apply().chain_err(||"unable to create log config")?;
 
     trace!("Starting...");
@@ -96,7 +96,7 @@ fn run() -> Result<()> {
 
     // run::<DriverMio,AiLua>(ip, username, password);
     //run(host, username, password);
-    let (login, cookie) = sac::client::authorize(host, auth_port, username, password).chain_err(||"authorization failed")?;
+    let (login, cookie) = xux::client::authorize(host, auth_port, username, password).chain_err(||"authorization failed")?;
 
     let mut ai = AiDecl::new();
     ai.init();

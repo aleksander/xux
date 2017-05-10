@@ -1,8 +1,8 @@
-extern crate sac;
+extern crate xux;
 
 fn go(data: &[u8]) {
     use std::io::Cursor;
-    use sac::proto::message::*;
+    use xux::proto::message::*;
     // fuzzed code goes here
     let mut r = Cursor::new(data);
     println!("{:?}", ServerMessage::from_buf(&mut r));

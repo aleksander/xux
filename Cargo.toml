@@ -1,9 +1,9 @@
 [package]
 
-name = "sac"
-version = "0.0.0"
+name = "xux"
+version = "0.1.0"
 authors = ["Aleksander Usov <aleksander.usov@gmail.com>"]
-description = "Salem Alternative Client"
+description = "Salem and Hafen alternative client"
 
 [dependencies]
 rustc-serialize = "*"
