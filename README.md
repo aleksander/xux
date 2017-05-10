@@ -2,8 +2,8 @@
 
 This repo contains:
 - Two-in-one client for:
- - Hafen (havenandhearth.com) MMOG
- - Salem (salemthegame.com) MMOG
+  - Hafen (havenandhearth.com) MMOG
+  - Salem (salemthegame.com) MMOG
 - stapler tool to staple map tiles to one big picture
 
 ## Prerequisites ##
