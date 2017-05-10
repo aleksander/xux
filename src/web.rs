@@ -1,5 +1,6 @@
 use state::State;
 use std::str;
+use proto::ObjXY;
 
 pub fn responce(buf: &[u8], state: &State) -> String {
     let buf = str::from_utf8(buf).expect("responce.from_utf8");
@@ -64,8 +65,8 @@ fn _responce(state: &State, buf: &str) -> Option<String> {
                 }
                 None => "null",
             };
-            let (x, y) = match o.xy {
-                Some(xy) => xy,
+            let (x,y) = match o.xy {
+                Some(ObjXY(x,y)) => (x,y),
                 #[cfg(feature = "salem")]
                 None => (0, 0),
                 #[cfg(feature = "hafen")]
@@ -125,8 +126,8 @@ fn _responce(state: &State, buf: &str) -> Option<String> {
                 }
                 None => (0, "null"),
             };
-            let (x, y) = match o.xy {
-                Some(xy) => xy,
+            let (x,y) = match o.xy {
+                Some(ObjXY(x,y)) => (x,y),
                 #[cfg(feature = "salem")]
                 None => (0, 0),
                 #[cfg(feature = "hafen")]

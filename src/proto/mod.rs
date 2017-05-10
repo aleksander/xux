@@ -25,12 +25,65 @@ pub use proto::message_objack::*;
 pub use proto::message_close::*;
 
 #[cfg(feature = "salem")]
-pub type ObjXY = (i32,i32);
+#[derive(Debug,Clone,Copy)]
+pub struct ObjXY(pub i32, pub i32);
 #[cfg(feature = "hafen")]
-pub type ObjXY = (f64,f64);
+#[derive(Debug,Clone,Copy)]
+pub struct ObjXY(pub f64, pub f64);
+
+impl ObjXY {
+    #[cfg(feature = "salem")]
+    pub fn new() -> ObjXY {
+        ObjXY(0, 0)
+    }
+
+    #[cfg(feature = "hafen")]
+    pub fn new() -> ObjXY {
+        ObjXY(0.0, 0.0)
+    }
+
+    #[cfg(feature = "salem")]
+    pub fn grid(self) -> GridXY {
+        let gx = self.0 / 1100;
+        let gy = self.1 / 1100;
+        (if self.0 < 0 { gx - 1 } else { gx }, if self.1 < 0 { gy - 1 } else { gy })
+    }
+
+    #[cfg(feature = "hafen")]
+    pub fn grid(self) -> GridXY {
+        let gx = (self.0 / 1100.0) as i32;
+        let gy = (self.1 / 1100.0) as i32;
+        (if self.0 < 0.0 { gx - 1 } else { gx }, if self.1 < 0.0 { gy - 1 } else { gy })
+    }
+}
+
+impl From<(i32,i32)> for ObjXY {
+    #[cfg(feature = "salem")]
+    fn from((x,y): (i32,i32)) -> Self {
+        ObjXY(x,y)
+    }
+
+    #[cfg(feature = "hafen")]
+    fn from((x,y): (i32,i32)) -> Self {
+        ObjXY(x as f64 * POSRES,y as f64 * POSRES)
+    }
+}
+
+impl Into<(i32,i32)> for ObjXY {
+    #[cfg(feature = "salem")]
+    fn into(self) -> (i32,i32) {
+        (self.0, self.1)
+    }
+
+    #[cfg(feature = "hafen")]
+    fn into(self) -> (i32,i32) {
+        ((self.0 / POSRES) as i32, (self.1 / POSRES) as i32)
+    }
+}
 pub type GridXY = (i32,i32);
 pub type Color = (u8, u8, u8, u8);
 pub type ObjID = u32;
 pub type ResID = u16;
 
 pub const POSRES: f64 = 1.0 / 1024.0 * 11.0;
+

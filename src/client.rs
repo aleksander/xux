@@ -119,6 +119,7 @@ impl<'a, D: Driver, A: Ai> Client<'a, D, A> {
     fn dispatch_single_event(&mut self) -> Result<()> {
         use driver;
         use web;
+        use proto::ObjXY;
 
         let event = self.driver.event().chain_err(||"unable to get event")?;
         match event {
@@ -138,20 +139,20 @@ impl<'a, D: Driver, A: Ai> Client<'a, D, A> {
             #[cfg(feature = "salem")]
             driver::Event::Render(re) => {
                 match re {
-                    driver::RenderEvent::Up    => if let Some((x,y)) = self.state.hero_xy() { self.state.go((x,y-100)).chain_err(||"unable to go Up")?; },
-                    driver::RenderEvent::Down  => if let Some((x,y)) = self.state.hero_xy() { self.state.go((x,y+100)).chain_err(||"unable to go Down")?; },
-                    driver::RenderEvent::Left  => if let Some((x,y)) = self.state.hero_xy() { self.state.go((x-100,y)).chain_err(||"unable to go Left")?; },
-                    driver::RenderEvent::Right => if let Some((x,y)) = self.state.hero_xy() { self.state.go((x+100,y)).chain_err(||"unable to go Right")?; },
+                    driver::RenderEvent::Up    => if let Some(ObjXY(x,y)) = self.state.hero_xy() { self.state.go(ObjXY(x,y-100)).chain_err(||"unable to go Up")?; },
+                    driver::RenderEvent::Down  => if let Some(ObjXY(x,y)) = self.state.hero_xy() { self.state.go(ObjXY(x,y+100)).chain_err(||"unable to go Down")?; },
+                    driver::RenderEvent::Left  => if let Some(ObjXY(x,y)) = self.state.hero_xy() { self.state.go(ObjXY(x-100,y)).chain_err(||"unable to go Left")?; },
+                    driver::RenderEvent::Right => if let Some(ObjXY(x,y)) = self.state.hero_xy() { self.state.go(ObjXY(x+100,y)).chain_err(||"unable to go Right")?; },
                     driver::RenderEvent::Quit  => self.state.close()?,
                 }
             }
             #[cfg(feature = "hafen")]
             driver::Event::Render(re) => {
                 match re {
-                    driver::RenderEvent::Up    => if let Some((x,y)) = self.state.hero_xy() { self.state.go((x,y-100.0)).chain_err(||"unable to go Up")?; },
-                    driver::RenderEvent::Down  => if let Some((x,y)) = self.state.hero_xy() { self.state.go((x,y+100.0)).chain_err(||"unable to go Down")?; },
-                    driver::RenderEvent::Left  => if let Some((x,y)) = self.state.hero_xy() { self.state.go((x-100.0,y)).chain_err(||"unable to go Left")?; },
-                    driver::RenderEvent::Right => if let Some((x,y)) = self.state.hero_xy() { self.state.go((x+100.0,y)).chain_err(||"unable to go Right")?; },
+                    driver::RenderEvent::Up    => if let Some(ObjXY(x,y)) = self.state.hero_xy() { self.state.go(ObjXY(x,y-100.0)).chain_err(||"unable to go Up")?; },
+                    driver::RenderEvent::Down  => if let Some(ObjXY(x,y)) = self.state.hero_xy() { self.state.go(ObjXY(x,y+100.0)).chain_err(||"unable to go Down")?; },
+                    driver::RenderEvent::Left  => if let Some(ObjXY(x,y)) = self.state.hero_xy() { self.state.go(ObjXY(x-100.0,y)).chain_err(||"unable to go Left")?; },
+                    driver::RenderEvent::Right => if let Some(ObjXY(x,y)) = self.state.hero_xy() { self.state.go(ObjXY(x+100.0,y)).chain_err(||"unable to go Right")?; },
                     driver::RenderEvent::Quit  => self.state.close()?,
                 }
             }

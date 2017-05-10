@@ -408,10 +408,7 @@ impl Map {
 
 pub enum Event {
     Grid(GridXY),
-    #[cfg(feature = "salem")]
     Obj(ObjID, ObjXY, ResID),
-    #[cfg(feature = "hafen")]
-    Obj(ObjID, (f64,f64), ResID),
     ObjRemove(ObjID),
     Res(ResID, String),
     Hero,
@@ -1030,10 +1027,7 @@ impl State {
         let name: String = "click".to_owned();
         let mut args: Vec<List> = Vec::new();
         args.push(List::Coord((907, 755))); //TODO set some random coords in the center of screen
-        #[cfg(feature = "salem")]
-        args.push(List::Coord(xy));
-        #[cfg(feature = "hafen")]
-        args.push(List::Coord(((xy.0 / POSRES) as i32, (xy.1 / POSRES) as i32)));
+        args.push(List::Coord(xy.into()));
         args.push(List::Int(1));
         args.push(List::Int(0));
         let mut rels = Rels::new(0);
@@ -1042,17 +1036,16 @@ impl State {
         Ok(())
     }
 
-    #[cfg(feature = "salem")]
     pub fn pick(&mut self, obj_id: u32) -> Result<()> {
         info!("PICK");
         let id = self.widget_id("mapview", None).expect("mapview widget is not found");
         let name = "click".to_owned();
         let mut args = Vec::new();
-        let (obj_x, obj_y) = {
+        let xy = {
             match self.objects.get(&obj_id) {
                 Some(obj) => {
                     match obj.xy {
-                        Some(xy) => xy,
+                        Some(xy) => xy.into(),
                         None => panic!("pick(): picking object has no XY"),
                     }
                 }
@@ -1060,12 +1053,12 @@ impl State {
             }
         };
         args.push(List::Coord((863, 832))); //TODO set some random coords in the center of screen
-        args.push(List::Coord((obj_x - 1, obj_y + 1)));
+        args.push(List::Coord(xy));
         args.push(List::Int(3));
         args.push(List::Int(0));
         args.push(List::Int(0));
         args.push(List::Int(obj_id as i32));
-        args.push(List::Coord((obj_x, obj_y)));
+        args.push(List::Coord(xy));
         args.push(List::Int(0));
         args.push(List::Int(-1));
         let mut rels = Rels::new(0);
@@ -1098,7 +1091,7 @@ impl State {
 
     pub fn hero_grid_xy(&self) -> Option<GridXY> {
         match self.hero_xy() {
-            Some(xy) => Some(grid(xy)),
+            Some(xy) => Some(xy.grid()),
             None => None,
         }
     }
@@ -1145,32 +1138,6 @@ impl State {
     pub fn next_event(&mut self) -> Option<Event> {
         self.events.pop_back()
     }
-}
-
-#[cfg(feature = "salem")]
-pub fn grid((x, y): ObjXY) -> GridXY {
-    let mut gx = x / 1100;
-    if x < 0 {
-        gx -= 1;
-    }
-    let mut gy = y / 1100;
-    if y < 0 {
-        gy -= 1;
-    }
-    (gx, gy)
-}
-
-#[cfg(feature = "hafen")]
-pub fn grid((x, y): ObjXY) -> GridXY {
-    let mut gx = (x / 1100.0) as i32;
-    if x < 0.0 {
-        gx -= 1;
-    }
-    let mut gy = (y / 1100.0) as i32;
-    if y < 0.0 {
-        gy -= 1;
-    }
-    (gx, gy)
 }
 
 // CLIENT

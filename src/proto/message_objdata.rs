@@ -4,8 +4,6 @@ use std::fmt::Formatter;
 use proto::serialization::*;
 use proto::ObjXY;
 #[cfg(feature = "hafen")]
-use proto::POSRES;
-#[cfg(feature = "hafen")]
 use std::f64::consts::PI;
 
 pub struct ObjData {
@@ -78,9 +76,9 @@ impl ObjDataElem {
 pub enum ObjDataElemProp {
     Rem,
     #[cfg(feature = "salem")]
-    Move((i32, i32), u16),
+    Move(ObjXY, u16), //TODO Move(ObjXY, Rotation)
     #[cfg(feature = "hafen")]
-    Move((f64, f64), f64),
+    Move(ObjXY, f64),
     Res(u16),
     Linbeg(Linbeg),
     Linstep(Linstep),
@@ -114,28 +112,14 @@ pub struct Linbeg {
     pub steps: i32,
 }
 
-//#[cfg(feature = "hafen")]
-//#[derive(Clone,Copy,Debug)]
-//pub struct Linbeg {
-//    pub from: ObjXY,
-//    pub to: ObjXY,
-//}
-
 impl Linbeg {
-    #[cfg(feature = "salem")]
+    //#[cfg(feature = "salem")]
     pub fn from_buf <R:ReadBytesSac> (r: &mut R) -> Result<Linbeg> {
         Ok(Linbeg{
-            from: (r.i32()?, r.i32()?),
-            to: (r.i32()?, r.i32()?),
+            from: (r.i32()?, r.i32()?).into(),
+            to: (r.i32()?, r.i32()?).into(),
+            #[cfg(feature = "salem")]
             steps: r.i32()?
-        })
-    }
-
-    #[cfg(feature = "hafen")]
-    pub fn from_buf <R:ReadBytesSac> (r: &mut R) -> Result<Linbeg> {
-        Ok(Linbeg{
-            from: (r.i32()? as f64 * POSRES, r.i32()? as f64 * POSRES),
-            to: (r.i32()? as f64 * POSRES, r.i32()? as f64 * POSRES)
         })
     }
 }
@@ -185,7 +169,7 @@ pub struct Drawoff {
 #[cfg(feature = "salem")]
 impl Drawoff {
     pub fn from_buf <R:ReadBytesSac> (r: &mut R) -> Result<Drawoff> {
-        Ok(Drawoff{ off: (r.i32()?, r.i32()?) })
+        Ok(Drawoff{ off: (r.i32()?, r.i32()?).into() })
     }
 }
 
@@ -263,13 +247,13 @@ impl ObjDataElemProp {
             OD_MOVE => {
                 let xy = (r.i32()?, r.i32()?);
                 let ia = r.u16()?;
-                Ok(Some(ObjDataElemProp::Move(xy, ia)))
+                Ok(Some(ObjDataElemProp::Move(xy.into(), ia))) //TODO Rotation.into()
             }
             #[cfg(feature = "hafen")]
             OD_MOVE => {
-                let xy = (r.i32()? as f64 * POSRES, r.i32()? as f64 * POSRES);
+                let xy = (r.i32()?, r.i32()?);
                 let ia = (r.u16()? as f64 / 65536.0) * PI * 2.0;
-                Ok(Some(ObjDataElemProp::Move(xy, ia)))
+                Ok(Some(ObjDataElemProp::Move(xy.into(), ia))) //TODO Rotation.into()
             }
             OD_RES => {
                 let mut resid = r.u16()?;

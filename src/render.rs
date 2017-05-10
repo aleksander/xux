@@ -95,11 +95,11 @@ impl Render {
                                     Event::Grid(x, y, _tiles, _z, _ol) => {
                                         last_event = format!("GRID: {} {}", x, y);
                                     }
-                                    Event::Obj(id, (x, y), _resid) => {
+                                    Event::Obj(id, ObjXY(x, y), _resid) => {
                                         last_event = format!("OBJ: {} {} {}", id, x, y);
                                     }
                                     Event::ObjRemove(_id) => {}
-                                    Event::Hero((x, y)) => {
+                                    Event::Hero(ObjXY(x, y)) => {
                                         last_event = format!("HERO: {} {}", x, y);
                                     }
                                     Event::Input => {
@@ -148,10 +148,7 @@ impl Render {
                     let mut objects = BTreeMap::new();
                     let mut zoom = 1.0;
                     let mut dragging = false;
-                    #[cfg(feature = "salem")]
-                    let mut hero = (0,0);
-                    #[cfg(feature = "hafen")]
-                    let mut hero = (0.0,0.0);
+                    let mut hero = ObjXY::new();
                     let mut grids = BTreeMap::new();
                     let mut delta_height = 0;
                     let mut command_line = false;
@@ -186,11 +183,11 @@ impl Render {
                             Input::Render(render) => {
                                 window.draw_2d(&e, |c, g| {
                                     clear([0.0; 4], g);
-                                    if let Some((ox,oy)) = origin {
+                                    if let Some(ObjXY(ox,oy)) = origin {
 
                                         let t = c.transform.trans(render.width as f64 / 2.0, render.height as f64 / 2.0).zoom(zoom);
 
-                                        let (gx,gy) = ::state::grid((hero.0,hero.1));
+                                        let (gx,gy) = hero.grid();
                                         for &(gridx,gridy) in [(gx-1,gy-1),(gx,gy-1),(gx+1,gy-1),
                                                                (gx-1,gy  ),(gx,gy  ),(gx+1,gy  ),
                                                                (gx-1,gy+1),(gx,gy+1),(gx+1,gy+1)].iter() {
@@ -281,7 +278,7 @@ impl Render {
                                             }
                                         }
 
-                                        for &((x,y),resid) in objects.values() {
+                                        for &(ObjXY(x,y),resid) in objects.values() {
                                             let (cx,cy) = (x-ox,y-oy);
                                             #[cfg(feature = "salem")]
                                             //FIXME check res_name=="*claim" but not ID==2951
@@ -333,14 +330,14 @@ impl Render {
                             Input::Release(Button::Mouse(MouseButton::Left)) => dragging = false,
                             #[cfg(feature = "salem")]
                             Input::Move(Motion::MouseRelative(x,y)) => if dragging {
-                                if let Some((ox,oy)) = origin {
-                                    origin = Some((ox - (x / zoom) as i32, oy - (y / zoom) as i32));
+                                if let Some(ObjXY(ox,oy)) = origin {
+                                    origin = Some(ObjXY(ox - (x / zoom) as i32, oy - (y / zoom) as i32));
                                 }
                             },
                             #[cfg(feature = "hafen")]
                             Input::Move(Motion::MouseRelative(x,y)) => if dragging {
-                                if let Some((ox,oy)) = origin {
-                                    origin = Some((ox - (x / zoom), oy - (y / zoom)));
+                                if let Some(ObjXY(ox,oy)) = origin {
+                                    origin = Some(ObjXY(ox - (x / zoom), oy - (y / zoom)));
                                 }
                             },
                             Input::Move(Motion::MouseScroll(_,y)) => zoom *= if y > 0.0 { 1.05 } else { 0.95 },

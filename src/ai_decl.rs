@@ -1,5 +1,6 @@
 use state::State;
 use ai::Ai;
+use proto::ObjXY;
 
 #[derive(Debug)]
 enum AiState {
@@ -52,7 +53,7 @@ impl Ai for AiDecl {
             }
             AiState::Walking => {
                 match state.hero_xy() {
-                    Some((x, y)) => {
+                    Some(ObjXY(x, y)) => {
                         let (dx, dy) = match self.step {
                             Step::A => (10, 0),
                             Step::B => (0, 10),
