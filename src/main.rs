@@ -45,9 +45,14 @@ use xux::client::Client;
 // TODO fn run<D,A>(ip: IpAddr, username: String, password: String) where D:Driver,A:Ai {
 fn run() -> Result<()> {
 
+    //TODO get "<crate name>.log" file name automatically from cargo (macro?)
+    #[cfg(feature = "salem")]
+    let log_file_name = "xux.salem.log";
+    #[cfg(feature = "hafen")]
+    let log_file_name = "xux.hafen.log";
+
     //TODO prefix logs with timestamp(absolute/relative), file name, line number, function name
     //TODO colorize stdout output: ERROR is RED, WARN is YELLOW etc
-    //TODO get "<crate name>.log" file name automatically from cargo (macro?)
     fern::Dispatch::new()
         /*
         .format(|out, message, record| {
@@ -61,7 +66,14 @@ fn run() -> Result<()> {
         */
         .level(log::LogLevelFilter::Debug)
         .chain(std::io::stdout())
-        .chain(fern::log_file("xux.log").chain_err(||"unable to create log file")?)
+        .chain(
+            //fern::log_file(log_file_name)
+            std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .append(false)
+            .open(log_file_name)
+            .chain_err(||"unable to create log file")?)
         .apply().chain_err(||"unable to create log config")?;
 
     trace!("Starting...");

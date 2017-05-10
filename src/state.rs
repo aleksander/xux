@@ -305,6 +305,9 @@ impl Surface {
             let resver = r.u16().chain_err(||"surface tile resver")?;
             tileres[tileid as usize] = (resname,resver);
         }
+        for (i,t) in tileres.iter().enumerate() {
+            if ! t.0.is_empty() { debug!("{} {:?}", i, t); }
+        }
 
         let tiles = (0..100*100).map(|_|r.u8()).collect::<Result<Vec<u8>>>()?;
         let z = (0..100*100).map(|_|r.i16()).collect::<Result<Vec<i16>>>()?;

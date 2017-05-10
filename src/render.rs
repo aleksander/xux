@@ -156,6 +156,7 @@ impl Render {
                     let mut show_objtypes = false;
                     let mut resources = BTreeMap::new();
                     let mut highlighted_tiles = 0u8;
+                    let mut show_tiles = false;
                     'outer: while let Some(e) = window.next() {
                         match e {
                             Input::Update(_) => {
@@ -187,90 +188,92 @@ impl Render {
 
                                         let t = c.transform.trans(render.width as f64 / 2.0, render.height as f64 / 2.0).zoom(zoom);
 
-                                        let (gx,gy) = hero.grid();
-                                        for &(gridx,gridy) in [(gx-1,gy-1),(gx,gy-1),(gx+1,gy-1),
-                                                               (gx-1,gy  ),(gx,gy  ),(gx+1,gy  ),
-                                                               (gx-1,gy+1),(gx,gy+1),(gx+1,gy+1)].iter() {
-                                            if let Some(&(ref tiles, ref heights, ref owning)) = grids.get(&(gridx,gridy)) {
-                                                for y in 0..100 {
-                                                    for x in 0..100 {
-                                                        let i = y*100+x;
-                                                        let tile = tiles[i];
-                                                        let owning = owning[i];
-                                                        //TODO do filter of what tile types is shown
-                                                        if tile == 66 || tile == highlighted_tiles || owning > 0 {
-                                                            let color =
-                                                                if tile == 66 {
-                                                                    let c = tile as f32 / 256.0;
-                                                                    [c,c,c,1.0]
-                                                                } else if tile == highlighted_tiles {
-                                                                    [0.0,0.3,0.0,0.5]
-                                                                } else {
-                                                                    [0.6,0.0,0.0,0.5]
-                                                                };
-                                                            #[cfg(feature = "salem")]
-                                                            rectangle(
-                                                                color,
-                                                                [(gridx*1100+(x*11) as i32-ox) as f64,
-                                                                 (gridy*1100+(y*11) as i32-oy) as f64,
-                                                                 11.0, 11.0],
-                                                            t, g);
-                                                            //#[cfg(feature = "hafen")]
-                                                            //rectangle(
-                                                            //    color,
-                                                            //    [(gridx*1100+(x*11) as i32) as f64 - ox,
-                                                            //     (gridy*1100+(y*11) as i32) as f64 - oy,
-                                                            //     11.0, 11.0],
-                                                            //t, g);
-                                                        }
-                                                    }
-                                                }
-                                                #[cfg(feature = "salem")]
-                                                for y in 0..99 {
-                                                    for x in 0..99 {
-                                                        use shift_to_unsigned::ShiftToUnsigned;
-
-                                                        let i = y*100+x;
-                                                        let z = heights[i].shift_to_unsigned();
-                                                        let zx = heights[i+1].shift_to_unsigned();
-                                                        let zy = heights[i+100].shift_to_unsigned();
-                                                        let dx = if z > zx { z - zx } else { zx - z };
-                                                        let dy = if z > zy { z - zy } else { zy - z };
-                                                        if dx > delta_height && dy > delta_height {
-                                                            let lx = (gridx * 1100 + (x * 11) as i32 - ox) as f64;
-                                                            let ly = (gridy * 1100 + (y * 11) as i32 - oy) as f64;
-                                                            let lcolor = [0.3, 0.3, 0.3, 1.0];
-                                                            let lsize = 1.0 / zoom;
-                                                            if dx > delta_height {
-                                                                line(lcolor, lsize, [lx, ly, lx + 11.0, ly], t, g);
-                                                            }
-                                                            if dy > delta_height {
-                                                                line(lcolor, lsize, [lx, ly, lx, ly + 11.0], t, g);
+                                        if show_tiles {
+                                            let (gx,gy) = hero.grid();
+                                            for &(gridx,gridy) in [(gx-1,gy-1),(gx,gy-1),(gx+1,gy-1),
+                                            (gx-1,gy  ),(gx,gy  ),(gx+1,gy  ),
+                                            (gx-1,gy+1),(gx,gy+1),(gx+1,gy+1)].iter() {
+                                                if let Some(&(ref tiles, ref heights, ref owning)) = grids.get(&(gridx,gridy)) {
+                                                    for y in 0..100 {
+                                                        for x in 0..100 {
+                                                            let i = y*100+x;
+                                                            let tile = tiles[i];
+                                                            let owning = owning[i];
+                                                            //TODO do filter of what tile types is shown
+                                                            if tile == 66 || tile == 115 || tile == highlighted_tiles || owning > 0 {
+                                                                let color =
+                                                                    if tile == 66 || tile == 115 {
+                                                                        let c = tile as f32 / 256.0;
+                                                                        [c,c,c,1.0]
+                                                                    } else if tile == highlighted_tiles {
+                                                                        [0.0,0.3,0.0,0.5]
+                                                                    } else {
+                                                                        [0.6,0.0,0.0,0.5]
+                                                                    };
+                                                                #[cfg(feature = "salem")]
+                                                                rectangle(
+                                                                    color,
+                                                                    [(gridx*1100+(x*11) as i32-ox) as f64,
+                                                                    (gridy*1100+(y*11) as i32-oy) as f64,
+                                                                    11.0, 11.0],
+                                                                    t, g);
+                                                                #[cfg(feature = "hafen")]
+                                                                rectangle(
+                                                                    color,
+                                                                    [(gridx*1100+(x*11) as i32) as f64 - ox,
+                                                                    (gridy*1100+(y*11) as i32) as f64 - oy,
+                                                                    11.0, 11.0],
+                                                                    t, g);
                                                             }
                                                         }
                                                     }
-                                                }
-                                                #[cfg(feature = "hafen")]
-                                                for y in 0..99 {
-                                                    for x in 0..99 {
-                                                        use shift_to_unsigned::ShiftToUnsigned;
+                                                    #[cfg(feature = "salem")]
+                                                    for y in 0..99 {
+                                                        for x in 0..99 {
+                                                            use shift_to_unsigned::ShiftToUnsigned;
 
-                                                        let i = y*100+x;
-                                                        let z = heights[i].shift_to_unsigned();
-                                                        let zx = heights[i+1].shift_to_unsigned();
-                                                        let zy = heights[i+100].shift_to_unsigned();
-                                                        let dx = if z > zx { z - zx } else { zx - z };
-                                                        let dy = if z > zy { z - zy } else { zy - z };
-                                                        if dx > delta_height && dy > delta_height {
-                                                            let lx = (gridx * 1100 + (x * 11) as i32) as f64 - ox;
-                                                            let ly = (gridy * 1100 + (y * 11) as i32) as f64 - oy;
-                                                            let lcolor = [0.3, 0.3, 0.3, 1.0];
-                                                            let lsize = 1.0 / zoom;
-                                                            if dx > delta_height {
-                                                                line(lcolor, lsize, [lx, ly, lx + 11.0, ly], t, g);
+                                                            let i = y*100+x;
+                                                            let z = heights[i].shift_to_unsigned();
+                                                            let zx = heights[i+1].shift_to_unsigned();
+                                                            let zy = heights[i+100].shift_to_unsigned();
+                                                            let dx = if z > zx { z - zx } else { zx - z };
+                                                            let dy = if z > zy { z - zy } else { zy - z };
+                                                            if dx > delta_height && dy > delta_height {
+                                                                let lx = (gridx * 1100 + (x * 11) as i32 - ox) as f64;
+                                                                let ly = (gridy * 1100 + (y * 11) as i32 - oy) as f64;
+                                                                let lcolor = [0.3, 0.3, 0.3, 1.0];
+                                                                let lsize = 1.0 / zoom;
+                                                                if dx > delta_height {
+                                                                    line(lcolor, lsize, [lx, ly, lx + 11.0, ly], t, g);
+                                                                }
+                                                                if dy > delta_height {
+                                                                    line(lcolor, lsize, [lx, ly, lx, ly + 11.0], t, g);
+                                                                }
                                                             }
-                                                            if dy > delta_height {
-                                                                line(lcolor, lsize, [lx, ly, lx, ly + 11.0], t, g);
+                                                        }
+                                                    }
+                                                    #[cfg(feature = "hafen")]
+                                                    for y in 0..99 {
+                                                        for x in 0..99 {
+                                                            use shift_to_unsigned::ShiftToUnsigned;
+
+                                                            let i = y*100+x;
+                                                            let z = heights[i].shift_to_unsigned();
+                                                            let zx = heights[i+1].shift_to_unsigned();
+                                                            let zy = heights[i+100].shift_to_unsigned();
+                                                            let dx = if z > zx { z - zx } else { zx - z };
+                                                            let dy = if z > zy { z - zy } else { zy - z };
+                                                            if dx > delta_height && dy > delta_height {
+                                                                let lx = (gridx * 1100 + (x * 11) as i32) as f64 - ox;
+                                                                let ly = (gridy * 1100 + (y * 11) as i32) as f64 - oy;
+                                                                let lcolor = [0.3, 0.3, 0.3, 1.0];
+                                                                let lsize = 1.0 / zoom;
+                                                                if dx > delta_height {
+                                                                    line(lcolor, lsize, [lx, ly, lx + 11.0, ly], t, g);
+                                                                }
+                                                                if dy > delta_height {
+                                                                    line(lcolor, lsize, [lx, ly, lx, ly + 11.0], t, g);
+                                                                }
                                                             }
                                                         }
                                                     }
@@ -357,12 +360,12 @@ impl Render {
                                     Key::L => if command_line { command += "l"; },
                                     Key::M => if command_line { command += "m"; },
                                     Key::N => if command_line { command += "n"; },
-                                    Key::O => if command_line { command += "o"; },
+                                    Key::O => if command_line { command += "o"; } else { show_objtypes = ! show_objtypes; },
                                     Key::P => if command_line { command += "p"; },
                                     Key::Q => if command_line { command += "q"; },
                                     Key::R => if command_line { command += "r"; },
                                     Key::S => if command_line { command += "s"; },
-                                    Key::T => if command_line { command += "t"; } else { show_objtypes = ! show_objtypes; },
+                                    Key::T => if command_line { command += "t"; } else { show_tiles = ! show_tiles; },
                                     Key::U => if command_line { command += "u"; },
                                     Key::V => if command_line { command += "v"; },
                                     Key::W => if command_line { command += "w"; },
