@@ -13,10 +13,7 @@ use self::flate2::read::ZlibDecoder;
 
 struct ObjProp {
     frame: i32,
-    #[cfg(feature = "salem")]
-    xy: Option<Coord>,
-    #[cfg(feature = "hafen")]
-    xy: Option<(f64,f64)>,
+    xy: Option<ObjXY>,
     resid: Option<ResID>, // TODO replace with Vec<resid> for composite objects
     line: Option<Linbeg>,
     step: Option<Linstep>,
@@ -67,27 +64,12 @@ pub struct Obj {
     pub id: ObjID, // TODO maybe remove this? because this is also a key field in objects hashmap
     pub frame: Option<i32>,
     pub resid: Option<ResID>,
-    #[cfg(feature = "salem")]
-    pub xy: Option<Coord>,
-    #[cfg(feature = "hafen")]
-    pub xy: Option<(f64,f64)>,
+    pub xy: Option<ObjXY>,
     pub movement: Option<Movement>,
 }
 
 impl Obj {
-    #[cfg(feature = "salem")]
-    fn new(id: ObjID, frame: Option<i32>, resid: Option<ResID>, xy: Option<Coord>, movement: Option<Movement>) -> Obj {
-        Obj {
-            id: id,
-            frame: frame,
-            resid: resid,
-            xy: xy,
-            movement: movement,
-        }
-    }
-
-    #[cfg(feature = "hafen")]
-    fn new(id: ObjID, frame: Option<i32>, resid: Option<ResID>, xy: Option<(f64,f64)>, movement: Option<Movement>) -> Obj {
+    fn new(id: ObjID, frame: Option<i32>, resid: Option<ResID>, xy: Option<ObjXY>, movement: Option<Movement>) -> Obj {
         Obj {
             id: id,
             frame: frame,
@@ -173,14 +155,14 @@ impl Obj {
 
 #[derive(Clone,Copy,Debug)]
 pub struct Movement {
-    pub from: Coord,
-    pub to: Coord,
+    pub from: ObjXY,
+    pub to: ObjXY,
     pub steps: i32,
     pub step: i32,
 }
 
 impl Movement {
-    fn new(from: Coord, to: Coord, steps: i32, step: i32) -> Movement {
+    fn new(from: ObjXY, to: ObjXY, steps: i32, step: i32) -> Movement {
         Movement {
             from: from,
             to: to,
@@ -226,10 +208,10 @@ pub struct Hero {
     pub obj: Option<Obj>,
     pub weight: Option<u16>,
     pub tmexp: Option<i32>,
-    pub hearthfire: Option<Coord>,
-    pub inventory: HashMap<Coord, u16>,
+    pub hearthfire: Option<(i32,i32)>,
+    pub inventory: HashMap<(i32,i32), u16>,
     pub equipment: HashMap<u8, u16>,
-    //pub start_xy: Option<Coord>,
+    //pub start_xy: Option<ObjXY>,
 }
 
 pub struct MapPieces {
@@ -365,7 +347,7 @@ pub type PacketId = i32;
 
 pub struct Map {
     pub partial: HashMap<PacketId, MapPieces>, // TODO somehow clean up from old pieces (periodically maybe)
-    pub grids: HashMap<Coord, Surface>,
+    pub grids: HashMap<GridXY, Surface>,
 }
 
 impl Map {
@@ -425,9 +407,9 @@ impl Map {
 }
 
 pub enum Event {
-    Grid(Coord),
+    Grid(GridXY),
     #[cfg(feature = "salem")]
-    Obj(ObjID, Coord, ResID),
+    Obj(ObjID, ObjXY, ResID),
     #[cfg(feature = "hafen")]
     Obj(ObjID, (f64,f64), ResID),
     ObjRemove(ObjID),
@@ -450,7 +432,7 @@ pub struct State {
     pub hero: Hero,
     pub map: Map,
     events: LinkedList<Event>,
-    origin: Option<Coord>,
+    //origin: Option<ObjXY>,
     requested_grids: BTreeSet<(i32, i32)>
 }
 
@@ -493,7 +475,7 @@ impl State {
                 grids: HashMap::new(),
             },
             events: LinkedList::new(),
-            origin: None,
+            //origin: None,
             requested_grids: BTreeSet::new(),
         }
     }
@@ -787,11 +769,11 @@ impl State {
                             });
         match wdg.name.as_str() {
             "gameui" => {
-                if let Some(&MsgList::Str(ref name)) = wdg.cargs.get(0) {
+                if let Some(&List::Str(ref name)) = wdg.cargs.get(0) {
                     self.hero.name = Some(name.clone());
                     info!("HERO: name = '{:?}'", self.hero.name);
                 }
-                if let Some(&MsgList::Int(obj)) = wdg.cargs.get(1) {
+                if let Some(&List::Int(obj)) = wdg.cargs.get(1) {
                     // FIXME BUG: object ID is uint32 but here it is int32 WHY??? XXX
                     assert!(obj >= 0);
                     let id = obj as u32;
@@ -813,25 +795,25 @@ impl State {
                 }
             }
             "mapview" => {
-                if let Some(&MsgList::Coord(xy)) = wdg.cargs.get(0) {
-                    self.origin = Some(xy);
-                    info!("origin = '{:?}'", self.origin);
+                if let Some(&List::Coord(xy)) = wdg.cargs.get(0) {
+                    //self.origin = Some(xy);
+                    info!("origin = '{:?}'", xy);//self.origin);
                 }
             }
             "item" => {
                 if let Some(parent) = self.widgets.get(&(wdg.parent)) {
                     match &*parent.typ {
                         "inv" => {
-                            if let Some(&MsgList::Coord((x, y))) = wdg.pargs.get(0) {
-                                if let Some(&MsgList::Uint16(id)) = wdg.cargs.get(0) {
+                            if let Some(&List::Coord((x, y))) = wdg.pargs.get(0) {
+                                if let Some(&List::Uint16(id)) = wdg.cargs.get(0) {
                                     self.hero.inventory.insert((x, y), id);
                                     info!("HERO: inventory: {:?}", self.hero.inventory);
                                 }
                             }
                         }
                         "epry" => {
-                            if let Some(&MsgList::Uint8(i)) = wdg.pargs.get(0) {
-                                if let Some(&MsgList::Uint16(id)) = wdg.cargs.get(0) {
+                            if let Some(&List::Uint8(i)) = wdg.pargs.get(0) {
+                                if let Some(&List::Uint16(id)) = wdg.cargs.get(0) {
                                     self.hero.equipment.insert(i, id);
                                     info!("HERO: equipment: {:?}", self.hero.equipment);
                                 }
@@ -850,7 +832,7 @@ impl State {
             match w.typ.as_str() {
                 "charlist" => {
                     if msg.name == "add" {
-                        if let Some(&MsgList::Str(ref name)) = msg.args.get(0) {
+                        if let Some(&List::Str(ref name)) = msg.args.get(0) {
                             info!("    add char '{}'", name);
                             // FIXME rewrite without cloning
                             self.charlist.push(name.clone());
@@ -859,7 +841,7 @@ impl State {
                 }
                 "gameui" => {
                     if msg.name == "weight" {
-                        if let Some(&MsgList::Uint16(w)) = msg.args.get(0) {
+                        if let Some(&List::Uint16(w)) = msg.args.get(0) {
                             self.hero.weight = Some(w);
                             info!("HERO: weight = '{:?}'", self.hero.weight);
                         }
@@ -867,7 +849,7 @@ impl State {
                 }
                 "chr" => {
                     if msg.name == "tmexp" {
-                        if let Some(&MsgList::Int(i)) = msg.args.get(0) {
+                        if let Some(&List::Int(i)) = msg.args.get(0) {
                             self.hero.tmexp = Some(i);
                             info!("HERO: tmexp = '{:?}'", self.hero.tmexp);
                         }
@@ -875,7 +857,7 @@ impl State {
                 }
                 "ui/hrtptr:11" => {
                     if msg.name == "upd" {
-                        if let Some(&MsgList::Coord((x, y))) = msg.args.get(0) {
+                        if let Some(&List::Coord((x, y))) = msg.args.get(0) {
                             self.hero.hearthfire = Some((x, y));
                             info!("HERO: heathfire = '{:?}'", self.hero.hearthfire);
                             //TODO send Event::Hearthfire
@@ -898,7 +880,7 @@ impl State {
         }
     }
 
-    fn request_grids_around (&mut self, (x, y): Coord) {
+    fn request_grids_around (&mut self, (x, y): GridXY) {
         self.request_grid((x,     y));
         self.request_grid((x - 1, y));
         self.request_grid((x + 1, y));
@@ -912,7 +894,7 @@ impl State {
         self.request_grid((x + 1, y + 1));
     }
 
-    fn request_grid (&mut self, (x, y): Coord) {
+    fn request_grid (&mut self, (x, y): GridXY) {
         if ! self.requested_grids.contains(&(x,y)) {
             info!("request grid ({},{})", x, y);
             self.mapreq(x, y).unwrap();
@@ -971,8 +953,8 @@ impl State {
         let name = "play".to_owned();
         let charname = self.charlist[i].clone();
         info!("send play '{}'", charname);
-        let mut args: Vec<MsgList> = Vec::new();
-        args.push(MsgList::Str(charname));
+        let mut args: Vec<List> = Vec::new();
+        args.push(List::Str(charname));
         let mut rels = Rels::new(0);
         rels.append(Rel::WDGMSG(WdgMsg::new(id, name, args)));
         self.enqueue_to_send(ClientMessage::REL(rels))
@@ -1042,32 +1024,18 @@ impl State {
     //     return ret;
     // }
 
-    #[cfg(feature = "salem")]
-    pub fn go(&mut self, xy: Coord) -> Result<()> {
+    pub fn go(&mut self, xy: ObjXY) -> Result<()> {
         info!("GO ({}, {})", xy.0, xy.1);
         let id = self.widget_id("mapview", None).ok_or(ErrorKind::Msg("try to go with no mapview widget".into()))?;
         let name: String = "click".to_owned();
-        let mut args: Vec<MsgList> = Vec::new();
-        args.push(MsgList::Coord((907, 755))); //TODO set some random coords in the center of screen
-        args.push(MsgList::Coord(xy));
-        args.push(MsgList::Int(1));
-        args.push(MsgList::Int(0));
-        let mut rels = Rels::new(0);
-        rels.append(Rel::WDGMSG(WdgMsg::new(id, name, args)));
-        self.enqueue_to_send(ClientMessage::REL(rels))?;
-        Ok(())
-    }
-
-    #[cfg(feature = "hafen")]
-    pub fn go(&mut self, (x,y): (f64,f64)) -> Result<()> {
-        info!("GO ({}, {})", x, y);
-        let id = self.widget_id("mapview", None).ok_or(ErrorKind::Msg("try to go with no mapview widget".into()))?;
-        let name: String = "click".to_owned();
-        let mut args: Vec<MsgList> = Vec::new();
-        args.push(MsgList::Coord((907, 755))); //TODO set some random coords in the center of screen
-        args.push(MsgList::Coord(((x / POSRES) as i32, (y / POSRES) as i32)));
-        args.push(MsgList::Int(1));
-        args.push(MsgList::Int(0));
+        let mut args: Vec<List> = Vec::new();
+        args.push(List::Coord((907, 755))); //TODO set some random coords in the center of screen
+        #[cfg(feature = "salem")]
+        args.push(List::Coord(xy));
+        #[cfg(feature = "hafen")]
+        args.push(List::Coord(((xy.0 / POSRES) as i32, (xy.1 / POSRES) as i32)));
+        args.push(List::Int(1));
+        args.push(List::Int(0));
         let mut rels = Rels::new(0);
         rels.append(Rel::WDGMSG(WdgMsg::new(id, name, args)));
         self.enqueue_to_send(ClientMessage::REL(rels))?;
@@ -1091,15 +1059,15 @@ impl State {
                 None => panic!("pick(): picking object is not found"),
             }
         };
-        args.push(MsgList::Coord((863, 832))); //TODO set some random coords in the center of screen
-        args.push(MsgList::Coord((obj_x - 1, obj_y + 1)));
-        args.push(MsgList::Int(3));
-        args.push(MsgList::Int(0));
-        args.push(MsgList::Int(0));
-        args.push(MsgList::Int(obj_id as i32));
-        args.push(MsgList::Coord((obj_x, obj_y)));
-        args.push(MsgList::Int(0));
-        args.push(MsgList::Int(-1));
+        args.push(List::Coord((863, 832))); //TODO set some random coords in the center of screen
+        args.push(List::Coord((obj_x - 1, obj_y + 1)));
+        args.push(List::Int(3));
+        args.push(List::Int(0));
+        args.push(List::Int(0));
+        args.push(List::Int(obj_id as i32));
+        args.push(List::Coord((obj_x, obj_y)));
+        args.push(List::Int(0));
+        args.push(List::Int(-1));
         let mut rels = Rels::new(0);
         rels.append(Rel::WDGMSG(WdgMsg::new(id, name, args)));
         self.enqueue_to_send(ClientMessage::REL(rels))?;
@@ -1110,8 +1078,8 @@ impl State {
         info!("GO");
         let name = "cl".to_owned();
         let mut args = Vec::new();
-        args.push(MsgList::Int(0));
-        args.push(MsgList::Int(0));
+        args.push(List::Int(0));
+        args.push(List::Int(0));
         let mut rels = Rels::new(0);
         rels.append(Rel::WDGMSG(WdgMsg::new(wdg_id, name, args)));
         self.enqueue_to_send(ClientMessage::REL(rels))?;
@@ -1121,23 +1089,14 @@ impl State {
     // TODO fn grid(Coord) {...}, fn xy(Grid) {...}
     //     and then we can do: hero.grid().xy();
 
-    #[cfg(feature = "salem")]
-    pub fn hero_xy(&self) -> Option<Coord> {
+    pub fn hero_xy(&self) -> Option<ObjXY> {
         match self.hero.obj {
             Some(ref hero) => hero.xy,
             None => None,
         }
     }
 
-    #[cfg(feature = "hafen")]
-    pub fn hero_xy(&self) -> Option<(f64,f64)> {
-        match self.hero.obj {
-            Some(ref hero) => hero.xy,
-            None => None,
-        }
-    }
-
-    pub fn hero_grid_xy(&self) -> Option<Coord> {
+    pub fn hero_grid_xy(&self) -> Option<GridXY> {
         match self.hero_xy() {
             Some(xy) => Some(grid(xy)),
             None => None,
@@ -1189,7 +1148,7 @@ impl State {
 }
 
 #[cfg(feature = "salem")]
-pub fn grid((x, y): Coord) -> Coord {
+pub fn grid((x, y): ObjXY) -> GridXY {
     let mut gx = x / 1100;
     if x < 0 {
         gx -= 1;
@@ -1202,7 +1161,7 @@ pub fn grid((x, y): Coord) -> Coord {
 }
 
 #[cfg(feature = "hafen")]
-pub fn grid((x, y): (f64,f64)) -> Coord {
+pub fn grid((x, y): ObjXY) -> GridXY {
     let mut gx = (x / 1100.0) as i32;
     if x < 0.0 {
         gx -= 1;

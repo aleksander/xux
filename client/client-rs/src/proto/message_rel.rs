@@ -1,5 +1,5 @@
 use std::fmt;
-use proto::msg_list::MsgList;
+use proto::list::List;
 use proto::serialization::*;
 use std::io::Write;
 use errors::*;
@@ -144,8 +144,8 @@ pub struct NewWdg {
     pub id: u16,
     pub name: String,
     pub parent: u16,
-    pub pargs: Vec<MsgList>,
-    pub cargs: Vec<MsgList>,
+    pub pargs: Vec<List>,
+    pub cargs: Vec<List>,
 }
 
 impl NewWdg {
@@ -155,8 +155,8 @@ impl NewWdg {
         let id = r.u16().chain_err(||"NEWWDG id")?;
         let name = r.strz().chain_err(||"NEWWDG name")?;
         let parent = r.u16().chain_err(||"NEWWDG parent")?;
-        let pargs = MsgList::from_buf(&mut r).chain_err(||"NEWWDG pargs")?;
-        let cargs = MsgList::from_buf(&mut r).chain_err(||"NEWWDG cargs")?;
+        let pargs = List::from_buf(&mut r).chain_err(||"NEWWDG pargs")?;
+        let cargs = List::from_buf(&mut r).chain_err(||"NEWWDG cargs")?;
         Ok(NewWdg {
             id: id,
             name: name,
@@ -171,13 +171,13 @@ impl NewWdg {
 pub struct WdgMsg {
     pub id: u16,
     pub name: String,
-    pub args: Vec<MsgList>,
+    pub args: Vec<List>,
 }
 
 impl WdgMsg {
     pub const ID: u8 = 1;
 
-    pub fn new (id: u16, name: String, args: Vec<MsgList>) -> WdgMsg {
+    pub fn new (id: u16, name: String, args: Vec<List>) -> WdgMsg {
         WdgMsg {
             id: id,
             name: name,
@@ -188,7 +188,7 @@ impl WdgMsg {
     fn from_buf <R:ReadBytesSac> (mut r: R) -> Result<WdgMsg> {
         let id = r.u16().chain_err(||"WDGMSG id")?;
         let name = r.strz().chain_err(||"WDGMSG name")?;
-        let args = MsgList::from_buf(&mut r).chain_err(||"WDGMSG args")?;
+        let args = List::from_buf(&mut r).chain_err(||"WDGMSG args")?;
         Ok(WdgMsg {
             id: id,
             name: name,
@@ -336,7 +336,7 @@ impl Glob {
 
     #[cfg(feature = "hafen")]
     fn from_buf <R:ReadBytesSac> (r: &mut R, t: &str, inc: u8) -> Result<Glob> {
-        let _list = MsgList::from_buf(r)?;
+        let _list = List::from_buf(r)?;
         Ok(match t {
             "tm" => {Glob::Tm}
             "astro" => {Glob::Astro}
@@ -463,4 +463,3 @@ pub struct SessKey;
 impl SessKey {
     pub const ID: u8 = 13;
 }
-

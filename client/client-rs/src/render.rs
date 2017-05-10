@@ -9,16 +9,10 @@ use proto::*;
 #[derive(Debug)]
 pub enum Event {
     Grid(i32, i32, Vec<u8>, Vec<i16>, Vec<u8>),
-    #[cfg(feature = "salem")]
-    Obj(ObjID, Coord, ResID),
-    #[cfg(feature = "hafen")]
-    Obj(ObjID, (f64,f64), ResID),
+    Obj(ObjID, ObjXY, ResID),
     ObjRemove(ObjID),
     Res(ResID, String),
-    #[cfg(feature = "salem")]
-    Hero(Coord),
-    #[cfg(feature = "hafen")]
-    Hero((f64,f64)),
+    Hero(ObjXY),
     // NewObj(i32,i32),
     // UpdObj(...),
     // AI(...ai desigions...),

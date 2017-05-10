@@ -2,7 +2,10 @@ use errors::*;
 use std::fmt;
 use std::fmt::Formatter;
 use proto::serialization::*;
-use proto::{Coord, POSRES};
+use proto::ObjXY;
+#[cfg(feature = "hafen")]
+use proto::POSRES;
+#[cfg(feature = "hafen")]
 use std::f64::consts::PI;
 
 pub struct ObjData {
@@ -103,20 +106,20 @@ pub enum ObjDataElemProp {
     Resattr(u16,Option<Vec<u8>>)
 }
 
-#[cfg(feature = "salem")]
 #[derive(Clone,Copy,Debug)]
 pub struct Linbeg {
-    pub from: Coord,
-    pub to: Coord,
+    pub from: ObjXY,
+    pub to: ObjXY,
+    #[cfg(feature = "salem")]
     pub steps: i32,
 }
 
-#[cfg(feature = "hafen")]
-#[derive(Clone,Copy,Debug)]
-pub struct Linbeg {
-    pub from: Coord,
-    pub to: Coord,
-}
+//#[cfg(feature = "hafen")]
+//#[derive(Clone,Copy,Debug)]
+//pub struct Linbeg {
+//    pub from: ObjXY,
+//    pub to: ObjXY,
+//}
 
 impl Linbeg {
     #[cfg(feature = "salem")]
@@ -131,8 +134,8 @@ impl Linbeg {
     #[cfg(feature = "hafen")]
     pub fn from_buf <R:ReadBytesSac> (r: &mut R) -> Result<Linbeg> {
         Ok(Linbeg{
-            from: (r.i32()?, r.i32()?),
-            to: (r.i32()?, r.i32()?)
+            from: (r.i32()? as f64 * POSRES, r.i32()? as f64 * POSRES),
+            to: (r.i32()? as f64 * POSRES, r.i32()? as f64 * POSRES)
         })
     }
 }
@@ -176,7 +179,7 @@ impl Linstep {
 #[cfg(feature = "salem")]
 #[derive(Clone,Copy,Debug)]
 pub struct Drawoff {
-    off: Coord,
+    off: ObjXY,
 }
 
 #[cfg(feature = "salem")]

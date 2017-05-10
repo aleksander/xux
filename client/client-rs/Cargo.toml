@@ -32,6 +32,7 @@ error-chain = "*"
 piston_window = "*"
 crossbeam = "*"
 deque = "*"
+chrono = "*"
 
 [features]
 driver_std = []

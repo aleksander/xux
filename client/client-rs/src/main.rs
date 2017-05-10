@@ -1,3 +1,4 @@
+extern crate chrono;
 #[macro_use]
 extern crate log;
 extern crate fern;
@@ -43,24 +44,25 @@ use sac::client::Client;
 // TODO fn run_std_lua() { run::<Std,Lua>() }
 // TODO fn run<D,A>(ip: IpAddr, username: String, password: String) where D:Driver,A:Ai {
 fn run() -> Result<()> {
-    // let mut log_open_options = std::fs::OpenOptions::new();
-    // let log_open_options = log_open_options.create(true).read(true).write(true).truncate(true);
-    let logger_config = fern::DispatchConfig {
-        format: Box::new(|msg: &str, level: &log::LogLevel, _location: &log::LogLocation| {
-            // format!("[{}][{}] {}", time::now().strftime("%Y-%m-%d][%H:%M:%S").unwrap(), level, msg)
-            // TODO prefix logs with timestamp(absolute/relative), file name, line number, function name
-            format!("[{}] {}", level, msg)
-        }),
-        output: vec![
-            fern::OutputConfig::stdout(), //TODO colorize stdout output: ERROR is RED, WARN is YELLOW etc
-            //fern::OutputConfig::file_with_options("log", &log_open_options)
-        ],
-        level: log::LogLevelFilter::Trace,
-    };
 
-    if let Err(e) = fern::init_global_logger(logger_config, log::LogLevelFilter::Trace) {
-        panic!("Failed to initialize global logger: {}", e);
-    }
+    //TODO prefix logs with timestamp(absolute/relative), file name, line number, function name
+    //TODO colorize stdout output: ERROR is RED, WARN is YELLOW etc
+    //TODO get "<crate name>.log" file name automatically from cargo (macro?)
+    fern::Dispatch::new()
+        /*
+        .format(|out, message, record| {
+            out.finish(
+                format_args!("{}[{}][{}] {}",
+                    chrono::Local::now().format("[%Y-%m-%d][%H:%M:%S]"),
+                    record.target(),
+                    record.level(),
+                    message))
+        })
+        */
+        .level(log::LogLevelFilter::Debug)
+        .chain(std::io::stdout())
+        .chain(fern::log_file("sac.log").chain_err(||"unable to create log file")?)
+        .apply().chain_err(||"unable to create log config")?;
 
     trace!("Starting...");
     debug!("Starting...");
@@ -68,7 +70,6 @@ fn run() -> Result<()> {
     warn!("Starting...");
     error!("Starting...");
 
-    // TODO handle both 'salem' and 'hafen' protocols
     // TODO arg parsing with 'clap'
     // TODO handle keyboard interrupt
     // TODO replace all unwraps and expects with normal error handling
