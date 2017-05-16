@@ -140,6 +140,7 @@ impl Render {
                     let mut window: PistonWindow =
                         WindowSettings::new("Render", [800, 600])
                             .vsync(true)
+                            .samples(16)
                             .build().unwrap();
                     let font = "/usr/share/fonts/TTF/DejaVuSansMono.ttf";
                     let factory = window.factory.clone();
