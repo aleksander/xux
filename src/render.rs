@@ -136,9 +136,12 @@ impl Render {
                     use piston_window::*;
                     //use std::sync::mpsc::TryRecvError;
                     use std::collections::BTreeMap;
+                    use image;
 
+                    //let opengl = OpenGL::V3_2;
                     let mut window: PistonWindow =
                         WindowSettings::new("Render", [800, 600])
+                            //.opengl(opengl)
                             .vsync(true)
                             .samples(16)
                             .build().unwrap();
@@ -158,6 +161,21 @@ impl Render {
                     let mut resources = BTreeMap::new();
                     let mut highlighted_tiles = 0u8;
                     let mut show_tiles = false;
+
+                    //TODO const palette
+                    //TODO bind palette to resource names
+                    let mut palette = [image::Rgba([0,0,0,255]); 256];
+                    palette[76] = image::Rgba([ 169, 223, 191, 255]); //76 ("gfx/tiles/field", 35)
+                    palette[77] = image::Rgba([ 249, 231, 159, 255]); //77 ("gfx/tiles/beach", 14)
+                    palette[87] = image::Rgba([ 88, 214, 141, 255]); //87 ("gfx/tiles/flowermeadow", 135)
+                    palette[88] = image::Rgba([ 40, 180, 99, 255]); //88 ("gfx/tiles/grass", 149)
+                    palette[102] = image::Rgba([ 20, 90, 50, 255]); //102 ("gfx/tiles/pinebarren", 55)
+                    palette[108] = image::Rgba([ 231, 76, 60, 255]); //108 ("gfx/tiles/sombrebramble", 63)
+                    palette[111] = image::Rgba([ 25, 111, 61, 255]); //111 ("gfx/tiles/wald", 137)
+                    palette[113] = image::Rgba([ 147, 81, 22, 255]); //113 ("gfx/tiles/dirt", 52)
+                    palette[115] = image::Rgba([ 21, 67, 96, 255]); //115 ("gfx/tiles/deep", 10)
+                    palette[118] = image::Rgba([ 33, 97, 140, 255]); //118 ("gfx/tiles/water", 32)
+
                     'outer: while let Some(e) = window.next() {
                         match e {
                             Input::Update(_) => {
@@ -166,7 +184,17 @@ impl Render {
                                         Stolen::Data(event) => {
                                             //println!("RENDER: {:?}", event);
                                             match event {
-                                                Event::Grid(x,y,tiles,heights,owning) => { grids.insert((x,y), (tiles,heights,owning)); }
+                                                Event::Grid(x,y,tiles,heights,owning) => {
+                                                    let mut img = image::ImageBuffer::new(100, 100);
+                                                    for y in 0..100 {
+                                                        for x in 0..100 {
+                                                            let c = tiles[y*100+x];
+                                                            img.put_pixel(x as u32, y as u32, palette[c as usize]);
+                                                        }
+                                                    }
+                                                    let texture = Texture::from_image(&mut window.factory, &img, &TextureSettings::new().filter(texture::Filter::Nearest)).unwrap();
+                                                    grids.insert((x,y), (tiles,heights,owning,texture));
+                                                }
                                                 Event::Obj(id,xy,resid) => { objects.insert(id, (xy,resid)); }
                                                 Event::ObjRemove(ref id) => { objects.remove(id); }
                                                 Event::Res(id,name) => { resources.insert(id, name); }
@@ -188,47 +216,20 @@ impl Render {
                                     if let Some(ObjXY(ox,oy)) = origin {
 
                                         let t = c.transform.trans(render.width as f64 / 2.0, render.height as f64 / 2.0).zoom(zoom);
+                                        let t = t.trans(-ox as f64, -oy as f64);
 
                                         if show_tiles {
                                             let (gx,gy) = hero.grid();
+                                            let t = t.zoom(11.0);
                                             for &(gridx,gridy) in [(gx-1,gy-1),(gx,gy-1),(gx+1,gy-1),
                                             (gx-1,gy  ),(gx,gy  ),(gx+1,gy  ),
                                             (gx-1,gy+1),(gx,gy+1),(gx+1,gy+1)].iter() {
-                                                if let Some(&(ref tiles, ref heights, ref owning)) = grids.get(&(gridx,gridy)) {
-                                                    for y in 0..100 {
-                                                        for x in 0..100 {
-                                                            let i = y*100+x;
-                                                            let tile = tiles[i];
-                                                            let owning = owning[i];
-                                                            //TODO do filter of what tile types is shown
-                                                            if tile == 66 || tile == 115 || tile == highlighted_tiles || owning > 0 {
-                                                                let color =
-                                                                    if tile == 66 || tile == 115 {
-                                                                        let c = tile as f32 / 256.0;
-                                                                        [c,c,c,1.0]
-                                                                    } else if tile == highlighted_tiles {
-                                                                        [0.0,0.3,0.0,0.5]
-                                                                    } else {
-                                                                        [0.6,0.0,0.0,0.5]
-                                                                    };
-                                                                #[cfg(feature = "salem")]
-                                                                rectangle(
-                                                                    color,
-                                                                    [(gridx*1100+(x*11) as i32-ox) as f64,
-                                                                    (gridy*1100+(y*11) as i32-oy) as f64,
-                                                                    11.0, 11.0],
-                                                                    t, g);
-                                                                #[cfg(feature = "hafen")]
-                                                                rectangle(
-                                                                    color,
-                                                                    [(gridx*1100+(x*11) as i32) as f64 - ox,
-                                                                    (gridy*1100+(y*11) as i32) as f64 - oy,
-                                                                    11.0, 11.0],
-                                                                    t, g);
-                                                            }
-                                                        }
-                                                    }
-                                                    #[cfg(feature = "salem")]
+                                                if let Some(&(ref tiles, ref heights, ref owning, ref texture)) = grids.get(&(gridx,gridy)) {
+
+                                                    let t = t.trans((gridx*100) as f64, (gridy*100) as f64);
+
+                                                    image(texture, t, g);
+
                                                     for y in 0..99 {
                                                         for x in 0..99 {
                                                             use shift_to_unsigned::ShiftToUnsigned;
@@ -239,66 +240,37 @@ impl Render {
                                                             let zy = heights[i+100].shift_to_unsigned();
                                                             let dx = if z > zx { z - zx } else { zx - z };
                                                             let dy = if z > zy { z - zy } else { zy - z };
-                                                            if dx > delta_height && dy > delta_height {
-                                                                let lx = (gridx * 1100 + (x * 11) as i32 - ox) as f64;
-                                                                let ly = (gridy * 1100 + (y * 11) as i32 - oy) as f64;
+                                                            if dx > delta_height || dy > delta_height {
+                                                                let lx = x as f64;
+                                                                let ly = y as f64;
                                                                 let lcolor = [0.3, 0.3, 0.3, 1.0];
-                                                                let lsize = 1.0 / zoom;
+                                                                let lsize = 0.1;
                                                                 if dx > delta_height {
-                                                                    line(lcolor, lsize, [lx, ly, lx + 11.0, ly], t, g);
+                                                                    line(lcolor, lsize, [lx, ly, lx + 1.0, ly], t, g);
                                                                 }
                                                                 if dy > delta_height {
-                                                                    line(lcolor, lsize, [lx, ly, lx, ly + 11.0], t, g);
+                                                                    line(lcolor, lsize, [lx, ly, lx, ly + 1.0], t, g);
                                                                 }
                                                             }
                                                         }
                                                     }
-                                                    #[cfg(feature = "hafen")]
-                                                    for y in 0..99 {
-                                                        for x in 0..99 {
-                                                            use shift_to_unsigned::ShiftToUnsigned;
 
-                                                            let i = y*100+x;
-                                                            let z = heights[i].shift_to_unsigned();
-                                                            let zx = heights[i+1].shift_to_unsigned();
-                                                            let zy = heights[i+100].shift_to_unsigned();
-                                                            let dx = if z > zx { z - zx } else { zx - z };
-                                                            let dy = if z > zy { z - zy } else { zy - z };
-                                                            if dx > delta_height && dy > delta_height {
-                                                                let lx = (gridx * 1100 + (x * 11) as i32) as f64 - ox;
-                                                                let ly = (gridy * 1100 + (y * 11) as i32) as f64 - oy;
-                                                                let lcolor = [0.3, 0.3, 0.3, 1.0];
-                                                                let lsize = 1.0 / zoom;
-                                                                if dx > delta_height {
-                                                                    line(lcolor, lsize, [lx, ly, lx + 11.0, ly], t, g);
-                                                                }
-                                                                if dy > delta_height {
-                                                                    line(lcolor, lsize, [lx, ly, lx, ly + 11.0], t, g);
-                                                                }
-                                                            }
-                                                        }
-                                                    }
                                                 }
                                             }
                                         }
 
                                         for &(ObjXY(x,y),resid) in objects.values() {
-                                            let (cx,cy) = (x-ox,y-oy);
+                                            let (cx, cy) = (x as f64, y as f64);
                                             #[cfg(feature = "salem")]
                                             //FIXME check res_name=="*claim" but not ID==2951
-                                            rectangle(if resid == 2951 {[1.0, 0.0, 0.0, 1.0]} else {[1.0, 1.0, 1.0, 1.0]}, [(cx - 2) as f64, (cy - 2) as f64, 5.0, 5.0], t, g);
+                                            let color = if resid == 2951 {[1.0, 0.0, 0.0, 1.0]} else {[1.0, 1.0, 1.0, 1.0]};
                                             #[cfg(feature = "hafen")]
-                                            rectangle([1.0, 1.0, 1.0, 1.0], [cx - 2.0, cy - 2.0, 5.0, 5.0], t, g);
+                                            let color = [1.0, 1.0, 1.0, 1.0];
+                                            rectangle(color, [cx as f64 - 2.0, cy as f64 - 2.0, 4.0, 4.0], t, g);
                                         }
-                                        #[cfg(feature = "salem")]
-                                        rectangle([0.2, 0.2, 1.0, 1.0], [(hero.0-ox-2) as f64, (hero.1-oy-2) as f64, 5.0, 5.0], t, g);
-                                        #[cfg(feature = "salem")]
-                                        rectangle([1.0, 1.0, 1.0, 1.0], [(hero.0-ox) as f64, (hero.1-oy) as f64, 1.0, 1.0], t, g);
 
-                                        #[cfg(feature = "hafen")]
-                                        rectangle([0.2, 0.2, 1.0, 1.0], [hero.0-ox-2.0, hero.1-oy-2.0, 5.0, 5.0], t, g);
-                                        #[cfg(feature = "hafen")]
-                                        rectangle([1.0, 1.0, 1.0, 1.0], [hero.0-ox, hero.1-oy, 1.0, 1.0], t, g);
+                                        rectangle([0.2, 0.2, 1.0, 1.0], [hero.0 as f64 - 2.0, hero.1 as f64 - 2.0, 4.0, 4.0], t, g);
+                                        rectangle([1.0, 1.0, 1.0, 1.0], [hero.0 as f64 - 0.5, hero.1 as f64 - 0.5, 1.0, 1.0], t, g);
 
                                         if show_objtypes {
                                             let mut objtypes = BTreeMap::new();
