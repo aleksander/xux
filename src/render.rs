@@ -188,8 +188,18 @@ impl Render {
                                                     let mut img = image::ImageBuffer::new(100, 100);
                                                     for y in 0..100 {
                                                         for x in 0..100 {
-                                                            let c = tiles[y*100+x];
-                                                            img.put_pixel(x as u32, y as u32, palette[c as usize]);
+                                                            let index = tiles[y*100+x] as usize;
+                                                            let color =
+                                                                if owning[y*100+x] == 0 {
+                                                                    palette[index]
+                                                                } else {
+                                                                    let r: u8 = palette[index][0];
+                                                                    let g = palette[index][1];
+                                                                    let b = palette[index][2];
+                                                                    let a = palette[index][3];
+                                                                    image::Rgba([r.saturating_add(50u8),g,b,a])
+                                                                };
+                                                            img.put_pixel(x as u32, y as u32, color);
                                                         }
                                                     }
                                                     let texture = Texture::from_image(&mut window.factory, &img, &TextureSettings::new().filter(texture::Filter::Nearest)).unwrap();
