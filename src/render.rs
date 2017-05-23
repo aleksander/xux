@@ -5,6 +5,7 @@ use driver;
 use ncurses::*;
 use deque::{self, Stolen};
 use proto::*;
+use state::Wdg;
 
 #[derive(Debug)]
 pub enum Event {
@@ -19,6 +20,7 @@ pub enum Event {
     // AI: going to pick obj (ID)
     // AI: going by path (PATH CHAIN)
     Input,
+    Wdg(Wdg),
 }
 
 //TODO implement as Render trait implementations
@@ -161,6 +163,8 @@ impl Render {
                     let mut resources = BTreeMap::new();
                     let mut highlighted_tiles = 0u8;
                     let mut show_tiles = false;
+                    let mut show_widgets = false;
+                    let mut widgets = BTreeMap::new();
 
                     //TODO const palette
                     //TODO bind palette to resource names
@@ -212,7 +216,10 @@ impl Render {
                                                     if origin.is_none() { origin = Some(xy); }
                                                     hero = xy;
                                                 }
-                                                Event::Input => break
+                                                Event::Input => break,
+                                                Event::Wdg(Wdg::New(id,name,parent_id)) => { widgets.insert(id,(name,parent_id)); }
+                                                Event::Wdg(Wdg::Msg(id,name)) => { /*TODO*/ }
+                                                Event::Wdg(Wdg::Del(id)) => { widgets.remove(&id); }
                                             }
                                         }
                                         Stolen::Empty => break,
@@ -264,7 +271,6 @@ impl Render {
                                                             }
                                                         }
                                                     }
-
                                                 }
                                             }
                                         }
@@ -297,6 +303,18 @@ impl Render {
                                                     &mut glyphs,
                                                     &c.draw_state,
                                                     c.transform.trans(200.0, 20.0 + i as f64), g);
+                                                i += 9; //TODO += font.height
+                                            }
+                                        }
+
+                                        if show_widgets {
+                                            let mut i = 0;
+                                            for (id, &(ref name, parent)) in widgets.iter() {
+                                                text::Text::new_color([1.0, 1.0, 1.0, 1.0], 9).draw(
+                                                    &format!("{:6} {:6} {}", id, parent, name),
+                                                    &mut glyphs,
+                                                    &c.draw_state,
+                                                    c.transform.trans(20.0, 20.0 + i as f64), g);
                                                 i += 9; //TODO += font.height
                                             }
                                         }
@@ -351,7 +369,7 @@ impl Render {
                                     Key::T => if command_line { command += "t"; } else { show_tiles = ! show_tiles; },
                                     Key::U => if command_line { command += "u"; },
                                     Key::V => if command_line { command += "v"; },
-                                    Key::W => if command_line { command += "w"; },
+                                    Key::W => if command_line { command += "w"; } else { show_widgets = ! show_widgets; },
                                     Key::X => if command_line { command += "x"; },
                                     Key::Y => if command_line { command += "y"; },
                                     Key::Z => if command_line { command += "z"; },

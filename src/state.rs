@@ -409,12 +409,20 @@ impl Map {
     }
 }
 
+#[derive(Debug)]
+pub enum Wdg {
+    New(u16,String,u16),
+    Msg(u16,String),
+    Del(u16),
+}
+
 pub enum Event {
     Grid(GridXY),
     Obj(ObjID, ObjXY, ResID),
     ObjRemove(ObjID),
     Res(ResID, String),
     Hero,
+    Wdg(Wdg)
 }
 
 pub struct State {
@@ -731,14 +739,17 @@ impl State {
                 Rel::NEWWDG(ref wdg) => {
                     // info!("      {:?}", wdg);
                     self.dispatch_newwdg(wdg);
+                    self.events.push_front( Event::Wdg(Wdg::New(wdg.id, wdg.name.clone(), wdg.parent)) );
                 }
                 Rel::WDGMSG(ref msg) => {
                     // info!("      {:?}", msg);
                     self.dispatch_wdgmsg(msg);
+                    self.events.push_front( Event::Wdg(Wdg::Msg(msg.id, msg.name.clone())) );
                 }
                 Rel::DSTWDG(ref wdg) => {
                     // info!("      {:?}", wdg);
                     self.widgets.remove(&wdg.id);
+                    self.events.push_front( Event::Wdg(Wdg::Del(wdg.id)) );
                 }
                 Rel::MAPIV(_) => {}
                 Rel::GLOBLOB(_) => {}

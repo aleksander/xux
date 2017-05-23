@@ -141,9 +141,9 @@ impl Rel {
 
 #[derive(Debug)]
 pub struct NewWdg {
-    pub id: u16,
+    pub id: u16, //TODO enum WdgID(u16)
     pub name: String,
-    pub parent: u16,
+    pub parent: u16, //TODO enum WdgID(u16)
     pub pargs: Vec<List>,
     pub cargs: Vec<List>,
 }
