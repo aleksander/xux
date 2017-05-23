@@ -6,6 +6,7 @@ use ncurses::*;
 use deque::{self, Stolen};
 use proto::*;
 use state::Wdg;
+use errors::*;
 
 #[derive(Debug)]
 pub enum Event {
@@ -21,6 +22,156 @@ pub enum Event {
     // AI: going by path (PATH CHAIN)
     Input,
     Wdg(Wdg),
+}
+
+struct Widget {
+    id: u16,
+    name: String,
+    children: Vec<Widget>,
+    messages: Vec<String>,
+}
+
+impl Widget {
+    fn new (id: u16, name: String) -> Widget {
+        Widget {
+            id: id,
+            name: name,
+            children: Vec::new(),
+            messages: Vec::new(),
+        }
+    }
+
+    fn add_child (&mut self, wdg: Widget) {
+        self.children.push(wdg)
+    }
+
+    fn find_child (&mut self, id: u16) -> Option<&mut Widget> {
+        for wdg in self.children.iter_mut() {
+            if wdg.id == id {
+                return Some(wdg);
+            }
+            if let Some(wdg) = wdg.find_child(id) {
+                return Some(wdg);
+            }
+        }
+        None
+    }
+
+    fn del_child (&mut self, id: u16) -> Result<()> {
+        let mut index = None;
+        for (i,wdg) in self.children.iter_mut().enumerate() {
+            if wdg.id == id {
+                index = Some(i);
+                break;
+            }
+            if let Ok(()) = wdg.del_child(id) {
+                return Ok(());
+            }
+        }
+        if let Some(i) = index {
+            self.children.remove(i);
+            return Ok(());
+        }
+        Err("unable to find widget".into())
+    }
+
+    fn message (&mut self, msg: String) {
+        self.messages.push(msg);
+    }
+}
+
+struct Ui {
+    widgets: Vec<Widget>,
+}
+
+impl Ui {
+    fn new () -> Ui {
+        Ui {
+            widgets: Vec::new()
+        }
+    }
+
+    fn find_widget (&mut self, id: u16) -> Option<&mut Widget> {
+        for wdg in self.widgets.iter_mut() {
+            if wdg.id == id {
+                return Some(wdg);
+            }
+            if let Some(wdg) = wdg.find_child(id) {
+                return Some(wdg);
+            }
+        }
+        None
+    }
+
+    fn add_widget (&mut self, id: u16, name: String, parent: u16) -> Result<()> {
+        if parent == 0 {
+            self.widgets.push(Widget::new(id, name));
+        } else {
+            self.find_widget(parent).ok_or::<Error>("unable to find widget".into())?.add_child(Widget::new(id, name))
+        }
+        Ok(())
+    }
+
+    fn del_widget (&mut self, id: u16) -> Result<()> {
+        let mut index = None;
+        for (i,wdg) in self.widgets.iter_mut().enumerate() {
+            if wdg.id == id {
+                index = Some(i);
+                break;
+            }
+            if let Ok(()) = wdg.del_child(id) {
+                return Ok(());
+            }
+        }
+        if let Some(i) = index {
+            self.widgets.remove(i);
+            return Ok(());
+        }
+        Err("unable to find widget".into())
+    }
+
+    fn message (&mut self, id: u16, msg: String) -> Result<()> {
+        self.find_widget(id).ok_or::<Error>("unable to find widget".into())?.message(msg);
+        Ok(())
+    }
+
+    fn widgets_iter (&self) -> UiWidgetIter {
+        let mut stack = Vec::new();
+        stack.push(self.widgets.iter());
+        UiWidgetIter {
+            stack: stack
+        }
+    }
+}
+
+use std::slice::Iter;
+use std::iter::Iterator;
+
+struct UiWidgetIter <'a> {
+    stack: Vec<Iter<'a, Widget>>
+}
+
+impl <'a> Iterator for UiWidgetIter <'a> {
+    type Item = (usize, &'a Widget);
+
+    fn next(&mut self) -> Option<(usize, &'a Widget)> {
+        loop {
+            if self.stack.is_empty() { return None; }
+            let len = self.stack.len();
+            match self.stack[len - 1].next() {
+                Some(wdg) => {
+                    let next = (len, wdg);
+                    if ! wdg.children.is_empty() {
+                        self.stack.push(wdg.children.iter());
+                    }
+                    return Some(next);
+                }
+                None => {
+                    self.stack.pop();
+                }
+            }
+        }
+    }
 }
 
 //TODO implement as Render trait implementations
@@ -165,6 +316,7 @@ impl Render {
                     let mut show_tiles = false;
                     let mut show_widgets = false;
                     let mut widgets = BTreeMap::new();
+                    let mut ui = Ui::new();
 
                     //TODO const palette
                     //TODO bind palette to resource names
@@ -217,9 +369,17 @@ impl Render {
                                                     hero = xy;
                                                 }
                                                 Event::Input => break,
-                                                Event::Wdg(Wdg::New(id,name,parent_id)) => { widgets.insert(id,(name,parent_id)); }
-                                                Event::Wdg(Wdg::Msg(id,name)) => { /*TODO*/ }
-                                                Event::Wdg(Wdg::Del(id)) => { widgets.remove(&id); }
+                                                Event::Wdg(Wdg::New(id,name,parent)) => {
+                                                    widgets.insert(id,(name.clone(),parent));
+                                                    ui.add_widget(id,name,parent).expect("unable to add widget");
+                                                }
+                                                Event::Wdg(Wdg::Msg(id,name)) => {
+                                                    ui.message(id,name);
+                                                }
+                                                Event::Wdg(Wdg::Del(id)) => {
+                                                    widgets.remove(&id);
+                                                    ui.del_widget(id);
+                                                }
                                             }
                                         }
                                         Stolen::Empty => break,
@@ -309,6 +469,25 @@ impl Render {
 
                                         if show_widgets {
                                             let mut i = 0;
+                                            for (depth,wdg) in ui.widgets_iter() {
+                                                text::Text::new_color([1.0, 1.0, 1.0, 1.0], 9).draw(
+                                                    &format!("{} {} {}", "- ".repeat(depth), wdg.id, wdg.name),
+                                                    &mut glyphs,
+                                                    &c.draw_state,
+                                                    c.transform.trans(20.0, 20.0 + i as f64), g);
+                                                /*
+                                                for msg in wdg.messages.iter() {
+                                                    text::Text::new_color([0.2, 0.2, 0.2, 1.0], 9).draw(
+                                                        &format!("{} {}", "- ".repeat(depth + 1), msg),
+                                                        &mut glyphs,
+                                                        &c.draw_state,
+                                                        c.transform.trans(20.0, 20.0 + i as f64), g);
+                                                    i += 9; //TODO += font.height
+                                                }
+                                                */
+                                                i += 9; //TODO += font.height
+                                            }
+                                            /*
                                             for (id, &(ref name, parent)) in widgets.iter() {
                                                 text::Text::new_color([1.0, 1.0, 1.0, 1.0], 9).draw(
                                                     &format!("{:6} {:6} {}", id, parent, name),
@@ -317,6 +496,7 @@ impl Render {
                                                     c.transform.trans(20.0, 20.0 + i as f64), g);
                                                 i += 9; //TODO += font.height
                                             }
+                                            */
                                         }
 
                                         if command_line {
