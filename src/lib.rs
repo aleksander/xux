@@ -28,6 +28,7 @@ extern crate image;
 extern crate piston_window;
 //extern crate crossbeam;
 extern crate deque;
+extern crate chrono;
 
 pub mod errors;
 pub mod proto;

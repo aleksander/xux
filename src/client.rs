@@ -165,9 +165,12 @@ impl<'a, D: Driver, A: Ai> Client<'a, D, A> {
         use state;
         use render;
         use util;
+        use chrono;
 
         info!("connect {} / {}", login, cookie.to_hex());
         self.state.connect(login, cookie)?;
+
+        let start_time = &chrono::Local::now().format("%Y-%m-%d %H-%M-%S").to_string();
 
         loop {
             while let Some(event) = self.state.next_event() {
@@ -175,8 +178,8 @@ impl<'a, D: Driver, A: Ai> Client<'a, D, A> {
                     state::Event::Grid((x, y)) => {
                         match self.state.map.grids.get(&(x, y)) {
                             Some(ref grid) => {
-                                //TODO save to 'account name'/'character name'/'session id(or login timestamp)'/ subdir
-                                util::grid_to_png(grid.x, grid.y, &grid.tiles, &grid.z);
+                                let name = if let Some(ref name) = self.state.hero.name { name } else { "none" };
+                                util::grid_to_png(login, name, start_time, grid.x, grid.y, &grid.tiles, &grid.z);
                                 render::Event::Grid(x, y, grid.tiles.clone(), grid.z.clone(), grid.ol.clone())
                             }
                             None => {
