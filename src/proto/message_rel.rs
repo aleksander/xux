@@ -335,7 +335,7 @@ impl Glob {
     }
 
     #[cfg(feature = "hafen")]
-    fn from_buf <R:ReadBytesSac> (r: &mut R, t: &str, inc: u8) -> Result<Glob> {
+    fn from_buf <R:ReadBytesSac> (r: &mut R, t: &str, _inc: u8) -> Result<Glob> {
         let _list = List::from_buf(r)?;
         Ok(match t {
             "tm" => {Glob::Tm}

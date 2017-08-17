@@ -1,10 +1,8 @@
 #![feature(inclusive_range_syntax)]
-#![feature(associated_consts)]
 #![recursion_limit = "1024"]
-#![feature(struct_field_attributes)]
 
 #![warn(trivial_casts)]
-#![warn(trivial_numeric_casts)]
+//#![warn(trivial_numeric_casts)]
 #![warn(unused_import_braces)]
 #![warn(unused_qualifications)]
 //#![warn(unused_results)]

@@ -82,12 +82,14 @@ impl Widget {
 
 struct Ui {
     widgets: Vec<Widget>,
+    messages: Vec<String>,
 }
 
 impl Ui {
     fn new () -> Ui {
         Ui {
-            widgets: Vec::new()
+            widgets: Vec::new(),
+            messages: Vec::new()
         }
     }
 
@@ -104,6 +106,7 @@ impl Ui {
     }
 
     fn add_widget (&mut self, id: u16, name: String, parent: u16) -> Result<()> {
+        debug!("adding widget {} '{}' [{}]", id, name, parent);
         if parent == 0 {
             self.widgets.push(Widget::new(id, name));
         } else {
@@ -113,6 +116,7 @@ impl Ui {
     }
 
     fn del_widget (&mut self, id: u16) -> Result<()> {
+        debug!("deleting widget {}", id);
         let mut index = None;
         for (i,wdg) in self.widgets.iter_mut().enumerate() {
             if wdg.id == id {
@@ -131,7 +135,12 @@ impl Ui {
     }
 
     fn message (&mut self, id: u16, msg: String) -> Result<()> {
-        self.find_widget(id).ok_or::<Error>("unable to find widget".into())?.message(msg);
+        debug!("message to widget {} '{}'", id, msg);
+        if id == 0 {
+            self.messages.push(msg);
+        } else {
+            self.find_widget(id).ok_or::<Error>("unable to find widget".into())?.message(msg);
+        }
         Ok(())
     }
 
@@ -300,7 +309,7 @@ impl Render {
                             .build().unwrap();
                     let font = "/usr/share/fonts/TTF/DejaVuSansMono.ttf";
                     let factory = window.factory.clone();
-                    let mut glyphs = Glyphs::new(font, factory).unwrap();
+                    let mut glyphs = Glyphs::new(font, factory, TextureSettings::new()).unwrap();
                     let mut origin = None;
                     let mut objects = BTreeMap::new();
                     let mut zoom = 1.0;
@@ -371,14 +380,14 @@ impl Render {
                                                 Event::Input => break,
                                                 Event::Wdg(Wdg::New(id,name,parent)) => {
                                                     widgets.insert(id,(name.clone(),parent));
-                                                    ui.add_widget(id,name,parent).expect("unable to add widget");
+                                                    ui.add_widget(id,name,parent).expect("unable to ui.add_widget");
                                                 }
                                                 Event::Wdg(Wdg::Msg(id,name)) => {
-                                                    ui.message(id,name);
+                                                    ui.message(id,name).expect("unable to ui.message");
                                                 }
                                                 Event::Wdg(Wdg::Del(id)) => {
                                                     widgets.remove(&id);
-                                                    ui.del_widget(id);
+                                                    ui.del_widget(id).expect("unable to ui.del_widget");
                                                 }
                                             }
                                         }

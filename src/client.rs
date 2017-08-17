@@ -179,7 +179,7 @@ impl<'a, D: Driver, A: Ai> Client<'a, D, A> {
                         match self.state.map.grids.get(&(x, y)) {
                             Some(ref grid) => {
                                 let name = if let Some(ref name) = self.state.hero.name { name } else { "none" };
-                                util::grid_to_png(login, name, start_time, grid.x, grid.y, &grid.tiles, &grid.z);
+                                util::grid_to_png(login, name, start_time, grid.x, grid.y, &grid.tiles, &grid.z)?;
                                 render::Event::Grid(x, y, grid.tiles.clone(), grid.z.clone(), grid.ol.clone())
                             }
                             None => {

@@ -162,6 +162,7 @@ pub struct Movement {
 }
 
 impl Movement {
+    #[cfg(feature = "salem")]
     fn new(from: ObjXY, to: ObjXY, steps: i32, step: i32) -> Movement {
         Movement {
             from: from,
