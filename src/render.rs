@@ -41,30 +41,31 @@ impl Widget {
         }
     }
 
-    fn add_child (&mut self, wdg: Widget) {
+    fn add (&mut self, wdg: Widget) {
         self.children.push(wdg)
     }
 
-    fn find_child (&mut self, id: u16) -> Option<&mut Widget> {
+    fn find (&mut self, id: u16) -> Option<&mut Widget> {
+        if id == self.id { return Some(self); }
         for wdg in self.children.iter_mut() {
             if wdg.id == id {
                 return Some(wdg);
             }
-            if let Some(wdg) = wdg.find_child(id) {
+            if let Some(wdg) = wdg.find(id) {
                 return Some(wdg);
             }
         }
         None
     }
 
-    fn del_child (&mut self, id: u16) -> Result<()> {
+    fn del (&mut self, id: u16) -> Result<()> {
         let mut index = None;
         for (i,wdg) in self.children.iter_mut().enumerate() {
             if wdg.id == id {
                 index = Some(i);
                 break;
             }
-            if let Ok(()) = wdg.del_child(id) {
+            if let Ok(()) = wdg.del(id) {
                 return Ok(());
             }
         }
@@ -81,72 +82,40 @@ impl Widget {
 }
 
 struct Ui {
-    widgets: Vec<Widget>,
-    messages: Vec<String>,
+    root: Widget,
 }
 
 impl Ui {
     fn new () -> Ui {
         Ui {
-            widgets: Vec::new(),
-            messages: Vec::new()
+            root: Widget::new(0, "root".into())
         }
     }
 
     fn find_widget (&mut self, id: u16) -> Option<&mut Widget> {
-        for wdg in self.widgets.iter_mut() {
-            if wdg.id == id {
-                return Some(wdg);
-            }
-            if let Some(wdg) = wdg.find_child(id) {
-                return Some(wdg);
-            }
-        }
-        None
+        self.root.find(id)
     }
 
     fn add_widget (&mut self, id: u16, name: String, parent: u16) -> Result<()> {
         debug!("adding widget {} '{}' [{}]", id, name, parent);
-        if parent == 0 {
-            self.widgets.push(Widget::new(id, name));
-        } else {
-            self.find_widget(parent).ok_or::<Error>("unable to find widget".into())?.add_child(Widget::new(id, name))
-        }
+        self.root.find(parent).ok_or::<Error>("unable to find widget".into())?.add(Widget::new(id, name));
         Ok(())
     }
 
     fn del_widget (&mut self, id: u16) -> Result<()> {
         debug!("deleting widget {}", id);
-        let mut index = None;
-        for (i,wdg) in self.widgets.iter_mut().enumerate() {
-            if wdg.id == id {
-                index = Some(i);
-                break;
-            }
-            if let Ok(()) = wdg.del_child(id) {
-                return Ok(());
-            }
-        }
-        if let Some(i) = index {
-            self.widgets.remove(i);
-            return Ok(());
-        }
-        Err("unable to find widget".into())
+        self.root.del(id)
     }
 
     fn message (&mut self, id: u16, msg: String) -> Result<()> {
         debug!("message to widget {} '{}'", id, msg);
-        if id == 0 {
-            self.messages.push(msg);
-        } else {
-            self.find_widget(id).ok_or::<Error>("unable to find widget".into())?.message(msg);
-        }
+        self.root.find(id).ok_or::<Error>("unable to find widget".into())?.message(msg);
         Ok(())
     }
 
     fn widgets_iter (&self) -> UiWidgetIter {
         let mut stack = Vec::new();
-        stack.push(self.widgets.iter());
+        stack.push(self.root.children.iter());
         UiWidgetIter {
             stack: stack
         }
