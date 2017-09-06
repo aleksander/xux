@@ -264,7 +264,7 @@ impl Render {
             }
             RenderKind::TwoD => {
                 thread::spawn(move || {
-                    use piston_window::*;
+                    use piston_window::{self as pw, PistonWindow, WindowSettings, Glyphs, TextureSettings, Texture, texture, text, Key, Transformed};
                     //use std::sync::mpsc::TryRecvError;
                     use std::collections::BTreeMap;
                     use image;
@@ -295,6 +295,7 @@ impl Render {
                     let mut show_widgets = false;
                     let mut widgets = BTreeMap::new();
                     let mut ui = Ui::new();
+                    let mut show_borders = false;
 
                     //TODO const palette
                     //TODO bind palette to resource names
@@ -312,7 +313,7 @@ impl Render {
 
                     'outer: while let Some(e) = window.next() {
                         match e {
-                            Input::Update(_) => {
+                            pw::Event::Loop(pw::Loop::Update(_)) => {
                                 loop {
                                     match stealer.steal() {
                                         Stolen::Data(event) => {
@@ -365,9 +366,9 @@ impl Render {
                                     }
                                 }
                             }
-                            Input::Render(render) => {
+                            pw::Event::Loop(pw::Loop::Render(render)) => {
                                 window.draw_2d(&e, |c, g| {
-                                    clear([0.0; 4], g);
+                                    pw::clear([0.0; 4], g);
                                     if let Some(ObjXY(ox,oy)) = origin {
 
                                         let t = c.transform.trans(render.width as f64 / 2.0, render.height as f64 / 2.0).zoom(zoom);
@@ -379,32 +380,34 @@ impl Render {
                                             for &(gridx,gridy) in [(gx-1,gy-1),(gx,gy-1),(gx+1,gy-1),
                                             (gx-1,gy  ),(gx,gy  ),(gx+1,gy  ),
                                             (gx-1,gy+1),(gx,gy+1),(gx+1,gy+1)].iter() {
-                                                if let Some(&(ref tiles, ref heights, ref owning, ref texture)) = grids.get(&(gridx,gridy)) {
+                                                if let Some(&(ref _tiles, ref heights, ref _owning, ref texture)) = grids.get(&(gridx,gridy)) {
 
                                                     let t = t.trans((gridx*100) as f64, (gridy*100) as f64);
 
-                                                    image(texture, t, g);
+                                                    pw::image(texture, t, g);
 
-                                                    for y in 0..99 {
-                                                        for x in 0..99 {
-                                                            use shift_to_unsigned::ShiftToUnsigned;
+                                                    if show_borders {
+                                                        for y in 0..99 {
+                                                            for x in 0..99 {
+                                                                use shift_to_unsigned::ShiftToUnsigned;
 
-                                                            let i = y*100+x;
-                                                            let z = heights[i].shift_to_unsigned();
-                                                            let zx = heights[i+1].shift_to_unsigned();
-                                                            let zy = heights[i+100].shift_to_unsigned();
-                                                            let dx = if z > zx { z - zx } else { zx - z };
-                                                            let dy = if z > zy { z - zy } else { zy - z };
-                                                            if dx > delta_height || dy > delta_height {
-                                                                let lx = x as f64;
-                                                                let ly = y as f64;
-                                                                let lcolor = [0.3, 0.3, 0.3, 1.0];
-                                                                let lsize = 0.1;
-                                                                if dx > delta_height {
-                                                                    line(lcolor, lsize, [lx, ly, lx + 1.0, ly], t, g);
-                                                                }
-                                                                if dy > delta_height {
-                                                                    line(lcolor, lsize, [lx, ly, lx, ly + 1.0], t, g);
+                                                                let i = y*100+x;
+                                                                let z = heights[i].shift_to_unsigned();
+                                                                let zx = heights[i+1].shift_to_unsigned();
+                                                                let zy = heights[i+100].shift_to_unsigned();
+                                                                let dx = if z > zx { z - zx } else { zx - z };
+                                                                let dy = if z > zy { z - zy } else { zy - z };
+                                                                if dx > delta_height || dy > delta_height {
+                                                                    let lx = x as f64;
+                                                                    let ly = y as f64;
+                                                                    let lcolor = [0.3, 0.3, 0.3, 1.0];
+                                                                    let lsize = 0.1;
+                                                                    if dx > delta_height {
+                                                                        pw::line(lcolor, lsize, [lx, ly, lx + 1.0, ly], t, g);
+                                                                    }
+                                                                    if dy > delta_height {
+                                                                        pw::line(lcolor, lsize, [lx, ly, lx, ly + 1.0], t, g);
+                                                                    }
                                                                 }
                                                             }
                                                         }
@@ -420,11 +423,11 @@ impl Render {
                                             let color = if resid == 2951 {[1.0, 0.0, 0.0, 1.0]} else {[1.0, 1.0, 1.0, 1.0]};
                                             #[cfg(feature = "hafen")]
                                             let color = [1.0, 1.0, 1.0, 1.0];
-                                            rectangle(color, [cx as f64 - 2.0, cy as f64 - 2.0, 4.0, 4.0], t, g);
+                                            pw::rectangle(color, [cx as f64 - 2.0, cy as f64 - 2.0, 4.0, 4.0], t, g);
                                         }
 
-                                        rectangle([0.2, 0.2, 1.0, 1.0], [hero.0 as f64 - 2.0, hero.1 as f64 - 2.0, 4.0, 4.0], t, g);
-                                        rectangle([1.0, 1.0, 1.0, 1.0], [hero.0 as f64 - 0.5, hero.1 as f64 - 0.5, 1.0, 1.0], t, g);
+                                        pw::rectangle([0.2, 0.2, 1.0, 1.0], [hero.0 as f64 - 2.0, hero.1 as f64 - 2.0, 4.0, 4.0], t, g);
+                                        pw::rectangle([1.0, 1.0, 1.0, 1.0], [hero.0 as f64 - 0.5, hero.1 as f64 - 0.5, 1.0, 1.0], t, g);
 
                                         if show_objtypes {
                                             let mut objtypes = BTreeMap::new();
@@ -488,25 +491,25 @@ impl Render {
                                     }
                                 });
                             }
-                            Input::Press(Button::Mouse(MouseButton::Left)) => dragging = true,
-                            Input::Release(Button::Mouse(MouseButton::Left)) => dragging = false,
+                            pw::Event::Input(pw::Input::Button(pw::ButtonArgs{state: pw::ButtonState::Press, button: pw::Button::Mouse(pw::MouseButton::Left), ..})) => dragging = true,
+                            pw::Event::Input(pw::Input::Button(pw::ButtonArgs{state: pw::ButtonState::Release, button: pw::Button::Mouse(pw::MouseButton::Left), ..})) => dragging = false,
                             #[cfg(feature = "salem")]
-                            Input::Move(Motion::MouseRelative(x,y)) => if dragging {
+                            pw::Event::Input(pw::Input::Move(pw::Motion::MouseRelative(x,y))) => if dragging {
                                 if let Some(ObjXY(ox,oy)) = origin {
                                     origin = Some(ObjXY(ox - (x / zoom) as i32, oy - (y / zoom) as i32));
                                 }
                             },
                             #[cfg(feature = "hafen")]
-                            Input::Move(Motion::MouseRelative(x,y)) => if dragging {
+                            pw::Event::Input(pw::Input::Move(pw::Motion::MouseRelative(x,y))) => if dragging {
                                 if let Some(ObjXY(ox,oy)) = origin {
                                     origin = Some(ObjXY(ox - (x / zoom), oy - (y / zoom)));
                                 }
                             },
-                            Input::Move(Motion::MouseScroll(_,y)) => zoom *= if y > 0.0 { 1.05 } else { 0.95 },
-                            Input::Press(Button::Keyboard(key)) => {
+                            pw::Event::Input(pw::Input::Move(pw::Motion::MouseScroll(_,y))) => zoom *= if y > 0.0 { 1.05 } else { 0.95 },
+                            pw::Event::Input(pw::Input::Button(pw::ButtonArgs{state: pw::ButtonState::Press, button: pw::Button::Keyboard(key), ..})) => {
                                 match key {
                                     Key::A => if command_line { command += "a"; },
-                                    Key::B => if command_line { command += "b"; },
+                                    Key::B => if command_line { command += "b"; } else { show_borders = ! show_borders; },
                                     Key::C => if command_line { command += "c"; },
                                     Key::D => if command_line { command += "d"; },
                                     Key::E => if command_line { command += "e"; },
@@ -561,7 +564,7 @@ impl Render {
                                     _ => {}
                                 }
                             }
-                            Input::Close(_) => break,
+                            pw::Event::Input(pw::Input::Close(_)) => break,
                             _ => {}
                         }
                     }
