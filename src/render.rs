@@ -3,7 +3,7 @@ use std::sync::mpsc::Sender;
 use std::thread;
 use driver;
 use ncurses::*;
-use deque::{self, Stolen};
+//use deque::{self, Stolen};
 use proto::*;
 use state::Wdg;
 use errors::*;
@@ -158,11 +158,12 @@ pub enum RenderKind {
     Tui,
     TwoD,
     ThreeD,
+    External,
 }
 
 pub struct Render {
     kind: RenderKind,
-    worker: deque::Worker<Event>,
+    tx: Sender<Event>,
 }
 
 impl Drop for Render {
@@ -177,28 +178,32 @@ impl Drop for Render {
             }
             RenderKind::ThreeD => {
             }
+            RenderKind::External => {
+            }
         }
     }
 }
 
 impl Render {
     pub fn new(kind: RenderKind, render_tx: Sender<driver::Event>) -> Render {
+        use std::sync::mpsc::channel;
+        use std::sync::mpsc::TryRecvError::*;
 
         //TODO try coco::deque instead
-        let (worker, stealer) = deque::new();
+        let (tx, rx) = channel();
 
         match kind {
             RenderKind::No => {
                 thread::spawn(move || {
                     loop {
-                        match stealer.steal() {
-                            Stolen::Data(event) => {
+                        match rx.try_recv() {
+                            Ok(event) => {
                                 match event {
                                     _ => {}
                                 }
                             }
-                            Stolen::Empty => {}
-                            Stolen::Abort => {}
+                            Err(Empty) => {}
+                            Err(Disconnected) => { break; }
                         }
                     }
                 });
@@ -219,8 +224,8 @@ impl Render {
                         mvprintw(0, 0, &format!("counter: {} ", counter));
                         mvprintw(1, 0, &last_event);
                         refresh();
-                        match stealer.steal() {
-                            Stolen::Data(value) => {
+                        match rx.try_recv() {
+                            Ok(value) => {
                                 counter += 1;
                                 match value {
                                     Event::Grid(x, y, _tiles, _z, _ol) => {
@@ -240,11 +245,11 @@ impl Render {
                                     _ => {}
                                 }
                             }
-                            Stolen::Empty => {
+                            Err(Empty) => {
                                 //info!("render: disconnected");
                                 //return;
                             }
-                            Stolen::Abort => {}
+                            Err(Disconnected) => { break; }
                         }
                     }
                 });
@@ -264,17 +269,18 @@ impl Render {
             }
             RenderKind::TwoD => {
                 thread::spawn(move || {
-                    use piston_window::{self as pw, PistonWindow, WindowSettings, Glyphs, TextureSettings, Texture, texture, text, Key, Transformed};
+                    use piston_window::{self as pw, PistonWindow, WindowSettings, Glyphs, TextureSettings, Texture, texture, text, Key, Transformed, OpenGL};
                     //use std::sync::mpsc::TryRecvError;
                     use std::collections::BTreeMap;
                     use image;
 
-                    //let opengl = OpenGL::V3_2;
+                    //let opengl = OpenGL::V3_0;
                     let mut window: PistonWindow =
                         WindowSettings::new("Render", [800, 600])
                             //.opengl(opengl)
-                            .vsync(true)
-                            .samples(16)
+                            //.vsync(true)
+                            //.samples(16)
+                            .srgb(false)
                             .build().unwrap();
                     let font = "/usr/share/fonts/TTF/DejaVuSansMono.ttf";
                     let factory = window.factory.clone();
@@ -315,8 +321,8 @@ impl Render {
                         match e {
                             pw::Event::Loop(pw::Loop::Update(_)) => {
                                 loop {
-                                    match stealer.steal() {
-                                        Stolen::Data(event) => {
+                                    match rx.try_recv() {
+                                        Ok(event) => {
                                             //println!("RENDER: {:?}", event);
                                             match event {
                                                 Event::Grid(x,y,tiles,heights,owning) => {
@@ -361,8 +367,8 @@ impl Render {
                                                 }
                                             }
                                         }
-                                        Stolen::Empty => break,
-                                        Stolen::Abort => {}
+                                        Err(Empty) => {}
+                                        Err(Disconnected) => { break; }
                                     }
                                 }
                             }
@@ -850,15 +856,17 @@ impl Render {
                          });
                 */
             }
+            RenderKind::External => {
+            }
         }
 
         Render {
             kind: kind,
-            worker: worker,
+            tx: tx,
         }
     }
 
     pub fn update(&mut self, event: Event) {
-        self.worker.push(event)
+        self.tx.send(event).expect("render.update");
     }
 }

@@ -25,7 +25,7 @@ extern crate image;
 // extern crate lua;
 extern crate piston_window;
 //extern crate crossbeam;
-extern crate deque;
+//extern crate deque;
 extern crate chrono;
 
 pub mod errors;

@@ -55,8 +55,8 @@ fn main () {
         let dx = (maxx - minx + 1) as u32;
         let dy = (maxy - miny + 1) as u32;
         println!("{}x{}", dx, dy);
-        for y in miny...maxy {
-            for x in minx...maxx {
+        for y in miny..=maxy {
+            for x in minx..=maxx {
                 if tiles.contains_key(&(x, y)) {
                     print!("0");
                 } else {
@@ -67,8 +67,8 @@ fn main () {
         }
         const TILE_SIZE: u32 = 100;
         let mut buf: image::ImageBuffer<image::Rgba<u8>, Vec<u8>> = image::ImageBuffer::new(dx * TILE_SIZE, dy * TILE_SIZE);
-        for y in miny...maxy {
-            for x in minx...maxx {
+        for y in miny..=maxy {
+            for x in minx..=maxx {
                 if let Some(path) = tiles.get(&(x, y)) {
                     use image::GenericImage;
                     let tile = image::open(path).expect("image.open");

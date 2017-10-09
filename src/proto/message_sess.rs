@@ -80,7 +80,7 @@ impl cSess {
         cSess {
             unknown: 2,
             proto: "Hafen".into(),
-            version: 10,
+            version: 11,
             login: login,
             cookie: cookie,
         }
