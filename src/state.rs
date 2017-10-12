@@ -410,7 +410,7 @@ impl Map {
     }
 }
 
-#[derive(Debug)]
+#[derive(Serialize,Deserialize,Debug)]
 pub enum Wdg {
     New(u16,String,u16),
     Msg(u16,String),

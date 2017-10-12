@@ -25,10 +25,10 @@ pub use proto::message_objack::*;
 pub use proto::message_close::*;
 
 #[cfg(feature = "salem")]
-#[derive(Debug,Clone,Copy)]
+#[derive(Serialize,Deserialize,Debug,Clone,Copy)]
 pub struct ObjXY(pub i32, pub i32);
 #[cfg(feature = "hafen")]
-#[derive(Debug,Clone,Copy)]
+#[derive(Serialize,Deserialize,Debug,Clone,Copy)]
 pub struct ObjXY(pub f64, pub f64);
 
 impl ObjXY {

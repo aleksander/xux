@@ -62,9 +62,9 @@ fn run() -> Result<()> {
     //      (implement when PNGs will be saved in user/char/session subdirs)
 
     let args: Vec<String> = std::env::args().collect();
-    if args.len() != 3 {
+    if args.len() != 4 {
         info!("wrong argument count");
-        info!("usage: {} username password", args[0]);
+        info!("usage: {} username password render_type", args[0]);
         return Err("wrong argument count".into());
     }
 
@@ -86,7 +86,15 @@ fn run() -> Result<()> {
 
     let mut driver = DriverStd::new(host, game_port).chain_err(||"unable to create driver")?;
 
-    let render = Render::new(RenderKind::TwoD, driver.sender());
+    let render_kind = match args[3].as_str() {
+        "no" => RenderKind::No,
+        "tui" => RenderKind::Tui,
+        "2d" => RenderKind::TwoD,
+        "3d" => RenderKind::ThreeD,
+        "external" => RenderKind::External,
+        _ => return Err("wrong render type".into())
+    };
+    let render = Render::new(render_kind, driver.sender());
 
     let mut client = Client::new(&mut driver, &mut ai, render);
     client.run(&login, &cookie)

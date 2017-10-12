@@ -31,8 +31,10 @@ pcap = "*"
 error-chain = "*"
 piston_window = "*"
 crossbeam = "*"
-#deque = "*"
 chrono = "*"
+serde = "*"
+serde_derive = "*"
+bincode = "*"
 
 [features]
 driver_std = []

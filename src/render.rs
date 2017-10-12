@@ -1,14 +1,16 @@
 use std::sync::mpsc::Sender;
-//use std::sync::mpsc::SendError;
 use std::thread;
 use driver;
 use ncurses::*;
-//use deque::{self, Stolen};
 use proto::*;
 use state::Wdg;
 use errors::*;
+use std::slice::Iter;
+use std::iter::Iterator;
+use std::sync::mpsc::channel;
+use std::sync::mpsc::TryRecvError::*;
 
-#[derive(Debug)]
+#[derive(Serialize,Deserialize,Debug)]
 pub enum Event {
     Grid(i32, i32, Vec<u8>, Vec<i16>, Vec<u8>),
     Obj(ObjID, ObjXY, ResID),
@@ -122,9 +124,6 @@ impl Ui {
     }
 }
 
-use std::slice::Iter;
-use std::iter::Iterator;
-
 struct UiWidgetIter <'a> {
     stack: Vec<Iter<'a, Widget>>
 }
@@ -169,26 +168,16 @@ pub struct Render {
 impl Drop for Render {
     fn drop(&mut self) {
         match self.kind {
-            RenderKind::No => {
-            }
             RenderKind::Tui => {
                 endwin();
             }
-            RenderKind::TwoD => {
-            }
-            RenderKind::ThreeD => {
-            }
-            RenderKind::External => {
-            }
+            _ => {}
         }
     }
 }
 
 impl Render {
     pub fn new(kind: RenderKind, render_tx: Sender<driver::Event>) -> Render {
-        use std::sync::mpsc::channel;
-        use std::sync::mpsc::TryRecvError::*;
-
         //TODO try coco::deque instead
         let (tx, rx) = channel();
 
@@ -857,6 +846,30 @@ impl Render {
                 */
             }
             RenderKind::External => {
+                thread::spawn(move || {
+                    use bincode::{serialize, Infinite};
+                    use std::fs::File;
+                    use std::io::BufWriter;
+                    use std::io::Write;
+
+                    let f = File::create("events.dump").expect("unable to create \"events.dump\"");
+                    let mut writer = BufWriter::new(f);
+                    loop {
+                        match rx.try_recv() {
+                            Ok(event) => {
+                                let serialized: Vec<u8> = serialize(&event, Infinite).unwrap();
+                                let mut len = serialized.len();
+                                for _ in 0..8 {
+                                    writer.write(&[len as u8]);
+                                    len >>= 8;
+                                }
+                                writer.write(&serialized);
+                            }
+                            Err(Empty) => {}
+                            Err(Disconnected) => { break; }
+                        }
+                    }
+                });
             }
         }
 
