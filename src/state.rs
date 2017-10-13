@@ -226,6 +226,8 @@ pub struct Surface {
     pub y: i32,
     pub name: String,
     pub id: i64,
+    #[cfg(feature = "hafen")]
+    pub tileres: Vec<Tile>,
     pub tiles: Vec<u8>,
     pub z: Vec<i16>,
     pub ol: Vec<u8>,
@@ -306,13 +308,13 @@ impl Surface {
             let resname = r.strz().chain_err(||"surface tile resname")?;
             let resver = r.u16().chain_err(||"surface tile resver")?;
             //tileres[tileid as usize] = (resname,resver);
-            tileres.push((tileid,resname,resver));
+            tileres.push(Tile{id:tileid,name:resname,ver:resver});
         }
         //for (i,t) in tileres.iter().enumerate() {
         //    if ! t.0.is_empty() { debug!("{} {:?}", i, t); }
         //}
-        for &(ref id, ref name, ref version) in tileres.iter() {
-            debug!("tileres {:5} {} {}", id, name, version);
+        for tile in tileres.iter() {
+            debug!("tileres {:5} {} {}", tile.id, tile.name, tile.ver);
         }
 
         let tiles = (0..100*100).map(|_|r.u8()).collect::<Result<Vec<u8>>>()?;
@@ -424,6 +426,7 @@ pub enum Wdg {
 }
 
 pub enum Event {
+    Tiles(Vec<Tile>),
     Grid(GridXY),
     Obj(ObjID, ObjXY, ResID),
     ObjRemove(ObjID),
@@ -639,10 +642,11 @@ impl State {
                     match self.map.grids.get(&(map.x, map.y)) {
                         Some(_) => info!("MAP DUPLICATE"),
                         None => {
-                            #[config(salem)]
+                            #[cfg(feature = "salem")]
                             self.events.push_front(Event::Grid((map.x, map.y)));
-                            #[config(hafen)]
-                            self.events.push_front(Event::TileRes(map.tileres));
+                            #[cfg(feature = "hafen")]
+                            self.events.push_front(Event::Tiles(map.tileres.clone()));
+                            #[cfg(feature = "hafen")]
                             self.events.push_front(Event::Grid((map.x, map.y)));
                             self.map.grids.insert((map.x, map.y), map);
                         }
@@ -774,7 +778,9 @@ impl State {
                 Rel::SFX(_) => {}
                 Rel::CATTR(_) => {}
                 Rel::MUSIC(_) => {}
-                Rel::TILES(_) => {}
+                Rel::TILES(ref tiles) => {
+                    self.events.push_front(Event::Tiles(tiles.tiles.clone()));
+                }
                 Rel::BUFF(_) => {}
                 Rel::SESSKEY(_) => {}
             }

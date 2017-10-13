@@ -12,7 +12,7 @@ use std::sync::mpsc::TryRecvError::*;
 
 #[derive(Serialize,Deserialize,Debug)]
 pub enum Event {
-    TileRes(id,name,version)
+    Tiles(Vec<Tile>),
     Grid(i32, i32, Vec<u8>, Vec<i16>, Vec<u8>),
     Obj(ObjID, ObjXY, ResID),
     ObjRemove(ObjID),
@@ -356,6 +356,7 @@ impl Render {
                                                     widgets.remove(&id);
                                                     ui.del_widget(id).expect("unable to ui.del_widget");
                                                 }
+                                                Event::Tiles(tiles) => { /*TODO*/ }
                                             }
                                         }
                                         Err(Empty) => {}

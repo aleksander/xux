@@ -443,7 +443,7 @@ impl fmt::Debug for Tiles {
     }
 }
 
-#[derive(Debug)]
+#[derive(Serialize,Deserialize,Clone,Debug)]
 pub struct Tile {
     pub id: u8,
     pub name: String,

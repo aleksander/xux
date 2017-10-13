@@ -200,7 +200,8 @@ impl<'a, D: Driver, A: Ai> Client<'a, D, A> {
                         }
                         None => panic!("received Event::Hero while hero.obj is None")
                     },
-                    state::Event::Wdg(wdg) => render::Event::Wdg(wdg)
+                    state::Event::Wdg(wdg) => render::Event::Wdg(wdg),
+                    state::Event::Tiles(tiles) => render::Event::Tiles(tiles),
                 };
                 self.render.update(event)
                 //{ self.state.close().chain_err(||"unable to enqueue CLOSE")?; }
