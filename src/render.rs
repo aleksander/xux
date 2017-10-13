@@ -12,6 +12,7 @@ use std::sync::mpsc::TryRecvError::*;
 
 #[derive(Serialize,Deserialize,Debug)]
 pub enum Event {
+    TileRes(id,name,version)
     Grid(i32, i32, Vec<u8>, Vec<i16>, Vec<u8>),
     Obj(ObjID, ObjXY, ResID),
     ObjRemove(ObjID),
@@ -94,9 +95,9 @@ impl Ui {
         }
     }
 
-    fn find_widget (&mut self, id: u16) -> Option<&mut Widget> {
-        self.root.find(id)
-    }
+    //fn find_widget (&mut self, id: u16) -> Option<&mut Widget> {
+    //    self.root.find(id)
+    //}
 
     fn add_widget (&mut self, id: u16, name: String, parent: u16) -> Result<()> {
         debug!("adding widget {} '{}' [{}]", id, name, parent);
@@ -258,7 +259,8 @@ impl Render {
             }
             RenderKind::TwoD => {
                 thread::spawn(move || {
-                    use piston_window::{self as pw, PistonWindow, WindowSettings, Glyphs, TextureSettings, Texture, texture, text, Key, Transformed, OpenGL};
+                    use piston_window::{self as pw, PistonWindow, WindowSettings, Glyphs, TextureSettings, Texture, texture, text, Key, Transformed};
+                    //use piston_window::OpenGL;
                     //use std::sync::mpsc::TryRecvError;
                     use std::collections::BTreeMap;
                     use image;
@@ -411,7 +413,7 @@ impl Render {
                                             }
                                         }
 
-                                        for &(ObjXY(x,y),resid) in objects.values() {
+                                        for &(ObjXY(x,y),_resid) in objects.values() {
                                             let (cx, cy) = (x as f64, y as f64);
                                             #[cfg(feature = "salem")]
                                             //FIXME check res_name=="*claim" but not ID==2951
@@ -427,7 +429,7 @@ impl Render {
                                         if show_objtypes {
                                             let mut objtypes = BTreeMap::new();
                                             for &(_,resid) in objects.values() {
-                                                let mut obj = objtypes.entry(resid).or_insert(0);
+                                                let obj = objtypes.entry(resid).or_insert(0);
                                                 *obj += 1;
                                             }
 
@@ -438,7 +440,7 @@ impl Render {
                                                     &format!("{:6} {:6} {}", count, resid, res),
                                                     &mut glyphs,
                                                     &c.draw_state,
-                                                    c.transform.trans(200.0, 20.0 + i as f64), g);
+                                                    c.transform.trans(200.0, 20.0 + i as f64), g).expect("unable to draw text");
                                                 i += 9; //TODO += font.height
                                             }
                                         }
@@ -450,7 +452,7 @@ impl Render {
                                                     &format!("{} {} {}", "- ".repeat(depth), wdg.id, wdg.name),
                                                     &mut glyphs,
                                                     &c.draw_state,
-                                                    c.transform.trans(20.0, 20.0 + i as f64), g);
+                                                    c.transform.trans(20.0, 20.0 + i as f64), g).expect("unable to draw text");
                                                 /*
                                                 for msg in wdg.messages.iter() {
                                                     text::Text::new_color([0.2, 0.2, 0.2, 1.0], 9).draw(
@@ -481,7 +483,7 @@ impl Render {
                                                 &mut glyphs,
                                                 &c.draw_state,
                                                 //TODO draw at the bottom of the window
-                                                c.transform.trans(10.0, 20.0), g);
+                                                c.transform.trans(10.0, 20.0), g).expect("unable to draw text");
                                         }
                                     }
                                 });
@@ -860,10 +862,10 @@ impl Render {
                                 let serialized: Vec<u8> = serialize(&event, Infinite).unwrap();
                                 let mut len = serialized.len();
                                 for _ in 0..8 {
-                                    writer.write(&[len as u8]);
+                                    writer.write(&[len as u8]).expect("unable to write serialized event len");
                                     len >>= 8;
                                 }
-                                writer.write(&serialized);
+                                writer.write(&serialized).expect("unable to write serialized event");
                             }
                             Err(Empty) => {}
                             Err(Disconnected) => { break; }
