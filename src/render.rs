@@ -259,7 +259,8 @@ impl Render {
             }
             RenderKind::TwoD => {
                 thread::spawn(move || {
-                    use piston_window::{self as pw, PistonWindow, WindowSettings, Glyphs, TextureSettings, Texture, texture, text, Key, Transformed};
+                    use piston_window::{self as pw, PistonWindow, WindowSettings, Glyphs, TextureSettings, Texture, text, Key, Transformed};
+                    use piston_window::texture::Filter::Nearest;
                     //use piston_window::OpenGL;
                     //use std::sync::mpsc::TryRecvError;
                     use std::collections::BTreeMap;
@@ -334,10 +335,15 @@ impl Render {
                                                             img.put_pixel(x as u32, y as u32, color);
                                                         }
                                                     }
-                                                    let texture = Texture::from_image(&mut window.factory, &img, &TextureSettings::new().filter(texture::Filter::Nearest)).unwrap();
+                                                    let texture = Texture::from_image(&mut window.factory, &img, &TextureSettings::new().filter(Nearest)).unwrap();
                                                     grids.insert((x,y), (tiles,heights,owning,texture));
                                                 }
-                                                Event::Obj(id,xy,resid) => { objects.insert(id, (xy,resid)); }
+                                                Event::Obj(id,xy,resid) => {
+                                                    //TODO ??? separate static objects like trees and
+                                                    //dynamic objects like rabbits to two
+                                                    //different caches
+                                                    objects.insert(id, (xy,resid));
+                                                }
                                                 Event::ObjRemove(ref id) => { objects.remove(id); }
                                                 Event::Res(id,name) => { resources.insert(id, name); }
                                                 Event::Hero(xy) => {
@@ -356,11 +362,11 @@ impl Render {
                                                     widgets.remove(&id);
                                                     ui.del_widget(id).expect("unable to ui.del_widget");
                                                 }
-                                                Event::Tiles(tiles) => { /*TODO*/ }
+                                                Event::Tiles(_tiles) => { /*TODO*/ }
                                             }
                                         }
-                                        Err(Empty) => {}
-                                        Err(Disconnected) => { break; }
+                                        Err(Empty) => { break; }
+                                        Err(Disconnected) => { break 'outer; }
                                     }
                                 }
                             }
