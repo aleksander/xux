@@ -22,19 +22,20 @@ nom = "*"
 #glium = "*"
 #cgmath = "*"
 #camera_controllers = "*"
-ncurses = "*"
+ncurses = { version = "*", optional = true }
 log = "*"
 fern = "*"
 #clippy = "*"
 pnet = "*"
 pcap = "*"
 error-chain = "*"
-piston_window = "*"
+piston_window = { version = "*", optional = true }
+piston2d-gfx_graphics = { version = "0.46.0", optional = true }
 crossbeam = "*"
 chrono = "*"
 serde = "*"
 serde_derive = "*"
-bincode = "*"
+bincode = { version = "*", optional = true }
 
 [features]
 driver_std = []
@@ -43,8 +44,14 @@ ai_decl = []
 ai_lua = []
 hafen = []
 salem = []
-default = ["driver_std","ai_decl"]
-mio_lua = ["driver_mio","ai_lua"]
+render_none = []
+render_text = [ "ncurses" ]
+render_2d_piston = [ "piston_window", "piston2d-gfx_graphics" ]
+render_3d_glium = []
+render_2d_gfx = []
+dump_events = [ "bincode" ]
+default = [ "driver_std", "ai_decl", "hafen" ]
+mio_lua = [ "driver_mio", "ai_lua" ]
 
 #[profile.dev]
 #panic = 'unwind'

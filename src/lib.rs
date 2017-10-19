@@ -15,6 +15,7 @@ extern crate byteorder;
 extern crate openssl;
 #[macro_use]
 extern crate error_chain;
+#[cfg(feature = "render_text")]
 extern crate ncurses;
 extern crate rustc_serialize;
 extern crate image;
@@ -23,12 +24,16 @@ extern crate image;
 // #[macro_use]
 // extern crate glium;
 // extern crate lua;
+#[cfg(feature = "render_2d_piston")]
 extern crate piston_window;
+#[cfg(feature = "render_2d_piston")]
+extern crate gfx_graphics;
 //extern crate crossbeam;
 //extern crate deque;
 extern crate chrono;
 #[macro_use]
 extern crate serde_derive;
+#[cfg(feature = "dump_events")]
 extern crate bincode;
 
 pub mod errors;
