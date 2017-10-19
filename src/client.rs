@@ -139,8 +139,8 @@ impl<'a, D: Driver, A: Ai> Client<'a, D, A> {
             #[cfg(feature = "salem")]
             driver::Event::Render(re) => {
                 match re {
-                    driver::RenderEvent::Up    => if let Some(ObjXY(x,y)) = self.state.hero_xy() { self.state.go(ObjXY(x,y-100)).chain_err(||"unable to go Up")?; },
-                    driver::RenderEvent::Down  => if let Some(ObjXY(x,y)) = self.state.hero_xy() { self.state.go(ObjXY(x,y+100)).chain_err(||"unable to go Down")?; },
+                    driver::RenderEvent::Up    => if let Some(ObjXY(x,y)) = self.state.hero_xy() { self.state.go(ObjXY(x,y+100)).chain_err(||"unable to go Up")?; },
+                    driver::RenderEvent::Down  => if let Some(ObjXY(x,y)) = self.state.hero_xy() { self.state.go(ObjXY(x,y-100)).chain_err(||"unable to go Down")?; },
                     driver::RenderEvent::Left  => if let Some(ObjXY(x,y)) = self.state.hero_xy() { self.state.go(ObjXY(x-100,y)).chain_err(||"unable to go Left")?; },
                     driver::RenderEvent::Right => if let Some(ObjXY(x,y)) = self.state.hero_xy() { self.state.go(ObjXY(x+100,y)).chain_err(||"unable to go Right")?; },
                     driver::RenderEvent::Quit  => self.state.close()?,
@@ -203,7 +203,7 @@ impl<'a, D: Driver, A: Ai> Client<'a, D, A> {
                     state::Event::Wdg(wdg) => render::Event::Wdg(wdg),
                     state::Event::Tiles(tiles) => render::Event::Tiles(tiles),
                 };
-                self.render.update(event)
+                self.render.update(event)?;
                 //{ self.state.close().chain_err(||"unable to enqueue CLOSE")?; }
             }
             self.send_all_enqueued().chain_err(||"unable to send_all_enqueued")?;

@@ -1,7 +1,8 @@
 #![feature(inclusive_range_syntax)]
 #![recursion_limit = "1024"]
+#![feature(inclusive_range_syntax)]
 
-#![warn(trivial_casts)]
+//#![warn(trivial_casts)]
 //#![warn(trivial_numeric_casts)]
 #![warn(unused_import_braces)]
 #![warn(unused_qualifications)]
@@ -35,6 +36,24 @@ extern crate chrono;
 extern crate serde_derive;
 #[cfg(feature = "dump_events")]
 extern crate bincode;
+
+#[cfg(feature = "render_2d_gfx")]
+#[macro_use]
+extern crate gfx;
+#[cfg(feature = "render_2d_gfx")]
+extern crate gfx_window_glutin;
+#[cfg(feature = "render_2d_gfx")]
+extern crate glutin;
+#[cfg(feature = "render_2d_gfx")]
+extern crate cgmath;
+#[cfg(feature = "render_2d_gfx")]
+extern crate imgui;
+#[cfg(feature = "render_2d_gfx")]
+extern crate imgui_gfx_renderer;
+#[cfg(feature = "render_2d_gfx")]
+extern crate gfx_device_gl;
+#[cfg(feature = "render_2d_gfx")]
+extern crate ron;
 
 pub mod errors;
 pub mod proto;

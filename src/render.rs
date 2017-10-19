@@ -83,13 +83,13 @@ impl Widget {
     }
 }
 
-struct Ui {
+struct XUi {
     root: Widget,
 }
 
-impl Ui {
-    fn new () -> Ui {
-        Ui {
+impl XUi {
+    fn new () -> XUi {
+        XUi {
             root: Widget::new(0, "root".into())
         }
     }
@@ -196,7 +196,7 @@ impl Render {
     pub fn new(render_tx: Sender<driver::Event>) -> Render {
         let (tx, rx) = channel();
 
-        thread::spawn(move || {
+        thread::Builder::new().name("render".to_string()).spawn(move || {
             let mut render_impl = render_impl::RenderImpl::new(); //TODO pass render_tx to new()
             #[cfg(feature = "dump_events")]
             let mut dumper = dumper::Dumper::init().expect("unable to create dumper");
@@ -216,14 +216,14 @@ impl Render {
                 }
             }
             render_impl.end();
-        });
+        }).expect("unable to create render thread");
 
         Render {
             tx: tx,
         }
     }
 
-    pub fn update(&mut self, event: Event) {
-        self.tx.send(event).expect("unable to send Event")
+    pub fn update(&mut self, event: Event) -> Result<()> {
+        self.tx.send(event).chain_err(||"render.update")
     }
 }

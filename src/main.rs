@@ -35,7 +35,8 @@ fn run() -> Result<()> {
                     message))
         })
         */
-        .level(log::LogLevelFilter::Debug)
+        .level(log::LogLevelFilter::Error)
+        .level_for("xux", log::LogLevelFilter::Debug)
         .chain(std::io::stdout())
         .chain(
             //fern::log_file(log_file_name)
