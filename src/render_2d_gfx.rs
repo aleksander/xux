@@ -344,11 +344,14 @@ impl ObjTex {
     fn plane_from_owning (size: f32, grid_x: i32, grid_y: i32, owning: &[u8]) -> ObjTex {
         assert_eq!(owning.len(), 100*100);
         let mut obj = ObjTex::plane(size, |x,y|{
-            if owning[y*100+x] == 0 {
+            let owning = owning[y*100+x];
+            if owning == 0 {
                 [0,0,0,0]
             } else {
                 //TODO different colors for personal and city claims
-                [255,0,0,63]
+                [127*(owning&1)      + 127*((owning>>1)&1),
+                 127*((owning>>2)&1) + 127*((owning>>3)&1),
+                 127*((owning>>4)&1) + 127*((owning>>5)&1), 63]
             }
         });
         obj.translate(size as f32 * grid_x as f32, size as f32 * grid_y as f32);

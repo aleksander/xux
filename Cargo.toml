@@ -63,7 +63,7 @@ render_2d_piston = [ "piston_window", "piston2d-gfx_graphics" ]
 render_3d_glium = []
 render_2d_gfx = [ "gfx", "gfx_window_glutin", "glutin", "cgmath", "imgui", "imgui-gfx-renderer", "gfx_device_gl", "serde", "serde_derive", "bincode", "ron", "image" ]
 dump_events = [ "bincode" ]
-default = [ "driver_std", "ai_decl", "hafen" ]
+default = [ "driver_std", "ai_decl", "hafen", "render_2d_gfx" ]
 mio_lua = [ "driver_mio", "ai_lua" ]
 
 #[profile.dev]

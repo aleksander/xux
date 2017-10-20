@@ -149,8 +149,8 @@ impl<'a, D: Driver, A: Ai> Client<'a, D, A> {
             #[cfg(feature = "hafen")]
             driver::Event::Render(re) => {
                 match re {
-                    driver::RenderEvent::Up    => if let Some(ObjXY(x,y)) = self.state.hero_xy() { self.state.go(ObjXY(x,y-100.0)).chain_err(||"unable to go Up")?; },
-                    driver::RenderEvent::Down  => if let Some(ObjXY(x,y)) = self.state.hero_xy() { self.state.go(ObjXY(x,y+100.0)).chain_err(||"unable to go Down")?; },
+                    driver::RenderEvent::Up    => if let Some(ObjXY(x,y)) = self.state.hero_xy() { self.state.go(ObjXY(x,y+100.0)).chain_err(||"unable to go Up")?; },
+                    driver::RenderEvent::Down  => if let Some(ObjXY(x,y)) = self.state.hero_xy() { self.state.go(ObjXY(x,y-100.0)).chain_err(||"unable to go Down")?; },
                     driver::RenderEvent::Left  => if let Some(ObjXY(x,y)) = self.state.hero_xy() { self.state.go(ObjXY(x-100.0,y)).chain_err(||"unable to go Left")?; },
                     driver::RenderEvent::Right => if let Some(ObjXY(x,y)) = self.state.hero_xy() { self.state.go(ObjXY(x+100.0,y)).chain_err(||"unable to go Right")?; },
                     driver::RenderEvent::Quit  => self.state.close()?,
