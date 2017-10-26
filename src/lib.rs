@@ -54,6 +54,8 @@ extern crate imgui_gfx_renderer;
 extern crate gfx_device_gl;
 #[cfg(feature = "render_2d_gfx")]
 extern crate ron;
+#[cfg(feature = "render_2d_gfx")]
+extern crate smallvec;
 
 pub mod errors;
 pub mod proto;

@@ -759,13 +759,17 @@ impl RenderImpl {
 
     //TODO FIXME split update() into update() and render() ???
     pub fn update (&mut self, render_tx: &Sender<driver::Event>) -> bool {
+        use smallvec::SmallVec;
         // HANDLE EVENTS
         //TODO app.handle(...)
         //FIXME ugly hack !
-        let mut events = Vec::with_capacity(100); //TODO use ArrayVec
+        let mut events = SmallVec::<[glutin::Event; 64]>::new();
         self.events_loop.poll_events(|event| {
             events.push(event);
         });
+        if events.spilled() {
+            warn!("events smallvec spilled!");
+        }
         for event in events.iter() {
             ui_handle_event(&mut self.imgui, &mut self.mouse_state, event);
             //TODO if ui.handle_event(event) == NOT_HANDLED {
