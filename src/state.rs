@@ -1055,7 +1055,7 @@ impl State {
     pub fn go(&mut self, xy: ObjXY) -> Result<()> {
         info!("GO ({}, {})", xy.0, xy.1);
         let id = self.widget_id("mapview", None).ok_or(ErrorKind::Msg("try to go with no mapview widget".into()))?;
-        let name: String = "click".to_owned();
+        let name = "click".to_string();
         let mut args: Vec<List> = Vec::new();
         args.push(List::Coord((907, 755))); //TODO set some random coords in the center of screen
         args.push(List::Coord(xy.into()));
@@ -1070,7 +1070,7 @@ impl State {
     pub fn pick(&mut self, obj_id: u32) -> Result<()> {
         info!("PICK");
         let id = self.widget_id("mapview", None).expect("mapview widget is not found");
-        let name = "click".to_owned();
+        let name = "click".to_string();
         let mut args = Vec::new();
         let xy = {
             match self.objects.get(&obj_id) {
@@ -1099,8 +1099,8 @@ impl State {
     }
 
     pub fn choose_pick(&mut self, wdg_id: u16) -> Result<()> {
-        info!("GO");
-        let name = "cl".to_owned();
+        info!("CHOOSE PICK");
+        let name = "cl".to_string();
         let mut args = Vec::new();
         args.push(List::Int(0));
         args.push(List::Int(0));
@@ -1156,10 +1156,7 @@ impl State {
     }
 
     pub fn hero_is_moving(&self) -> bool {
-        match self.hero_movement() {
-            Some(_) => true,
-            None => false,
-        }
+        self.hero_movement().is_some()
     }
 
     //pub fn start_point(&self) -> Option<Coord> {
