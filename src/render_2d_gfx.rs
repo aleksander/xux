@@ -432,8 +432,8 @@ fn run_ui <'a> (ui: &Ui<'a>,
                 resources: &BTreeMap<ResID,String>) -> bool {
     use imgui::*;
     ui.window(im_str!("Клёцка"))
-        .size((300.0, 600.0), ImGuiSetCond_FirstUseEver)
-        .position((10.0, 10.0), ImGuiSetCond_FirstUseEver)
+        .size((300.0, 600.0), ImGuiCond::FirstUseEver)
+        .position((10.0, 10.0), ImGuiCond::FirstUseEver)
         .build(|| {
             ui.text(im_str!("Привет, Мир!!!"));
             ui.separator();
@@ -450,8 +450,8 @@ fn run_ui <'a> (ui: &Ui<'a>,
         });
     ui.window(im_str!("Объекты"))
     //ui.window(im_str!("Объекты: {}", objects.len()))
-        .size((300.0, 600.0), ImGuiSetCond_FirstUseEver)
-        .position((300.0, 10.0), ImGuiSetCond_FirstUseEver)
+        .size((300.0, 600.0), ImGuiCond::FirstUseEver)
+        .position((300.0, 10.0), ImGuiCond::FirstUseEver)
         .build(|| {
             for ( &objid, &(ObjXY(_x,_y), ref resid) ) in objects.iter() {
                 let resname = match resources.get(resid) {
@@ -561,12 +561,9 @@ fn update_mouse(imgui: &mut ImGui, mouse_state: &mut MouseState) {
     mouse_state.wheel = 0.0;
 }
 
-
-
-pub struct RenderImpl {
+struct RenderImplState {
     tile_colors: HashMap<String,[u8;4]>,
     palette: [[u8; 4]; 256],
-    events_loop: glutin::EventsLoop,
     window: glutin::GlWindow,
     device: gfx_device_gl::Device,
     factory: gfx_device_gl::Factory,
@@ -604,94 +601,7 @@ pub struct RenderImpl {
     xui: XUi,
 }
 
-impl RenderImpl {
-    pub fn new () -> RenderImpl {
-
-        let events_loop = glutin::EventsLoop::new();
-        let context = glutin::ContextBuilder::new();
-        let builder = glutin::WindowBuilder::new()
-            .with_title("gfx 2d test".to_string())
-            .with_dimensions(800, 600);
-
-        let (window, device, mut factory, main_color, main_depth) =
-            gfx_window_glutin::init::<Rgba8, DepthStencil>(builder, context, &events_loop);
-
-
-        let (w, h) = window.get_inner_size_points().expect("get_inner_size_points failed");
-
-        let shaders = {
-            let version = device.get_info().shading_language;
-            if version.is_embedded {
-                if version.major >= 3 {
-                    Shaders::GlSlEs300
-                } else {
-                    Shaders::GlSlEs100
-                }
-            } else {
-                if version.major >= 4 {
-                    Shaders::GlSl400
-                } else if version.major >= 3 {
-                    Shaders::GlSl130
-                } else {
-                    Shaders::GlSl110
-                }
-            }
-        };
-
-        let mut imgui = ImGui::init();
-        imgui.set_font("DejaVuSansMono.ttf", 12.0, GlyphRange::Cyrillic).expect("Failed to imgui.set_font");
-        RenderImpl {
-            tile_colors: {
-                use ron::de::from_reader;
-                use std::io::BufReader;
-                use std::fs::File;
-
-                let f = File::open("tile_colors.ron").expect("unable to open tile_colors.ron");
-                from_reader(BufReader::new(f)).expect("unable to deserialize")
-            },
-            palette: [[0,0,0,255]; 256],
-            events_loop: events_loop,
-            window: window,
-            device: device,
-            encoder: factory.create_command_buffer().into(),
-            pso_col: factory.create_pipeline_simple(VERTEX_SHADER_COL.as_bytes(), FRAGMENT_SHADER_COL.as_bytes(), pipe_col::new()).expect("create_pipeline_simple failed"),
-            pso_tex: factory.create_pipeline_simple(VERTEX_SHADER_TEX.as_bytes(), FRAGMENT_SHADER_TEX.as_bytes(), pipe_tex::new()).expect("create_pipeline_simple failed"),
-            imgui_renderer: Renderer::init(&mut imgui, &mut factory, shaders, main_color.clone()).expect("Failed to initialize renderer"),
-            imgui: imgui,
-            factory: factory,
-            main_color: main_color,
-            main_depth: main_depth,
-            angle: 0.0, //TODO replace by camera.angle
-            zoom: 1.0, //TODO replace by camera.zoom
-            w: w,
-            h: h,
-            delta: delta::Delta::new(),
-            mouse_state: MouseState::default(), //TODO move to struct Ui
-            grids_tiles: Vec::new(),
-            grids_owning: Vec::new(),
-            grids_heights: Vec::new(),
-            objects: BTreeMap::new(),
-            hero_x: 0.0,
-            hero_y: 0.0,
-            resources: BTreeMap::new(),
-            dragging: false,
-            last_mouse_x: 0.0,
-            last_mouse_y: 0.0,
-            shift: Vector2::zero(), //TODO replace by camera.{x,y}
-            ctrl_pressed: false,
-            threshold: 3,
-            show_tiles: true,
-            show_heights: true,
-            show_owning: false,
-            v1: 0,
-            widgets: BTreeMap::new(),
-            xui: XUi::new(),
-        }
-    }
-
-    pub fn init (&self) {
-    }
-
+impl RenderImplState {
     pub fn event (&mut self, event: Event) {
         use render::Wdg;
 
@@ -757,96 +667,196 @@ impl RenderImpl {
         }
     }
 
+    pub fn update (&mut self, render_tx: &Sender<driver::Event>, event: &glutin::Event, should_stop: &mut bool) {
+        ui_handle_event(&mut self.imgui, &mut self.mouse_state, event);
+        //TODO if ui.handle_event(event) == NOT_HANDLED {
+        //         if app.handle_event(event) == NOT_HANDLED {
+        //             match (event) {
+        //                 ...
+        //             }
+        //         }
+        //}
+        match *event {
+            glutin::Event::WindowEvent { ref event, .. } => {
+                //use glutin::KeyboardInput;
+                use glutin::ElementState::Pressed;
+                match *event {
+                    KeyboardInput { input, .. } => {
+                        use glutin::VirtualKeyCode as Key;
+                        let pressed = input.state == Pressed;
+                        match input.virtual_keycode {
+                            Some(Key::Escape) => *should_stop = true,
+                            Some(Key::LControl) | Some(Key::RControl) => self.ctrl_pressed = pressed, //TODO use some kind of keys_state { ... }
+                        Some(Key::Up) => { render_tx.send(driver::Event::Render(driver::RenderEvent::Up)).expect("unable to send Render::Up"); }
+                        Some(Key::Down) => { render_tx.send(driver::Event::Render(driver::RenderEvent::Down)).expect("unable to send Render::Down"); }
+                        Some(Key::Left) => { render_tx.send(driver::Event::Render(driver::RenderEvent::Left)).expect("unable to send Render::Left"); }
+                        Some(Key::Right) => { render_tx.send(driver::Event::Render(driver::RenderEvent::Right)).expect("unable to send Render::Right"); }
+                        _ => {}
+                        }
+                    }
+                    Closed => *should_stop = true,
+                    Resized(width, height) => {
+                        //TODO app.resize()
+                        //TODO ui.resize()
+                        self.w = width;
+                        self.h = height;
+                        gfx_window_glutin::update_views(&self.window, &mut self.main_color, &mut self.main_depth);
+                        self.imgui_renderer.update_render_target(self.main_color.clone());
+                        //TODO app.update_render_target(main_color.clone())
+                        for t in self.grids_tiles.iter_mut() {
+                            t.data.out = self.main_color.clone();
+                        }
+                        for t in self.grids_owning.iter_mut() {
+                            t.data.out = self.main_color.clone();
+                        }
+                        for t in self.grids_heights.iter_mut() {
+                            t.data.out = self.main_color.clone();
+                        }
+                    }
+                    MouseWheel { delta: glutin::MouseScrollDelta::LineDelta(_, y), .. } => {
+                        if self.ctrl_pressed {
+                            if y < 0.0 { self.threshold += 1; } else { if self.threshold > 0 { self.threshold -= 1; } }
+                        } else {
+                            if y < 0.0 { self.zoom *= 1.1; } else { self.zoom *= 0.9; }
+                        }
+                    }
+                    MouseInput {state, button: MouseButton::Left, ..} => self.dragging = state == Pressed,
+                    MouseMoved {position: (x, y), ..} => {
+                        let x = if x < 0.0 { 0.0 } else if x > self.w as f64 { self.w as f64 } else { x };
+                        let y = if y < 0.0 { 0.0 } else if y > self.h as f64 { self.h as f64 } else { y };
+                        let delta_x = x - self.last_mouse_x;
+                        let delta_y = self.last_mouse_y - y; // y-axis is inverted
+                        self.last_mouse_x = x;
+                        self.last_mouse_y = y;
+                        if self.dragging {
+                            let rot = Matrix2::from_angle(Rad(-self.angle));
+                            let vec = Vector2::new(delta_x as f32, delta_y as f32);
+                            self.shift += rot * vec / self.zoom * 2.0;
+                            //println!("shift ({} {})", shift[0], shift[1]);
+                        }
+                    }
+                    _ => (),
+                }
+            }
+            _ => (),
+        }
+    }
+}
+
+pub struct RenderImpl {
+    events_loop: glutin::EventsLoop,
+    state: RenderImplState,
+}
+
+impl RenderImpl {
+    pub fn new () -> RenderImpl {
+
+        let events_loop = glutin::EventsLoop::new();
+        let context = glutin::ContextBuilder::new();
+        let builder = glutin::WindowBuilder::new()
+            .with_title("gfx 2d test".to_string())
+            .with_dimensions(800, 600);
+
+        let (window, device, mut factory, main_color, main_depth) =
+            gfx_window_glutin::init::<Rgba8, DepthStencil>(builder, context, &events_loop);
+
+
+        let (w, h) = window.get_inner_size_points().expect("get_inner_size_points failed");
+
+        let shaders = {
+            let version = device.get_info().shading_language;
+            if version.is_embedded {
+                if version.major >= 3 {
+                    Shaders::GlSlEs300
+                } else {
+                    Shaders::GlSlEs100
+                }
+            } else {
+                if version.major >= 4 {
+                    Shaders::GlSl400
+                } else if version.major >= 3 {
+                    Shaders::GlSl130
+                } else {
+                    Shaders::GlSl110
+                }
+            }
+        };
+
+        let mut imgui = ImGui::init();
+        imgui.set_font("DejaVuSansMono.ttf", 12.0, GlyphRange::Cyrillic).expect("Failed to imgui.set_font");
+        RenderImpl {
+            events_loop: events_loop,
+            state: RenderImplState {
+                tile_colors: {
+                    use ron::de::from_reader;
+                    use std::io::BufReader;
+                    use std::fs::File;
+
+                    let f = File::open("tile_colors.ron").expect("unable to open tile_colors.ron");
+                    from_reader(BufReader::new(f)).expect("unable to deserialize")
+                },
+                palette: [[0,0,0,255]; 256],
+                window: window,
+                device: device,
+                encoder: factory.create_command_buffer().into(),
+                pso_col: factory.create_pipeline_simple(VERTEX_SHADER_COL.as_bytes(), FRAGMENT_SHADER_COL.as_bytes(), pipe_col::new()).expect("create_pipeline_simple failed"),
+                pso_tex: factory.create_pipeline_simple(VERTEX_SHADER_TEX.as_bytes(), FRAGMENT_SHADER_TEX.as_bytes(), pipe_tex::new()).expect("create_pipeline_simple failed"),
+                imgui_renderer: Renderer::init(&mut imgui, &mut factory, shaders, main_color.clone()).expect("Failed to initialize renderer"),
+                imgui: imgui,
+                factory: factory,
+                main_color: main_color,
+                main_depth: main_depth,
+                angle: 0.0, //TODO replace by camera.angle
+                zoom: 1.0, //TODO replace by camera.zoom
+                w: w,
+                h: h,
+                delta: delta::Delta::new(),
+                mouse_state: MouseState::default(), //TODO move to struct Ui
+                grids_tiles: Vec::new(),
+                grids_owning: Vec::new(),
+                grids_heights: Vec::new(),
+                objects: BTreeMap::new(),
+                hero_x: 0.0,
+                hero_y: 0.0,
+                resources: BTreeMap::new(),
+                dragging: false,
+                last_mouse_x: 0.0,
+                last_mouse_y: 0.0,
+                shift: Vector2::zero(), //TODO replace by camera.{x,y}
+                ctrl_pressed: false,
+                threshold: 3,
+                show_tiles: true,
+                show_heights: true,
+                show_owning: false,
+                v1: 0,
+                widgets: BTreeMap::new(),
+                xui: XUi::new(),
+            }
+        }
+    }
+
+    pub fn init (&self) {
+    }
+
+    pub fn event (&mut self, event: Event) {
+        self.state.event(event)
+    }
+
     //TODO FIXME split update() into update() and render() ???
     pub fn update (&mut self, render_tx: &Sender<driver::Event>) -> bool {
-        use smallvec::SmallVec;
         // HANDLE EVENTS
         //TODO app.handle(...)
-        //FIXME ugly hack !
-        let mut events = SmallVec::<[glutin::Event; 64]>::new();
-        self.events_loop.poll_events(|event| {
-            events.push(event);
-        });
-        if events.spilled() {
-            warn!("events smallvec spilled!");
-        }
-        for event in events.iter() {
-            ui_handle_event(&mut self.imgui, &mut self.mouse_state, event);
-            //TODO if ui.handle_event(event) == NOT_HANDLED {
-            //         if app.handle_event(event) == NOT_HANDLED {
-            //             match (event) {
-            //                 ...
-            //             }
-            //         }
-            //}
-            match *event {
-                glutin::Event::WindowEvent { ref event, .. } => {
-                    //use glutin::KeyboardInput;
-                    use glutin::ElementState::Pressed;
-                    match *event {
-                        KeyboardInput { input, .. } => {
-                            use glutin::VirtualKeyCode as Key;
-                            let pressed = input.state == Pressed;
-                            match input.virtual_keycode {
-                                Some(Key::Escape) => return false,
-                                Some(Key::LControl) | Some(Key::RControl) => self.ctrl_pressed = pressed, //TODO use some kind of keys_state { ... }
-                            Some(Key::Up) => { render_tx.send(driver::Event::Render(driver::RenderEvent::Up)).expect("unable to send Render::Up"); }
-                            Some(Key::Down) => { render_tx.send(driver::Event::Render(driver::RenderEvent::Down)).expect("unable to send Render::Down"); }
-                            Some(Key::Left) => { render_tx.send(driver::Event::Render(driver::RenderEvent::Left)).expect("unable to send Render::Left"); }
-                            Some(Key::Right) => { render_tx.send(driver::Event::Render(driver::RenderEvent::Right)).expect("unable to send Render::Right"); }
-                            _ => {}
-                            }
-                        }
-                        Closed => return false,
-                        Resized(width, height) => {
-                            //TODO app.resize()
-                            //TODO ui.resize()
-                            self.w = width;
-                            self.h = height;
-                            gfx_window_glutin::update_views(&self.window, &mut self.main_color, &mut self.main_depth);
-                            self.imgui_renderer.update_render_target(self.main_color.clone());
-                            //TODO app.update_render_target(main_color.clone())
-                            for t in self.grids_tiles.iter_mut() {
-                                t.data.out = self.main_color.clone();
-                            }
-                            for t in self.grids_owning.iter_mut() {
-                                t.data.out = self.main_color.clone();
-                            }
-                            for t in self.grids_heights.iter_mut() {
-                                t.data.out = self.main_color.clone();
-                            }
-                        }
-                        MouseWheel { delta: glutin::MouseScrollDelta::LineDelta(_, y), .. } => {
-                            if self.ctrl_pressed {
-                                if y < 0.0 { self.threshold += 1; } else { if self.threshold > 0 { self.threshold -= 1; } }
-                            } else {
-                                if y < 0.0 { self.zoom *= 1.1; } else { self.zoom *= 0.9; }
-                            }
-                        }
-                        MouseInput {state, button: MouseButton::Left, ..} => self.dragging = state == Pressed,
-                        MouseMoved {position: (x, y), ..} => {
-                            let x = if x < 0.0 { 0.0 } else if x > self.w as f64 { self.w as f64 } else { x };
-                            let y = if y < 0.0 { 0.0 } else if y > self.h as f64 { self.h as f64 } else { y };
-                            let delta_x = x - self.last_mouse_x;
-                            let delta_y = self.last_mouse_y - y; // y-axis is inverted
-                            self.last_mouse_x = x;
-                            self.last_mouse_y = y;
-                            if self.dragging {
-                                let rot = Matrix2::from_angle(Rad(-self.angle));
-                                let vec = Vector2::new(delta_x as f32, delta_y as f32);
-                                self.shift += rot * vec / self.zoom * 2.0;
-                                //println!("shift ({} {})", shift[0], shift[1]);
-                            }
-                        }
-                        _ => (),
-                    }
-                }
-                _ => (),
-            }
+        {
+            let mut should_stop = false;
+            let state = &mut self.state;
+            self.events_loop.poll_events(|event| {
+                state.update(render_tx, &event, &mut should_stop)
+            });
+            if should_stop { return false; }
         }
 
         // UPDATE
-        let delta_s = self.delta.tick();
+        let delta_s = self.state.delta.tick();
 
         //TODO app.update(delta_s);
         //TODO camera.rotate(angle);
@@ -859,69 +869,70 @@ impl RenderImpl {
         let translate = Matrix3::new(
             1.0,           0.0,           0.0,
             0.0,           1.0,           0.0,
-            self.shift[0], self.shift[1], 1.0,
+            self.state.shift[0], self.state.shift[1], 1.0,
             );
-        let rotate = Matrix3::from_angle_z(Rad(self.angle));
-        let scale = Matrix3::from_diagonal(Vector3::new(self.zoom / self.w as f32, self.zoom / self.h as f32, 1.0));
+        let rotate = Matrix3::from_angle_z(Rad(self.state.angle));
+        let scale = Matrix3::from_diagonal(Vector3::new(self.state.zoom / self.state.w as f32, self.state.zoom / self.state.h as f32, 1.0));
         let transform = (scale * rotate * translate).into();
 
-        if self.show_tiles {
-            for t in self.grids_tiles.iter_mut() {
+        if self.state.show_tiles {
+            for t in self.state.grids_tiles.iter_mut() {
                 t.data.transform = transform;
             }
         }
-        if self.show_owning {
-            for t in self.grids_owning.iter_mut() {
+        if self.state.show_owning {
+            for t in self.state.grids_owning.iter_mut() {
                 t.data.transform = transform;
             }
         }
-        if self.show_heights {
-            for t in self.grids_heights.iter_mut() {
+        if self.state.show_heights {
+            for t in self.state.grids_heights.iter_mut() {
                 t.data.transform = transform;
-                t.data.threshold = self.threshold as i32;
+                t.data.threshold = self.state.threshold as i32;
             }
         }
 
-        self.encoder.clear(&self.main_color, BLACK);
+        self.state.encoder.clear(&self.state.main_color, BLACK);
 
-        if self.show_tiles {
-            for t in self.grids_tiles.iter() {
-                self.encoder.draw(&t.slice, &self.pso_tex, &t.data);
+        if self.state.show_tiles {
+            for t in self.state.grids_tiles.iter() {
+                self.state.encoder.draw(&t.slice, &self.state.pso_tex, &t.data);
             }
         }
 
-        if self.show_owning {
-            for t in self.grids_owning.iter() {
-                self.encoder.draw(&t.slice, &self.pso_tex, &t.data);
+        if self.state.show_owning {
+            for t in self.state.grids_owning.iter() {
+                self.state.encoder.draw(&t.slice, &self.state.pso_tex, &t.data);
             }
         }
 
-        if self.show_heights {
-            for t in self.grids_heights.iter() {
-                self.encoder.draw(&t.slice, &self.pso_col, &t.data);
+        if self.state.show_heights {
+            for t in self.state.grids_heights.iter() {
+                self.state.encoder.draw(&t.slice, &self.state.pso_col, &t.data);
             }
         }
 
         {
-            let mut obj = ObjCol::from_objects(&self.objects, self.hero_x, self.hero_y).bake(self.main_color.clone(), &mut self.factory, self.threshold);
+            let mut obj = ObjCol::from_objects(&self.state.objects, self.state.hero_x, self.state.hero_y).bake(self.state.main_color.clone(), &mut self.state.factory, self.state.threshold);
             obj.data.transform = transform;
             obj.data.threshold = 0;
-            self.encoder.draw(&obj.slice, &self.pso_col, &obj.data);
+            self.state.encoder.draw(&obj.slice, &self.state.pso_col, &obj.data);
         }
 
-        let size_points = self.window.get_inner_size_points().unwrap();
-        let size_pixels = self.window.get_inner_size_pixels().unwrap();
-        let ui = self.imgui.frame(size_points, size_pixels, delta_s);
+        let size_points = self.state.window.get_inner_size_points().unwrap();
+        let size_pixels = self.state.window.get_inner_size_pixels().unwrap();
+        let ui = self.state.imgui.frame(size_points, size_pixels, delta_s);
 
         let fps = (1.0 / delta_s) as usize;
-        if !run_ui(&ui, fps, self.threshold, &mut self.show_tiles, &mut self.show_heights, &mut self.show_owning, &mut self.v1, &self.objects, &self.resources) {
+        //FIXME pass &mut RenderImplState instead
+        if !run_ui(&ui, fps, self.state.threshold, &mut self.state.show_tiles, &mut self.state.show_heights, &mut self.state.show_owning, &mut self.state.v1, &self.state.objects, &self.state.resources) {
             return false;
         }
-        self.imgui_renderer.render(ui, &mut self.factory, &mut self.encoder).expect("IMGUI Rendering failed");
+        self.state.imgui_renderer.render(ui, &mut self.state.factory, &mut self.state.encoder).expect("IMGUI Rendering failed");
 
-        self.encoder.flush(&mut self.device);
-        self.window.swap_buffers().expect("window.swap_buffers() failed");
-        self.device.cleanup();
+        self.state.encoder.flush(&mut self.state.device);
+        self.state.window.swap_buffers().expect("window.swap_buffers() failed");
+        self.state.device.cleanup();
 
         true
     }

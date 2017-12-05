@@ -204,39 +204,10 @@ impl<'a, D: Driver, A: Ai> Client<'a, D, A> {
                     state::Event::Tiles(tiles) => render::Event::Tiles(tiles),
                 };
                 self.render.update(event)?;
-                //{ self.state.close().chain_err(||"unable to enqueue CLOSE")?; }
             }
             self.send_all_enqueued().chain_err(||"unable to send_all_enqueued")?;
             self.dispatch_single_event().chain_err(||"unable to dispatch_single_event")?;
             self.ai.update(&mut self.state);
         }
-
-        // while let None = self.state.start_point() {
-        //     self.send_all_enqueued();
-        //     self.dispatch_single_event();
-        //     self.ai.update(&mut self.state);
-        // }
-        //
-        // let (start_x, start_y) = match self.state.start_point() {
-        //     Some(xy) => xy,
-        //     None => unreachable!() //panic!("this can't be")
-        // };
-        //
-        // loop {
-        //     while let Some(event) = self.state.next_event() {
-        //         let event = match event {
-        //             state::Event::Grid(x,y,tiles,z) => render::Event::Grid(x * 1100 - start_x, y * 1100 - start_y, tiles, z),
-        //             state::Event::Obj((x,y))        => render::Event::Obj(x - start_x, y - start_y),
-        //         };
-        //         //info!("event: {:?}", event);
-        //         if let Err(e) = self.render.update(event) {
-        //             info!("render.update ERROR: {:?}", e);
-        //             return None /*TODO Some(e)*/;
-        //         }
-        //     }
-        //     self.send_all_enqueued();
-        //     self.dispatch_single_event();
-        //     self.ai.update(&mut self.state);
-        // }
     }
 }
