@@ -1,6 +1,7 @@
-use ::errors::*;
 use proto::serialization::*;
 use proto::Color;
+use Result;
+use failure::err_msg;
 
 #[derive(Debug)]
 pub enum List {
@@ -66,56 +67,56 @@ impl FromBuf for List {
                     deep += 1;
                 }
                 T_INT => {
-                    list[deep].push(List::Int(r.i32().chain_err(||"list INT")?));
+                    list[deep].push(List::Int(r.i32()?));
                 }
                 T_STR => {
                     list[deep].push(List::Str(r.strz()?));
                 }
                 T_COORD => {
-                    list[deep].push(List::Coord(r.coord().chain_err(||"list COORD")?));
+                    list[deep].push(List::Coord(r.coord()?));
                 }
                 T_UINT8 => {
-                    list[deep].push(List::Uint8(r.u8().chain_err(||"list UINT8")?));
+                    list[deep].push(List::Uint8(r.u8()?));
                 }
                 T_UINT16 => {
-                    list[deep].push(List::Uint16(r.u16().chain_err(||"list UINT16")?));
+                    list[deep].push(List::Uint16(r.u16()?));
                 }
                 T_COLOR => {
-                    list[deep].push(List::Color(r.color().chain_err(||"list COLOR")?));
+                    list[deep].push(List::Color(r.color()?));
                 }
                 T_INT8 => {
-                    list[deep].push(List::Int8(r.i8().chain_err(||"list INT8")?));
+                    list[deep].push(List::Int8(r.i8()?));
                 }
                 T_INT16 => {
-                    list[deep].push(List::Int16(r.i16().chain_err(||"list INT16")?));
+                    list[deep].push(List::Int16(r.i16()?));
                 }
                 T_NIL => {
                     list[deep].push(List::Nil);
                 }
                 T_BYTES => {
-                    let len = r.u8().chain_err(||"list BYTES len")?;
+                    let len = r.u8()?;
                     if (len & 128) != 0 {
-                        let len = r.i32().chain_err(||"list BYTES len2")?;
-                        if len <= 0 { return Err("List.from_buf: len <= 0".into()); }
+                        let len = r.i32()?;
+                        if len <= 0 { return Err(err_msg("List.from_buf: len <= 0")); }
                         //TODO this magic 65535 const should be set to some adequate default (but what is adequate?)
-                        if len > 1024*1024 { return Err("List.from_buf: len > MiB".into()); }
+                        if len > 1024*1024 { return Err(err_msg("List.from_buf: len > MiB")); }
                         let mut bytes = vec![0; len as usize];
-                        r.read_exact(&mut bytes).chain_err(||"list read bytes")?;
+                        r.read_exact(&mut bytes)?;
                         list[deep].push(List::Bytes(bytes));
                     } else {
                         let mut bytes = vec![0; len as usize];
-                        r.read_exact(&mut bytes).chain_err(||"list read bytes2")?;
+                        r.read_exact(&mut bytes)?;
                         list[deep].push(List::Bytes(bytes));
                     }
                 }
                 T_FLOAT32 => {
-                    list[deep].push(List::Float32(r.f32().chain_err(||"list FLOAT32")?));
+                    list[deep].push(List::Float32(r.f32()?));
                 }
                 T_FLOAT64 => {
-                    list[deep].push(List::Float64(r.f64().chain_err(||"list FLOAT64")?));
+                    list[deep].push(List::Float64(r.f64()?));
                 }
                 _ => {
-                    return Err(format!("unknown MstList type: {}", t).into());
+                    return Err(format_err!("unknown MstList type: {}", t));
                 }
             }
         }
@@ -127,7 +128,7 @@ impl ToBuf for [List] {
         for l in self.iter() {
             l.to_buf(w)?;
         }
-        w.u8(T_END).chain_err(||"list to_buf END")?;
+        w.u8(T_END)?;
         Ok(())
     }
 }
@@ -136,53 +137,53 @@ impl ToBuf for List {
     fn to_buf <W:WriteBytesSac> (&self, w: &mut W) -> Result<()> {
         match *self {
             List::Int(i) => {
-                w.u8(T_INT).chain_err(||"list to_buf INT")?;
-                w.i32(i).chain_err(||"list to_buf INT value")?;
+                w.u8(T_INT)?;
+                w.i32(i)?;
             }
             List::Str(ref s) => {
-                w.u8(T_STR).chain_err(||"list to_buf STR")?;
-                w.strz(s).chain_err(||"list to_buf STR value")?;
+                w.u8(T_STR)?;
+                w.strz(s)?;
             }
             List::Coord((x, y)) => {
-                w.u8(T_COORD).chain_err(||"list to_buf COORD")?;
-                w.coord(x, y).chain_err(||"list to_buf COORD value")?;
+                w.u8(T_COORD)?;
+                w.coord(x, y)?;
             }
             List::Uint8(u) => {
-                w.u8(T_UINT8).chain_err(||"list to_buf UINT8")?;
-                w.u8(u).chain_err(||"list to_buf UINT8 value")?;
+                w.u8(T_UINT8)?;
+                w.u8(u)?;
             }
             List::Uint16(u) => {
-                w.u8(T_UINT16).chain_err(||"list to_buf UINT16")?;
-                w.u16(u).chain_err(||"list to_buf UINT16 value")?;
+                w.u8(T_UINT16)?;
+                w.u16(u)?;
             }
             List::Color((r, g, b, a)) => {
-                w.u8(T_COLOR).chain_err(||"list to_buf COLOR")?;
-                w.color(r, g, b, a).chain_err(||"list to_buf COLOR value")?;
+                w.u8(T_COLOR)?;
+                w.color(r, g, b, a)?;
             }
             List::Ttol(_) => {
-                return Err("list.to_buf is NOT implemented for TTOL".into());
+                return Err(err_msg("list.to_buf is NOT implemented for TTOL"));
             }
             List::Int8(i) => {
-                w.u8(T_INT8).chain_err(||"list to_buf INT8")?;
-                w.i8(i).chain_err(||"list to_buf INT8 value")?;
+                w.u8(T_INT8)?;
+                w.i8(i)?;
             }
             List::Int16(i) => {
-                w.u8(T_INT16).chain_err(||"list to_buf INT16")?;
-                w.i16(i).chain_err(||"list to_buf INT16 value")?;
+                w.u8(T_INT16)?;
+                w.i16(i)?;
             }
             List::Nil => {
-                w.u8(T_NIL).chain_err(||"list to_buf NIL")?;
+                w.u8(T_NIL)?;
             }
             List::Bytes(_) => {
-                return Err("list.to_buf is NOT implemented for BYTES".into());
+                return Err(err_msg("list.to_buf is NOT implemented for BYTES"));
             }
             List::Float32(f) => {
-                w.u8(T_FLOAT32).chain_err(||"list to_buf FLOAT32")?;
-                w.f32(f).chain_err(||"list to_buf FLOAT32 value")?;
+                w.u8(T_FLOAT32)?;
+                w.f32(f)?;
             }
             List::Float64(f) => {
-                w.u8(T_FLOAT64).chain_err(||"list to_buf FLOAT64")?;
-                w.f64(f).chain_err(||"list to_buf FLOAT64 value")?;
+                w.u8(T_FLOAT64)?;
+                w.f64(f)?;
             }
         }
         Ok(())

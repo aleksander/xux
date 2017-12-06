@@ -1,8 +1,9 @@
-use errors::*;
 use std::fmt;
 use std::fmt::Formatter;
 use proto::serialization::*;
 use proto::ObjXY;
+use Result;
+
 #[cfg(feature = "hafen")]
 use std::f64::consts::PI;
 
@@ -23,7 +24,7 @@ impl ObjData {
     pub fn from_buf <R:ReadBytesSac> (r: &mut R) -> Result<ObjData> {
         let mut obj = Vec::new();
         //TODO let obj = ObjDataElem::iter(r).collect::<Result<Vec<ObjDataElem>>>().chain_err(||"")?;
-        while let Some(o) = ObjDataElem::from_buf(r).chain_err(||"ObjDataElem::from_buf")? {
+        while let Some(o) = ObjDataElem::from_buf(r)? {
             obj.push(o);
         }
         Ok(ObjData { obj: obj })
@@ -60,7 +61,7 @@ impl ObjDataElem {
         let frame = r.i32()?;
         let mut prop = Vec::new();
         //TODO let props = ObjDataElemProp::iter(r).collect::<Result<Vec<ObjDataElemProp>>>().chain_err(||"")?;
-        while let Some(p) = ObjDataElemProp::from_buf(r).chain_err(||"ObjDataElemProp::from_buf")? {
+        while let Some(p) = ObjDataElemProp::from_buf(r)? {
             prop.push(p);
         }
         Ok(Some(ObjDataElem{
@@ -240,7 +241,7 @@ const OD_END: u8 = 255;
 
 impl ObjDataElemProp {
     pub fn from_buf <R:ReadBytesSac> (r: &mut R) -> Result<Option<ObjDataElemProp>> {
-        let t = r.u8().chain_err(||"unable to get ObjDataElemProp type")?;
+        let t = r.u8()?;
         match t {
             OD_REM => Ok(Some(ObjDataElemProp::Rem)),
             #[cfg(feature = "salem")]
@@ -262,14 +263,14 @@ impl ObjDataElemProp {
                     let sdt_len = r.u8()?;
                     let _sdt = {
                         let mut tmp = vec![0; sdt_len as usize];
-                        r.read_exact(&mut tmp).chain_err(||"ObjDataElemProp RES sdt")?;
+                        r.read_exact(&mut tmp)?;
                         tmp
                     };
                 }
                 Ok(Some(ObjDataElemProp::Res(resid)))
             }
-            OD_LINBEG => Ok(Some(ObjDataElemProp::Linbeg(Linbeg::from_buf(r).chain_err(||"Linbeg.from")?))),
-            OD_LINSTEP => Ok(Some(ObjDataElemProp::Linstep(Linstep::from_buf(r).chain_err(||"Linstep.from")?))),
+            OD_LINBEG => Ok(Some(ObjDataElemProp::Linbeg(Linbeg::from_buf(r)?))),
+            OD_LINSTEP => Ok(Some(ObjDataElemProp::Linstep(Linstep::from_buf(r)?))),
             OD_SPEECH => {
                 let zo = r.u16()?;
                 let text = r.strz()?;
@@ -280,9 +281,9 @@ impl ObjDataElemProp {
                 Ok(Some(ObjDataElemProp::Compose(resid)))
             }
             #[cfg(feature = "salem")]
-            OD_DRAWOFF => Ok(Some(ObjDataElemProp::Drawoff(Drawoff::from_buf(r).chain_err(||"Drawoff.from")?))),
+            OD_DRAWOFF => Ok(Some(ObjDataElemProp::Drawoff(Drawoff::from_buf(r)?))),
             #[cfg(feature = "hafen")]
-            OD_ZOFF => Ok(Some(ObjDataElemProp::Zoff(Zoff::from_buf(r).chain_err(||"Zoff.from")?))),
+            OD_ZOFF => Ok(Some(ObjDataElemProp::Zoff(Zoff::from_buf(r)?))),
             OD_LUMIN => {
                 let off = (r.i32()?, r.i32()?);
                 let sz = r.u16()?;
@@ -333,7 +334,7 @@ impl ObjDataElemProp {
                     let sdt_len = r.u8()? as usize;
                     let _sdt = {
                         let mut tmp = vec![0; sdt_len];
-                        r.read_exact(&mut tmp).chain_err(||"ObjDataElemProp OVERLAY sdt")?;
+                        r.read_exact(&mut tmp)?;
                         tmp
                     };
                 }
@@ -374,7 +375,7 @@ impl ObjDataElemProp {
                             let sdt_len = r.u8()? as usize;
                             let _sdt = {
                                 let mut tmp = vec![0; sdt_len];
-                                r.read_exact(&mut tmp).chain_err(||"ObjDataElemProp CMPPOSE sdt")?;
+                                r.read_exact(&mut tmp)?;
                                 tmp
                             };
                         }
@@ -400,7 +401,7 @@ impl ObjDataElemProp {
                             let sdt_len = r.u8()? as usize;
                             let _sdt = {
                                 let mut tmp = vec![0; sdt_len];
-                                r.read_exact(&mut tmp).chain_err(||"ObjDataElemProp CMPPOSE sdt2")?;
+                                r.read_exact(&mut tmp)?;
                                 tmp
                             };
                         }
@@ -435,7 +436,7 @@ impl ObjDataElemProp {
                             let sdt_len = r.u8()? as usize;
                             let _sdt = {
                                 let mut tmp = vec![0; sdt_len];
-                                r.read_exact(&mut tmp).chain_err(||"ObjDataElemProp CMPMOD sdt2")?;
+                                r.read_exact(&mut tmp)?;
                                 tmp
                             };
                         }
@@ -494,7 +495,7 @@ impl ObjDataElemProp {
                 if len > 0 {
                     let dat = {
                         let mut tmp = vec![0; len as usize];
-                        r.read_exact(&mut tmp).chain_err(||"ObjDataElemProp RESATTR dat")?;
+                        r.read_exact(&mut tmp)?;
                         tmp
                     };
                     Ok(Some(ObjDataElemProp::Resattr(resid, Some(dat))))
@@ -504,7 +505,7 @@ impl ObjDataElemProp {
             }
             OD_END => Ok(None),
             _ => {
-                Err(format!("unknown ObjDataElemProp: {}", t).into())
+                Err(format_err!("unknown ObjDataElemProp: {}", t))
             }
         }
     }

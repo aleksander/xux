@@ -3,7 +3,8 @@ use std::thread;
 use std::sync::mpsc::{channel, Sender, Receiver};
 use std::io::{Read, Write};
 use driver::{Driver, Event};
-use errors::*;
+use Result;
+use failure::err_msg;
 
 impl Driver for DriverStd {
 
@@ -11,9 +12,9 @@ impl Driver for DriverStd {
 
     fn tx(&self, buf: &[u8]) -> Result<()> {
         // info!("driver.tx: {} bytes", buf.len());
-        let len = self.sock.send(buf).chain_err(||"driver.tx")?;
+        let len = self.sock.send(buf)?;
         if len != buf.len() {
-            return Err("sent len != buf len".into());
+            return Err(err_msg("sent len != buf len"));
         }
         Ok(())
     }
@@ -30,7 +31,7 @@ impl Driver for DriverStd {
     }
 
     fn event(&mut self) -> Result<Event> {
-        self.rx.recv().chain_err(||"driverstd.event recv")
+        Ok(self.rx.recv()?)
     }
 }
 
@@ -42,12 +43,12 @@ pub struct DriverStd {
 
 impl DriverStd {
     pub fn new(host: &str, port: u16) -> Result<DriverStd> {
-        let sock = std::net::UdpSocket::bind("0.0.0.0:0").chain_err(||"driverstd.new bind")?;
-        sock.connect((host, port)).chain_err(||"udp_sock::connect")?;
+        let sock = std::net::UdpSocket::bind("0.0.0.0:0")?;
+        sock.connect((host, port))?;
         let (tx,rx) = channel();
 
         let receiver_tx = tx.clone();
-        let sock_rx = sock.try_clone().chain_err(||"driver::new.try_clone(sock)")?;
+        let sock_rx = sock.try_clone()?;
         thread::spawn(move || {
             let mut buf = vec![0; 65535];
             loop {

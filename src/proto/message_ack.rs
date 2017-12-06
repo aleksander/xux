@@ -1,5 +1,5 @@
 use proto::serialization::*;
-use errors::*;
+use Result;
 
 #[derive(Debug)]
 pub struct Ack {

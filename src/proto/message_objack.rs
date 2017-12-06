@@ -1,6 +1,6 @@
 use proto::message_objdata::ObjData;
 use proto::serialization::*;
-use errors::*;
+use Result;
 
 #[derive(Debug)]
 pub struct ObjAck {

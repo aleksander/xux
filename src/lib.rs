@@ -11,11 +11,11 @@
 //#![warn(variant_size_differences)]
 
 #[macro_use]
+extern crate failure;
+#[macro_use]
 extern crate log;
 extern crate byteorder;
 extern crate openssl;
-#[macro_use]
-extern crate error_chain;
 #[cfg(feature = "render_text")]
 extern crate ncurses;
 extern crate rustc_serialize;
@@ -54,8 +54,8 @@ extern crate imgui_gfx_renderer;
 extern crate gfx_device_gl;
 #[cfg(feature = "render_2d_gfx")]
 extern crate ron;
+extern crate flate2;
 
-pub mod errors;
 pub mod proto;
 pub mod state;
 
@@ -93,3 +93,5 @@ mod shift_to_unsigned;
 // TODO #[cfg(driver = "mio")]
 // #[cfg(driver_mio)]
 //FIXME BROKEN! mod driver_mio;
+
+pub type Result<T> = std::result::Result<T, failure::Error>;

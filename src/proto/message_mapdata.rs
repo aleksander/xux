@@ -1,6 +1,6 @@
 use std::fmt;
 use proto::serialization::*;
-use errors::*;
+use Result;
 
 pub struct MapData {
     pub pktid: i32,
@@ -29,7 +29,7 @@ impl MapData {
             len: r.u16()?,
             buf: {
                 let mut buf = Vec::new();
-                r.read_to_end(&mut buf).chain_err(||"mapdata.from buf")?;
+                r.read_to_end(&mut buf)?;
                 buf
             },
         })

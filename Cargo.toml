@@ -10,33 +10,18 @@ rustc-serialize = "*"
 byteorder = "*"
 openssl = "*"
 mio = "*"
-#bytes = "*"
-#nix = "*"
 flate2 = "*"
-#image = "*"
-#hlua = "*"
-#lua = "*"
-#lua-rs = "*"
-#libc = "*"
 nom = "*"
-#glium = "*"
-#cgmath = "*"
-#camera_controllers = "*"
 ncurses = { version = "*", optional = true }
 log = "*"
 fern = "*"
-#clippy = "*"
 pnet = "*"
 pcap = "*"
-error-chain = "*"
 piston_window = { version = "*", optional = true }
 piston2d-gfx_graphics = { version = "0.46.0", optional = true }
 crossbeam = "*"
 chrono = "*"
-#serde = "*"
-#serde_derive = "*"
 bincode = { version = "*", optional = true }
-
 gfx = { version = "*", optional = true }
 gfx_window_glutin = { version = "*", optional = true }
 glutin = { version = "0.10.0", optional = true }
@@ -46,9 +31,9 @@ imgui-gfx-renderer = { optional = true, path = "../imgui-rs/imgui-gfx-renderer" 
 gfx_device_gl = { version = "*", optional = true }
 serde = { version = "*", optional = true }
 serde_derive = { version = "*", optional = true }
-#bincode = { version = "*", optional = true }
 ron = { version = "*", optional = true }
 image = { version = "*", optional = true }
+failure = "*"
 
 [features]
 driver_std = []
@@ -65,9 +50,3 @@ render_2d_gfx = [ "gfx", "gfx_window_glutin", "glutin", "cgmath", "imgui", "imgu
 dump_events = [ "bincode" ]
 default = [ "driver_std", "ai_decl", "hafen", "render_2d_gfx" ]
 mio_lua = [ "driver_mio", "ai_lua" ]
-
-#[profile.dev]
-#panic = 'unwind'
-#
-#[profile.release]
-#panic = 'abort'

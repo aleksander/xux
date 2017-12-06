@@ -2,15 +2,18 @@
 extern crate log;
 extern crate fern;
 extern crate xux;
+extern crate failure;
 
 use std::process;
 
-use xux::errors::*;
 use xux::ai::Ai;
 use xux::ai_decl::AiDecl;
 use xux::driver_std::DriverStd;
 use xux::render::Render;
 use xux::client::Client;
+use xux::Result;
+
+use failure::err_msg;
 
 // TODO fn run_std_lua() { run::<Std,Lua>() }
 // TODO fn run<D,A>(ip: IpAddr, username: String, password: String) where D:Driver,A:Ai {
@@ -44,9 +47,8 @@ fn run() -> Result<()> {
             .write(true)
             .create(true)
             .append(false)
-            .open(log_file_name)
-            .chain_err(||"unable to create log file")?)
-        .apply().chain_err(||"unable to create log config")?;
+            .open(log_file_name)?)
+        .apply()?;
 
     trace!("Starting...");
     debug!("Starting...");
@@ -66,7 +68,7 @@ fn run() -> Result<()> {
     if args.len() != 3 {
         info!("wrong argument count");
         info!("usage: {} username password", args[0]);
-        return Err("wrong argument count".into());
+        return Err(err_msg("wrong argument count"));
     }
 
     let username = args[1].clone();
@@ -80,12 +82,12 @@ fn run() -> Result<()> {
 
     // run::<DriverMio,AiLua>(ip, username, password);
     //run(host, username, password);
-    let (login, cookie) = xux::client::authorize(host, auth_port, username, password).chain_err(||"authorization failed")?;
+    let (login, cookie) = xux::client::authorize(host, auth_port, username, password)?;
 
     let mut ai = AiDecl::new();
     ai.init();
 
-    let mut driver = DriverStd::new(host, game_port).chain_err(||"unable to create driver")?;
+    let mut driver = DriverStd::new(host, game_port)?;
 
     let render = Render::new(driver.sender());
 
@@ -94,17 +96,13 @@ fn run() -> Result<()> {
 }
 
 fn main () {
-    if let Err(ref e) = run() {
-        println!("error: {}", e);
-
-        for e in e.iter().skip(1) {
-            println!("caused by: {}", e);
+    process::exit(
+        match run() {
+            Ok(()) => { 0 }
+            Err(e) => {
+                println!("error \"{}\", cause \"{}\"", e, e.cause());
+                -1
+            }
         }
-
-        if let Some(backtrace) = e.backtrace() {
-            println!("backtrace: {:?}", backtrace);
-        }
-
-        process::exit(1);
-    }
+    );
 }

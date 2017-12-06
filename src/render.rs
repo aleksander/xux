@@ -3,11 +3,12 @@ use std::thread;
 use driver;
 use proto::*;
 use state::Wdg;
-use errors::*;
 use std::slice::Iter;
 use std::iter::Iterator;
 use std::sync::mpsc::channel;
 use std::sync::mpsc::TryRecvError::*;
+use failure::err_msg;
+use Result;
 
 #[derive(Serialize,Deserialize,Debug)]
 pub enum Event {
@@ -75,7 +76,7 @@ impl Widget {
             self.children.remove(i);
             return Ok(());
         }
-        Err("unable to find widget".into())
+        Err(err_msg("unable to find widget"))
     }
 
     fn message (&mut self, msg: String) {
@@ -100,7 +101,7 @@ impl XUi {
 
     fn add_widget (&mut self, id: u16, name: String, parent: u16) -> Result<()> {
         debug!("adding widget {} '{}' [{}]", id, name, parent);
-        self.root.find(parent).ok_or::<Error>("unable to find widget".into())?.add(Widget::new(id, name));
+        self.root.find(parent).ok_or(err_msg("unable to find widget"))?.add(Widget::new(id, name));
         Ok(())
     }
 
@@ -111,7 +112,7 @@ impl XUi {
 
     fn message (&mut self, id: u16, msg: String) -> Result<()> {
         debug!("message to widget {} '{}'", id, msg);
-        self.root.find(id).ok_or::<Error>("unable to find widget".into())?.message(msg);
+        self.root.find(id).ok_or(err_msg("unable to find widget"))?.message(msg);
         Ok(())
     }
 
@@ -224,6 +225,6 @@ impl Render {
     }
 
     pub fn update(&mut self, event: Event) -> Result<()> {
-        self.tx.send(event).chain_err(||"render.update")
+        Ok(self.tx.send(event)?)
     }
 }

@@ -1,5 +1,5 @@
 use std::sync::mpsc::Sender;
-use errors::*;
+use Result;
 
 pub trait Driver {
     fn tx(&self, buf: &[u8]) -> Result<()>;

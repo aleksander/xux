@@ -1,15 +1,12 @@
 use std::collections::{HashMap, LinkedList, BTreeSet};
-
 use std::vec::Vec;
 use std::io::Cursor;
 use std::io::Read;
 use std::u16;
-
 use proto::*;
-use errors::*;
-
-extern crate flate2;
-use self::flate2::read::ZlibDecoder;
+use Result;
+use failure::err_msg;
+use flate2::read::ZlibDecoder;
 
 struct ObjProp {
     frame: i32,
@@ -236,19 +233,19 @@ pub struct Surface {
 impl Surface {
     fn from_buf <R:ReadBytesSac> (r: &mut R) -> Result<Surface> {
         //let mut r = Cursor::new(buf);
-        let (x,y) = r.coord().chain_err(||"surface coord")?;
-        let mmname = r.strz().chain_err(||"surface name")?;
+        let (x,y) = r.coord()?;
+        let mmname = r.strz()?;
         let mut pfl = vec![0; 256];
         loop {
-            let pidx = r.u8().chain_err(||"pidx")?;
+            let pidx = r.u8()?;
             if pidx == 255 {
                 break;
             }
-            pfl[pidx as usize] = r.u8().chain_err(||"pfl[pidx]")?;
+            pfl[pidx as usize] = r.u8()?;
         }
         let mut decoder = ZlibDecoder::new(r);
         let mut unzipped = Vec::new();
-        let _unzipped_len = decoder.read_to_end(&mut unzipped).chain_err(||"unable to unpack")?;
+        let _unzipped_len = decoder.read_to_end(&mut unzipped)?;
         // TODO check unzipped_len
         let mut r = Cursor::new(unzipped);
 
@@ -301,12 +298,12 @@ impl Surface {
         //let mut tileres = vec![("".into(),0); 256];
         let mut tileres = Vec::new();
         loop {
-            let tileid = r.u8().chain_err(||"tileid")?;
+            let tileid = r.u8()?;
             if tileid == 255 {
                 break;
             }
-            let resname = r.strz().chain_err(||"surface tile resname")?;
-            let resver = r.u16().chain_err(||"surface tile resver")?;
+            let resname = r.strz()?;
+            let resver = r.u16()?;
             //tileres[tileid as usize] = (resname,resver);
             tileres.push(Tile{id:tileid,name:resname,ver:resver});
         }
@@ -333,7 +330,7 @@ impl Surface {
                 0 => if (fl & 1) == 1 { 2 } else { 1 },
                 1 => if (fl & 1) == 1 { 8 } else { 4 },
                 2 => if (fl & 1) == 1 { 32 } else { 16 },
-                _ => { return Err(format!("ERROR: unknown plot type {}", typ).into()); }
+                _ => { return Err(format_err!("ERROR: unknown plot type {}", typ)); }
             };
             for y in y1..y2+1 {
                 for x in x1..x2+1 {
@@ -597,7 +594,7 @@ impl State {
                 match sess.err {
                     SessError::OK => {}
                     _ => {
-                        return Err("session error".into());
+                        return Err(err_msg("session error"));
                         // XXX ??? should we send CLOSE too ???
                         // ??? or can we re-send our SESS requests in case of BUSY err ?
                     }
@@ -708,7 +705,7 @@ impl State {
             ServerMessage::CLOSE(_) => {
                 // info!("RX: CLOSE");
                 // TODO return Status::EndOfSession instead of Error
-                return Err("session closed".into());
+                return Err(err_msg("session closed"));
             }
         }
 
@@ -1053,8 +1050,9 @@ impl State {
     // }
 
     pub fn go(&mut self, xy: ObjXY) -> Result<()> {
+        use failure::err_msg;
         info!("GO ({}, {})", xy.0, xy.1);
-        let id = self.widget_id("mapview", None).ok_or(ErrorKind::Msg("try to go with no mapview widget".into()))?;
+        let id = self.widget_id("mapview", None).ok_or(err_msg("try to go with no mapview widget"))?;
         let name = "click".to_string();
         let mut args: Vec<List> = Vec::new();
         args.push(List::Coord((907, 755))); //TODO set some random coords in the center of screen

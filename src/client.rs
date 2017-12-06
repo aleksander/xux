@@ -1,8 +1,9 @@
-use errors::*;
 use driver::Driver;
 use ai::Ai;
 use render::Render;
 use state::State;
+use Result;
+use failure::err_msg;
 
 pub fn authorize(host: &str, port: u16, user: String, pass: String) -> Result<(String, Vec<u8>)> {
 
@@ -19,49 +20,49 @@ pub fn authorize(host: &str, port: u16, user: String, pass: String) -> Result<(S
     type be = BigEndian;
 
     info!("authorize {} @ {}:{}", user, host, port);
-    let stream = net::TcpStream::connect((host, port)).chain_err(||"tcpstream.connect")?;
-    let mut ctx = ssl::SslContext::builder(ssl::SslMethod::tls()).chain_err(||"sslContext.builder")?;
+    let stream = net::TcpStream::connect((host, port))?;
+    let mut ctx = ssl::SslContext::builder(ssl::SslMethod::tls())?;
     ctx.set_verify(ssl::SSL_VERIFY_NONE);
     let ctx = ctx.build();
-    let ssl = ssl::Ssl::new(&ctx).chain_err(||"Ssl.new")?;
-    let mut stream = ssl.connect(stream).chain_err(||"Ssl::connect")?;
+    let ssl = ssl::Ssl::new(&ctx)?;
+    let mut stream = ssl.connect(stream)?;
 
     fn msg(buf: Vec<u8>) -> Result<Vec<u8>> {
         let mut msg = Vec::new();
-        msg.write_u16::<be>(buf.len() as u16).chain_err(||"authorize.msg.write(buf.len)")?;
+        msg.write_u16::<be>(buf.len() as u16)?;
         msg.extend(buf);
         Ok(msg)
     }
 
     // TODO use closure instead (no need to pass stream)
     fn command<S:Read+Write>(mut stream: S, cmd: Vec<u8>) -> Result<Vec<u8>> {
-        let cmd = msg(cmd).chain_err(||"unable to create msg")?;
-        stream.write(&cmd).chain_err(||"unable to write cmd")?;
-        stream.flush().chain_err(||"unable to flush")?;
+        let cmd = msg(cmd)?;
+        stream.write(&cmd)?;
+        stream.flush()?;
 
         let len = {
             let mut buf = vec![0; 2];
-            stream.read_exact(&mut buf).chain_err(||"unable to read")?;
+            stream.read_exact(&mut buf)?;
             let mut rdr = Cursor::new(buf);
-            rdr.read_u16::<be>().chain_err(||"unable to read len")?
+            rdr.read_u16::<be>()?
         };
 
         let mut msg = vec![0; len as usize];
-        stream.read_exact(msg.as_mut_slice()).chain_err(||"unable to read msg")?;
+        stream.read_exact(msg.as_mut_slice())?;
         debug!("msg: {:?}", msg);
         if msg.len() < b"ok\0".len() {
-            return Err(format!("too short answer: {:?}", msg).into());
+            return Err(format_err!("too short answer: {:?}", msg));
         }
         match &msg[..3] {
             b"ok\0" => Ok(msg[3..].to_vec()),
             b"no\0" => {
-                let msg = str::from_utf8(&msg[3..]).chain_err(||"unable to decode msg")?;
+                let msg = String::from_utf8(msg[3..].to_vec())?;
                 //TODO add errors::AuthError(msg)
-                Err(msg.into())
+                Err(err_msg(msg))
             }
             _ => {
-                let msg = str::from_utf8(&msg).chain_err(||"unable to decode msg")?;
-                Err(format!("unexpected answer: '{}'", msg).into())
+                let msg = str::from_utf8(&msg)?;
+                Err(format_err!("unexpected answer: '{}'", msg))
             }
         }
     }
@@ -71,11 +72,11 @@ pub fn authorize(host: &str, port: u16, user: String, pass: String) -> Result<(S
         buf.extend(b"pw\0");
         buf.extend(user.as_bytes());
         buf.push(0);
-        let hash = hash2(MessageDigest::sha256(), pass.as_bytes()).chain_err(||"unable to hash2(pass)")?;
+        let hash = hash2(MessageDigest::sha256(), pass.as_bytes())?;
         buf.extend(&*hash);
-        let msg = command(&mut stream, buf).chain_err(||"unable to pw")?;
+        let msg = command(&mut stream, buf)?;
         // FIXME use read_strz analog
-        str::from_utf8(&msg[..msg.len() - 1]).chain_err(||"unable to decode login")?.to_string()
+        str::from_utf8(&msg[..msg.len() - 1])?.to_string()
     };
 
     let cookie = {
@@ -108,7 +109,7 @@ impl<'a, D: Driver, A: Ai> Client<'a, D, A> {
     fn send_all_enqueued(&mut self) -> Result<()> {
         // TODO use iterator
         while let Some(ebuf) = self.state.tx() {
-            self.driver.tx(&ebuf.buf).chain_err(||"send_all_enqueued")?;
+            self.driver.tx(&ebuf.buf)?;
             if let Some(timeout) = ebuf.timeout {
                 self.driver.timeout(timeout.seq, timeout.ms);
             }
@@ -121,11 +122,11 @@ impl<'a, D: Driver, A: Ai> Client<'a, D, A> {
         use web;
         use proto::ObjXY;
 
-        let event = self.driver.event().chain_err(||"unable to get event")?;
+        let event = self.driver.event()?;
         match event {
             driver::Event::Rx(buf) => {
                 // info!("event::rx: {} bytes", buf.len());
-                self.state.rx(&buf).chain_err(||"unable to rx")?;
+                self.state.rx(&buf)?;
             }
             driver::Event::Timeout(seq) => {
                 // info!("event::timeout: {} seq", seq);
@@ -133,26 +134,26 @@ impl<'a, D: Driver, A: Ai> Client<'a, D, A> {
             }
             driver::Event::Tcp((tx, buf)) => {
                 let reply = web::responce(&buf, &self.state);
-                tx.send(reply).chain_err(||"unable to send")?;
+                tx.send(reply)?;
                 // self.driver.reply(reply);
             }
             #[cfg(feature = "salem")]
             driver::Event::Render(re) => {
                 match re {
-                    driver::RenderEvent::Up    => if let Some(ObjXY(x,y)) = self.state.hero_xy() { self.state.go(ObjXY(x,y+100)).chain_err(||"unable to go Up")?; },
-                    driver::RenderEvent::Down  => if let Some(ObjXY(x,y)) = self.state.hero_xy() { self.state.go(ObjXY(x,y-100)).chain_err(||"unable to go Down")?; },
-                    driver::RenderEvent::Left  => if let Some(ObjXY(x,y)) = self.state.hero_xy() { self.state.go(ObjXY(x-100,y)).chain_err(||"unable to go Left")?; },
-                    driver::RenderEvent::Right => if let Some(ObjXY(x,y)) = self.state.hero_xy() { self.state.go(ObjXY(x+100,y)).chain_err(||"unable to go Right")?; },
+                    driver::RenderEvent::Up    => if let Some(ObjXY(x,y)) = self.state.hero_xy() { self.state.go(ObjXY(x,y+100))?; },
+                    driver::RenderEvent::Down  => if let Some(ObjXY(x,y)) = self.state.hero_xy() { self.state.go(ObjXY(x,y-100))?; },
+                    driver::RenderEvent::Left  => if let Some(ObjXY(x,y)) = self.state.hero_xy() { self.state.go(ObjXY(x-100,y))?; },
+                    driver::RenderEvent::Right => if let Some(ObjXY(x,y)) = self.state.hero_xy() { self.state.go(ObjXY(x+100,y))?; },
                     driver::RenderEvent::Quit  => self.state.close()?,
                 }
             }
             #[cfg(feature = "hafen")]
             driver::Event::Render(re) => {
                 match re {
-                    driver::RenderEvent::Up    => if let Some(ObjXY(x,y)) = self.state.hero_xy() { self.state.go(ObjXY(x,y+100.0)).chain_err(||"unable to go Up")?; },
-                    driver::RenderEvent::Down  => if let Some(ObjXY(x,y)) = self.state.hero_xy() { self.state.go(ObjXY(x,y-100.0)).chain_err(||"unable to go Down")?; },
-                    driver::RenderEvent::Left  => if let Some(ObjXY(x,y)) = self.state.hero_xy() { self.state.go(ObjXY(x-100.0,y)).chain_err(||"unable to go Left")?; },
-                    driver::RenderEvent::Right => if let Some(ObjXY(x,y)) = self.state.hero_xy() { self.state.go(ObjXY(x+100.0,y)).chain_err(||"unable to go Right")?; },
+                    driver::RenderEvent::Up    => if let Some(ObjXY(x,y)) = self.state.hero_xy() { self.state.go(ObjXY(x,y+100.0))?; },
+                    driver::RenderEvent::Down  => if let Some(ObjXY(x,y)) = self.state.hero_xy() { self.state.go(ObjXY(x,y-100.0))?; },
+                    driver::RenderEvent::Left  => if let Some(ObjXY(x,y)) = self.state.hero_xy() { self.state.go(ObjXY(x-100.0,y))?; },
+                    driver::RenderEvent::Right => if let Some(ObjXY(x,y)) = self.state.hero_xy() { self.state.go(ObjXY(x+100.0,y))?; },
                     driver::RenderEvent::Quit  => self.state.close()?,
                 }
             }
@@ -205,8 +206,8 @@ impl<'a, D: Driver, A: Ai> Client<'a, D, A> {
                 };
                 self.render.update(event)?;
             }
-            self.send_all_enqueued().chain_err(||"unable to send_all_enqueued")?;
-            self.dispatch_single_event().chain_err(||"unable to dispatch_single_event")?;
+            self.send_all_enqueued()?;
+            self.dispatch_single_event()?;
             self.ai.update(&mut self.state);
         }
     }

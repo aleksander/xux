@@ -2,7 +2,8 @@ use std::fmt;
 use proto::list::List;
 use proto::serialization::*;
 use std::io::Write;
-use errors::*;
+use Result;
+use failure::err_msg;
 
 pub struct Rels {
     pub seq: u16,
@@ -26,20 +27,20 @@ impl Rels {
 
     // TODO impl FromBuf for Rel {}
     pub fn from_buf <R:ReadBytesSac> (r: &mut R) -> Result<Rels> {
-        let seq = r.u16().chain_err(||"rels.from seq")?;
+        let seq = r.u16()?;
         let mut rels = Vec::new();
         loop {
-            let mut rel_type = r.u8().chain_err(||"rels.from type")?;
+            let mut rel_type = r.u8()?;
             let last = (rel_type & Rels::MORE_RELS_ATTACHED_BIT) == 0;
             let rel_buf = if !last {
                 rel_type &= !Rels::MORE_RELS_ATTACHED_BIT;
-                let rel_len = r.u16().chain_err(||"rels.from len")?;
+                let rel_len = r.u16()?;
                 let mut tmp = vec![0; rel_len as usize];
-                r.read_exact(&mut tmp).chain_err(||"rels.from buf")?;
+                r.read_exact(&mut tmp)?;
                 tmp
             } else {
                 let mut tmp = Vec::new();
-                r.read_to_end(&mut tmp).chain_err(||"rels.from buf2")?;
+                r.read_to_end(&mut tmp)?;
                 tmp
             };
             rels.push(Rel::from_buf(rel_type, rel_buf.as_slice())?);
@@ -101,7 +102,7 @@ impl Rel {
             Buff::ID => Ok(Rel::BUFF(Buff)),
             SessKey::ID => Ok(Rel::SESSKEY(SessKey)),
             id => {
-                Err(format!("unknown REL type: {}", id).into())
+                Err(format_err!("unknown REL type: {}", id))
             }
         }
     }
@@ -112,28 +113,28 @@ impl Rel {
         match *self {
             Rel::WDGMSG(ref msg) => {
                 let mut tmp = vec![];
-                tmp.u16(msg.id).chain_err(||"rel.to WDGMSG id")?; // widget ID
-                tmp.strz(&msg.name).chain_err(||"rel.to WDGMSG name")?;
+                tmp.u16(msg.id)?; // widget ID
+                tmp.strz(&msg.name)?;
                 let args_buf = {
                     let mut v = Vec::new();
                     msg.args.to_buf(&mut v)?;
                     v
                 };
-                tmp.write(&args_buf).chain_err(||"rel.to WDGMSG args")?;
+                tmp.write(&args_buf)?;
                 if last {
-                    w.u8(WdgMsg::ID).chain_err(||"rel.to WDGMSG")?;
+                    w.u8(WdgMsg::ID)?;
                 } else {
                     use std::u16;
-                    w.u8(WdgMsg::ID | Rels::MORE_RELS_ATTACHED_BIT).chain_err(||"rel.to WDGMSG+m")?;
-                    if tmp.len() > u16::MAX as usize { return Err("rel.to WDGMSG rel buf > u16.max".into()); }
-                    w.u16(tmp.len() as u16).chain_err(||"rel.to WDGMSG len")?; // rel length
+                    w.u8(WdgMsg::ID | Rels::MORE_RELS_ATTACHED_BIT)?;
+                    if tmp.len() > u16::MAX as usize { return Err(err_msg("rel.to WDGMSG rel buf > u16.max")); }
+                    w.u16(tmp.len() as u16)?; // rel length
                 }
-                w.write(&tmp).chain_err(||"rel.to WDGMSG buf")?;
+                w.write(&tmp)?;
 
                 Ok(w)
             }
-            _ => {
-                Err("rel.to not implemented".into())
+            ref other => {
+                Err(format_err!("rel.to is not implemented for {:?}", other))
             }
         }
     }
@@ -152,11 +153,11 @@ impl NewWdg {
     pub const ID: u8 = 0;
 
     fn from_buf <R:ReadBytesSac> (mut r: R) -> Result<NewWdg> {
-        let id = r.u16().chain_err(||"NEWWDG id")?;
-        let name = r.strz().chain_err(||"NEWWDG name")?;
-        let parent = r.u16().chain_err(||"NEWWDG parent")?;
-        let pargs = List::from_buf(&mut r).chain_err(||"NEWWDG pargs")?;
-        let cargs = List::from_buf(&mut r).chain_err(||"NEWWDG cargs")?;
+        let id = r.u16()?;
+        let name = r.strz()?;
+        let parent = r.u16()?;
+        let pargs = List::from_buf(&mut r)?;
+        let cargs = List::from_buf(&mut r)?;
         Ok(NewWdg {
             id: id,
             name: name,
@@ -186,9 +187,9 @@ impl WdgMsg {
     }
 
     fn from_buf <R:ReadBytesSac> (mut r: R) -> Result<WdgMsg> {
-        let id = r.u16().chain_err(||"WDGMSG id")?;
-        let name = r.strz().chain_err(||"WDGMSG name")?;
-        let args = List::from_buf(&mut r).chain_err(||"WDGMSG args")?;
+        let id = r.u16()?;
+        let name = r.strz()?;
+        let args = List::from_buf(&mut r)?;
         Ok(WdgMsg {
             id: id,
             name: name,
@@ -206,7 +207,7 @@ impl DstWdg {
     pub const ID: u8 = 2;
 
     fn from_buf <R:ReadBytesSac> (mut r: R) -> Result<DstWdg> {
-        let id = r.u16().chain_err(||"DSTWDG id")?;
+        let id = r.u16()?;
         Ok(DstWdg{ id: id })
     }
 }
@@ -243,7 +244,7 @@ impl Globs {
     #[cfg(feature = "hafen")]
     fn from_buf <R:ReadBytesSac> (r: &mut R) -> Result<Globs> {
         let mut globs = Vec::new();
-        let inc = r.u8().chain_err(||"Globs.from inc")?;
+        let inc = r.u8()?;
         loop {
             let t = match r.strz() {
                 Ok(b) => b,
@@ -344,7 +345,7 @@ impl Glob {
             "sky" => {Glob::Sky}
             "wth" => {Glob::Wth}
             _ => {
-                return Err(format!("unknown GLOBLOB type: '{:?}'", t.as_bytes()).into())
+                return Err(format_err!("unknown GLOBLOB type: '{:?}'", t.as_bytes()))
             }
         })
     }
@@ -368,9 +369,9 @@ impl ResId {
     pub const ID: u8 = 6;
 
     fn from_buf <R:ReadBytesSac> (mut r: R) -> Result<ResId> {
-        let id = r.u16().chain_err(||"ResId.from id")?;
-        let name = r.strz().chain_err(||"ResId.from name")?;
-        let ver = r.u16().chain_err(||"ResId.from ver")?;
+        let id = r.u16()?;
+        let name = r.strz()?;
+        let ver = r.u16()?;
         Ok(ResId {
             id: id,
             name: name,
@@ -421,8 +422,8 @@ impl Tiles {
                 Ok(b) => b,
                 Err(_) => break, //TODO check error type
             };
-            let name = r.strz().chain_err(||"TILES name")?;
-            let ver = r.u16().chain_err(||"TILES ver")?;
+            let name = r.strz()?;
+            let ver = r.u16()?;
             tiles.push(Tile {
                 id: id,
                 name: name,

@@ -1,5 +1,5 @@
 use proto::serialization::*;
-use errors::*;
+use Result;
 
 #[derive(Debug)]
 pub enum SessError {
@@ -41,7 +41,7 @@ impl sSess {
 
     // TODO impl FromBuf for sSess {}
     pub fn from_buf <R:ReadBytesSac> (r: &mut R) -> Result<sSess> {
-        Ok(sSess::new( r.u8().chain_err(||"ssess.from")? ))
+        Ok(sSess::new( r.u8()? ))
     }
 
     /*
@@ -88,14 +88,14 @@ impl cSess {
 
     // TODO impl FromBuf for cSess {}
     pub fn from_buf <R:ReadBytesSac> (r: &mut R) -> Result<cSess> {
-        let unknown = r.u16().chain_err(||"csess.from unk")?;
-        let proto = r.strz().chain_err(||"csess.from proto")?;
-        let version = r.u16().chain_err(||"csess.from version")?;
-        let login = r.strz().chain_err(||"csess.from login")?;
-        let cookie_len = r.u16().chain_err(||"csess.from cookie len")?;
+        let unknown = r.u16()?;
+        let proto = r.strz()?;
+        let version = r.u16()?;
+        let login = r.strz()?;
+        let cookie_len = r.u16()?;
         let cookie = {
             let mut tmp = vec![0; cookie_len as usize];
-            r.read_exact(&mut tmp).chain_err(||"csess.from cookie")?;
+            r.read_exact(&mut tmp)?;
             tmp
         };
         Ok(cSess{
@@ -108,13 +108,13 @@ impl cSess {
     }
 
     pub fn to_buf <W:WriteBytesSac> (&self, w: &mut W) -> Result<()> {
-        w.u8(Self::ID).chain_err(||"csess.to id")?;
-        w.u16(self.unknown).chain_err(||"csess.to unk")?;
-        w.strz(&self.proto).chain_err(||"csess.to proto")?; // proto
-        w.u16(self.version).chain_err(||"csess.to version")?; // version
-        w.strz(&self.login).chain_err(||"csess.to login")?; // login
-        w.u16(32).chain_err(||"csess.to cookie len")?; // cookie length
-        w.write(self.cookie.as_slice()).chain_err(||"csess.to cookie")?; // cookie
+        w.u8(Self::ID)?;
+        w.u16(self.unknown)?;
+        w.strz(&self.proto)?; // proto
+        w.u16(self.version)?; // version
+        w.strz(&self.login)?; // login
+        w.u16(32)?; // cookie length
+        w.write(self.cookie.as_slice())?; // cookie
         Ok(())
     }
 }
