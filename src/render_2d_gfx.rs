@@ -685,16 +685,16 @@ impl RenderImplState {
                         use glutin::VirtualKeyCode as Key;
                         let pressed = input.state == Pressed;
                         match input.virtual_keycode {
-                            Some(Key::Escape) => *should_stop = true,
+                            Some(Key::Escape) => { render_tx.send(driver::Event::Render(driver::RenderEvent::Quit)).expect("unable to send Render::Quit"); *should_stop = true; }
                             Some(Key::LControl) | Some(Key::RControl) => self.ctrl_pressed = pressed, //TODO use some kind of keys_state { ... }
-                        Some(Key::Up) => { render_tx.send(driver::Event::Render(driver::RenderEvent::Up)).expect("unable to send Render::Up"); }
-                        Some(Key::Down) => { render_tx.send(driver::Event::Render(driver::RenderEvent::Down)).expect("unable to send Render::Down"); }
-                        Some(Key::Left) => { render_tx.send(driver::Event::Render(driver::RenderEvent::Left)).expect("unable to send Render::Left"); }
-                        Some(Key::Right) => { render_tx.send(driver::Event::Render(driver::RenderEvent::Right)).expect("unable to send Render::Right"); }
-                        _ => {}
+                            Some(Key::Up) => { render_tx.send(driver::Event::Render(driver::RenderEvent::Up)).expect("unable to send Render::Up"); }
+                            Some(Key::Down) => { render_tx.send(driver::Event::Render(driver::RenderEvent::Down)).expect("unable to send Render::Down"); }
+                            Some(Key::Left) => { render_tx.send(driver::Event::Render(driver::RenderEvent::Left)).expect("unable to send Render::Left"); }
+                            Some(Key::Right) => { render_tx.send(driver::Event::Render(driver::RenderEvent::Right)).expect("unable to send Render::Right"); }
+                            _ => {}
                         }
                     }
-                    Closed => *should_stop = true,
+                    Closed => { render_tx.send(driver::Event::Render(driver::RenderEvent::Quit)).expect("unable to send Render::Quit"); *should_stop = true; }
                     Resized(width, height) => {
                         //TODO app.resize()
                         //TODO ui.resize()

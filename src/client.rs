@@ -149,6 +149,7 @@ impl<'a, D: Driver, A: Ai> Client<'a, D, A> {
             }
             #[cfg(feature = "hafen")]
             driver::Event::Render(re) => {
+                info!("event: {:?}", re);
                 match re {
                     driver::RenderEvent::Up    => if let Some(ObjXY(x,y)) = self.state.hero_xy() { self.state.go(ObjXY(x,y+100.0))?; },
                     driver::RenderEvent::Down  => if let Some(ObjXY(x,y)) = self.state.hero_xy() { self.state.go(ObjXY(x,y-100.0))?; },

@@ -7,6 +7,7 @@ pub trait Driver {
     fn event(&mut self) -> Result<Event>;
 }
 
+#[derive(Debug)]
 pub enum Event {
     Rx(Vec<u8>),
     Timeout(usize),
@@ -14,6 +15,7 @@ pub enum Event {
     Render(RenderEvent),
 }
 
+#[derive(Debug)]
 pub enum RenderEvent {
     Up,
     Down,
