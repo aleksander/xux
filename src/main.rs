@@ -89,10 +89,9 @@ fn run() -> Result<()> {
 
     let mut driver = DriverStd::new(host, game_port)?;
 
-    let render = Render::new(driver.sender());
+    let events_tx = Render::new(driver.sender());
 
-    let mut client = Client::new(&mut driver, &mut ai, render);
-    client.run(&login, &cookie)
+    Client::new(&mut driver, &mut ai, events_tx).run(&login, &cookie)
 }
 
 fn main () {
@@ -101,6 +100,8 @@ fn main () {
             Ok(()) => { 0 }
             Err(e) => {
                 println!("error \"{}\", cause \"{}\"", e, e.cause());
+                println!("trace:");
+                println!("{}", e.backtrace());
                 -1
             }
         }

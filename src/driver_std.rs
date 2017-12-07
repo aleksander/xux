@@ -52,6 +52,7 @@ impl DriverStd {
         thread::spawn(move || {
             let mut buf = vec![0; 65535];
             loop {
+                // TODO send Error(e) through receiver_tx
                 let len = sock_rx.recv(&mut buf).expect("driver::recv");
                 // TODO zero-copy data processing
                 receiver_tx.send(Event::Rx(buf[..len].to_vec())).expect("driver::send(event::rx)");

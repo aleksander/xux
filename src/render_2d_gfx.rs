@@ -1,4 +1,5 @@
-use render::Event;
+use state::Event;
+use state::Surface;
 use driver;
 use std::sync::mpsc::Sender;
 use gfx_device_gl;
@@ -7,7 +8,7 @@ use gfx::traits::FactoryExt;
 use gfx::{self, Device};
 use gfx::format::*;
 use glutin::{self, GlContext, MouseButton};
-use glutin::WindowEvent::{KeyboardInput, Closed, Resized, MouseWheel, MouseInput, MouseMoved};
+use glutin::WindowEvent::{KeyboardInput, Closed, Resized, MouseWheel, MouseInput, CursorMoved};
 use cgmath::{Matrix2, Matrix3, Vector2, Vector3, SquareMatrix, Rad, Zero};
 use imgui::{ImGui, Ui, GlyphRange};
 use imgui_gfx_renderer::{Renderer, Shaders};
@@ -515,7 +516,7 @@ fn ui_handle_event (imgui: &mut ImGui, mouse_state: &mut MouseState, event: &glu
                     _ => {}
                 }
             }
-            MouseMoved { position: (x, y), .. } => mouse_state.pos = (x as i32, y as i32),
+            CursorMoved { position: (x, y), .. } => mouse_state.pos = (x as i32, y as i32),
             MouseInput { state, button, .. } => {
                 match button {
                     MouseButton::Left => mouse_state.pressed.0 = state == Pressed,
@@ -614,21 +615,21 @@ impl RenderImplState {
                     }
                 }
             }
-            Event::Grid(grid_x,grid_y,tiles,heights,owning) => {
+            Event::Grid(Surface{ x, y, tiles, z, ol, .. }) => {
                 //println!("grid ({}, {})", grid_x, grid_y);
                 //TODO app.rebuild_grid_cache(...)
                 //XXX FIXME TODO one BIG mesh with all grids in it ?
                 //or individual buffer+pipe.data for every grid ?
                 //or use texture-per-grid and don't care at all
-                let tiles = ObjTex::plane_from_tiles(1100.0, grid_x, grid_y, tiles.as_ref(), &self.palette)
+                let tiles = ObjTex::plane_from_tiles(1100.0, x, y, tiles.as_ref(), &self.palette)
                     .bake(self.main_color.clone(), &mut self.factory);
                 self.grids_tiles.push(tiles);
-                let owning = ObjTex::plane_from_owning(1100.0, grid_x, grid_y, owning.as_ref())
+                let owning = ObjTex::plane_from_owning(1100.0, x, y, ol.as_ref())
                     .bake(self.main_color.clone(), &mut self.factory);
                 self.grids_owning.push(owning);
                 //let heights = ObjCol::grid_from_heights(100, 11.0, grid_x, grid_y, heights.as_ref(), 1.0)
                 //    .bake(main_color.clone(), &mut factory, threshold);
-                let heights = ObjCol::grid_from_heights2(100, 11.0, grid_x, grid_y, heights.as_ref())
+                let heights = ObjCol::grid_from_heights2(100, 11.0, x, y, z.as_ref())
                     .bake(self.main_color.clone(), &mut self.factory, self.threshold);
                 self.grids_heights.push(heights);
             }
@@ -663,7 +664,6 @@ impl RenderImplState {
                 self.widgets.remove(&id);
                 self.xui.del_widget(id).expect("unable to ui.del_widget");
             }
-            _ => {}
         }
     }
 
@@ -721,7 +721,7 @@ impl RenderImplState {
                         }
                     }
                     MouseInput {state, button: MouseButton::Left, ..} => self.dragging = state == Pressed,
-                    MouseMoved {position: (x, y), ..} => {
+                    CursorMoved {position: (x, y), ..} => {
                         let x = if x < 0.0 { 0.0 } else if x > self.w as f64 { self.w as f64 } else { x };
                         let y = if y < 0.0 { 0.0 } else if y > self.h as f64 { self.h as f64 } else { y };
                         let delta_x = x - self.last_mouse_x;
@@ -761,7 +761,7 @@ impl RenderImpl {
             gfx_window_glutin::init::<Rgba8, DepthStencil>(builder, context, &events_loop);
 
 
-        let (w, h) = window.get_inner_size_points().expect("get_inner_size_points failed");
+        let (w, h) = window.get_inner_size().expect("get_inner_size failed");
 
         let shaders = {
             let version = device.get_info().shading_language;
@@ -919,9 +919,8 @@ impl RenderImpl {
             self.state.encoder.draw(&obj.slice, &self.state.pso_col, &obj.data);
         }
 
-        let size_points = self.state.window.get_inner_size_points().unwrap();
-        let size_pixels = self.state.window.get_inner_size_pixels().unwrap();
-        let ui = self.state.imgui.frame(size_points, size_pixels, delta_s);
+        let inner_size = self.state.window.get_inner_size().expect("unable to get_inner_size");
+        let ui = self.state.imgui.frame(inner_size, inner_size, delta_s);
 
         let fps = (1.0 / delta_s) as usize;
         //FIXME pass &mut RenderImplState instead

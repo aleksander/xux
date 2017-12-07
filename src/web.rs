@@ -90,6 +90,7 @@ fn _responce(state: &State, buf: &str) -> Option<String> {
 
         body = body + "],\"map\":[";
 
+        /*
         period = "";
         match state.hero_grid() {
             Some(// grid
@@ -111,6 +112,7 @@ fn _responce(state: &State, buf: &str) -> Option<String> {
                 }
             }
         }
+        */
 
         body = body + "]}";
         Some(format!("HTTP/1.1 200 OK\r\nContent-Type: text/json\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\n\r\n", body.len()) + &body)

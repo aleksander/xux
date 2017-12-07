@@ -7,6 +7,7 @@ use proto::*;
 use Result;
 use failure::err_msg;
 use flate2::read::ZlibDecoder;
+use std::sync::mpsc::Sender;
 
 struct ObjProp {
     frame: i32,
@@ -218,6 +219,7 @@ pub struct MapPieces {
 }
 
 //TODO rename to Grid
+//TODO rename to Map
 pub struct Surface {
     pub x: i32,
     pub y: i32,
@@ -295,7 +297,6 @@ impl Surface {
     fn surface <R:ReadBytesSac> (r: &mut R, pfl: &[u8], x: i32, y: i32, name: String) -> Result<Surface> {
         let id = r.i64()?;
 
-        //let mut tileres = vec![("".into(),0); 256];
         let mut tileres = Vec::new();
         loop {
             let tileid = r.u8()?;
@@ -304,12 +305,8 @@ impl Surface {
             }
             let resname = r.strz()?;
             let resver = r.u16()?;
-            //tileres[tileid as usize] = (resname,resver);
             tileres.push(Tile{id:tileid,name:resname,ver:resver});
         }
-        //for (i,t) in tileres.iter().enumerate() {
-        //    if ! t.0.is_empty() { debug!("{} {:?}", i, t); }
-        //}
         for tile in tileres.iter() {
             debug!("tileres {:5} {} {}", tile.id, tile.name, tile.ver);
         }
@@ -354,9 +351,10 @@ impl Surface {
 
 pub type PacketId = i32;
 
+//TODO rename to PartialMap
 pub struct Map {
     pub partial: HashMap<PacketId, MapPieces>, // TODO somehow clean up from old pieces (periodically maybe)
-    pub grids: HashMap<GridXY, Surface>,
+    pub grids: BTreeSet<GridXY>,
 }
 
 impl Map {
@@ -409,7 +407,6 @@ impl Map {
         }
         if buf.len() as u16 != map.total_len {
             info!("ERROR: buf.len() as u16 != map.total_len");
-            // return Err(Error{source:"buf.len() as u16 != map.total_len",detail:None});
         }
         buf
     }
@@ -424,11 +421,11 @@ pub enum Wdg {
 
 pub enum Event {
     Tiles(Vec<Tile>),
-    Grid(GridXY),
+    Grid(Surface),
     Obj(ObjID, ObjXY, ResID),
     ObjRemove(ObjID),
     Res(ResID, String),
-    Hero,
+    Hero(ObjXY),
     Wdg(Wdg)
 }
 
@@ -446,13 +443,16 @@ pub struct State {
     pub rel_cache: HashMap<u16, Rels>, //TODO unify with rx_rel_seq to have more consistent entity (struct Rel { ... })
     pub hero: Hero,
     pub map: Map,
-    events: LinkedList<Event>,
-    //origin: Option<ObjXY>,
-    requested_grids: BTreeSet<(i32, i32)>
+    events_tx: Sender<Event>,
+    requested_grids: BTreeSet<(i32, i32)>,
+    timestamp: String,
+    pub login: String,
 }
 
 impl State {
-    pub fn new() -> State {
+    pub fn new(events_tx: Sender<Event>) -> State {
+        use chrono;
+
         let mut widgets = HashMap::new();
         widgets.insert(0,
             Widget {
@@ -483,15 +483,15 @@ impl State {
                 hearthfire: None,
                 inventory: HashMap::new(),
                 equipment: HashMap::new(),
-                //start_xy: None,
             },
             map: Map {
                 partial: HashMap::new(),
-                grids: HashMap::new(),
+                grids: BTreeSet::new(),
             },
-            events: LinkedList::new(),
-            //origin: None,
+            events_tx: events_tx,
             requested_grids: BTreeSet::new(),
+            timestamp: chrono::Local::now().format("%Y-%m-%d %H-%M-%S").to_string(),
+            login: "".into(),
         }
     }
 
@@ -639,13 +639,16 @@ impl State {
                     match self.map.grids.get(&(map.x, map.y)) {
                         Some(_) => info!("MAP DUPLICATE"),
                         None => {
+                            use util::grid_to_png;
+                            self.map.grids.insert((map.x, map.y));
+                            let name = if let Some(ref name) = self.hero.name { name } else { "none" };
+                            grid_to_png(&self.login, name, &self.timestamp, map.x, map.y, &map.tiles, &map.z)?;
                             #[cfg(feature = "salem")]
-                            self.events.push_front(Event::Grid((map.x, map.y)));
+                            self.events_tx.send(Event::Grid((map.x, map.y)))?;
                             #[cfg(feature = "hafen")]
-                            self.events.push_front(Event::Tiles(map.tileres.clone()));
+                            self.events_tx.send(Event::Tiles(map.tileres.clone()))?;
                             #[cfg(feature = "hafen")]
-                            self.events.push_front(Event::Grid((map.x, map.y)));
-                            self.map.grids.insert((map.x, map.y), map);
+                            self.events_tx.send(Event::Grid(map))?;
                         }
                     }
                 }
@@ -663,22 +666,24 @@ impl State {
                                     match self.hero.obj {
                                         Some(ref mut hero_obj) => {
                                             hero_obj.update(new_obj_prop);
+                                            self.events_tx.send(Event::Hero(hero_obj.xy.unwrap_or(ObjXY::new())))?;
                                         }
                                         None => {
                                             if let Some(mut cached_hero_obj) = self.objects.remove(&hero_id) {
                                                 cached_hero_obj.update(new_obj_prop);
+                                                self.events_tx.send(Event::Hero(cached_hero_obj.xy.unwrap_or(ObjXY::new())))?;
                                                 self.hero.obj = Some(cached_hero_obj);
-                                                self.events.push_front(Event::ObjRemove(hero_id));
+                                                self.events_tx.send(Event::ObjRemove(hero_id))?;
                                             } else {
                                                 let mut hero_obj = Obj::new(o.id, None, None, None, None);
                                                 hero_obj.update(new_obj_prop);
+                                                self.events_tx.send(Event::Hero(hero_obj.xy.unwrap_or(ObjXY::new())))?;
                                                 self.hero.obj = Some(hero_obj);
                                             }
                                             info!("HERO: obj: {:?}", self.hero.obj);
                                         }
                                     }
                                     self.request_grids_around_hero();
-                                    self.events.push_front(Event::Hero);
                                     continue;
                                 }
                             }
@@ -689,14 +694,14 @@ impl State {
 
                             if obj.update(&new_obj_prop) {
                                 if let Some(xy) = obj.xy {
-                                    self.events.push_front(Event::Obj(obj.id, xy, obj.resid.unwrap_or(0)));
+                                    self.events_tx.send(Event::Obj(obj.id, xy, obj.resid.unwrap_or(0)))?;
                                 }
                                 info!("OBJ: {:?}", obj);
                             }
                         }
                         None => {
                             self.objects.remove(&o.id);
-                            self.events.push_front(Event::ObjRemove(o.id));
+                            self.events_tx.send(Event::ObjRemove(o.id))?;
                             info!("OBJ: {} removed", o.id);
                         }
                     }
@@ -724,13 +729,13 @@ impl State {
         // XXX FIXME do we handle seq right in the case of overflow ???
         //           to do refactor this code and replace add with wrapping_add
         let mut next_rel_seq = rel.seq + ((rel.rels.len() as u16) - 1);
-        self.dispatch_rel(rel);
+        self.dispatch_rel(rel)?;
         loop {
             let next_rel = self.rel_cache.remove(&(next_rel_seq + 1));
             match next_rel {
                 Some(rel) => {
                     next_rel_seq = rel.seq + ((rel.rels.len() as u16) - 1);
-                    self.dispatch_rel(&rel);
+                    self.dispatch_rel(&rel)?;
                 }
                 None => {
                     break;
@@ -743,25 +748,25 @@ impl State {
     }
 
     //TODO add struct Rel { ... } and move this to self.rel.dispatch(rel)
-    fn dispatch_rel(&mut self, rel: &Rels) {
+    fn dispatch_rel(&mut self, rel: &Rels) -> Result<()> {
         info!("dispatch REL {}-{}", rel.seq, rel.seq + ((rel.rels.len() as u16) - 1));
         // info!("RX: {:?}", rel);
         for r in &rel.rels {
             match *r {
                 Rel::NEWWDG(ref wdg) => {
                     // info!("      {:?}", wdg);
-                    self.dispatch_newwdg(wdg);
-                    self.events.push_front( Event::Wdg(Wdg::New(wdg.id, wdg.name.clone(), wdg.parent)) );
+                    self.dispatch_newwdg(wdg)?;
+                    self.events_tx.send(Event::Wdg(Wdg::New(wdg.id, wdg.name.clone(), wdg.parent)))?;
                 }
                 Rel::WDGMSG(ref msg) => {
                     // info!("      {:?}", msg);
                     self.dispatch_wdgmsg(msg);
-                    self.events.push_front( Event::Wdg(Wdg::Msg(msg.id, msg.name.clone())) );
+                    self.events_tx.send(Event::Wdg(Wdg::Msg(msg.id, msg.name.clone())))?;
                 }
                 Rel::DSTWDG(ref wdg) => {
                     // info!("      {:?}", wdg);
                     self.widgets.remove(&wdg.id);
-                    self.events.push_front( Event::Wdg(Wdg::Del(wdg.id)) );
+                    self.events_tx.send(Event::Wdg(Wdg::Del(wdg.id)))?;
                 }
                 Rel::MAPIV(_) => {}
                 Rel::GLOBLOB(_) => {}
@@ -769,22 +774,23 @@ impl State {
                 Rel::RESID(ref res) => {
                     // info!("      {:?}", res);
                     self.resources.insert(res.id, res.name.clone());
-                    self.events.push_front(Event::Res(res.id, res.name.clone()));
+                    self.events_tx.send(Event::Res(res.id, res.name.clone()))?;
                 }
                 Rel::PARTY(_) => {}
                 Rel::SFX(_) => {}
                 Rel::CATTR(_) => {}
                 Rel::MUSIC(_) => {}
                 Rel::TILES(ref tiles) => {
-                    self.events.push_front(Event::Tiles(tiles.tiles.clone()));
+                    self.events_tx.send(Event::Tiles(tiles.tiles.clone()))?;
                 }
                 Rel::BUFF(_) => {}
                 Rel::SESSKEY(_) => {}
             }
         }
+        Ok(())
     }
 
-    fn dispatch_newwdg(&mut self, wdg: &NewWdg) {
+    fn dispatch_newwdg(&mut self, wdg: &NewWdg) -> Result<()> {
         self.widgets.insert(wdg.id,
                             Widget {
                                 id: wdg.id,
@@ -805,24 +811,21 @@ impl State {
                     self.hero.id = Some(id);
                     info!("HERO: id: {:?}", self.hero.id);
                     let cached_hero_obj = self.objects.remove(&id);
-                    if cached_hero_obj.is_some() {
-                        self.hero.obj = cached_hero_obj;
-                        info!("HERO: obj: {:?}", self.hero.obj);
-                        self.request_grids_around_hero();
-                        self.events.push_front(Event::ObjRemove(id));
-                        self.events.push_front(Event::Hero);
+                    match cached_hero_obj {
+                        Some(cached_hero_obj) => {
+                            self.events_tx.send(Event::ObjRemove(id))?;
+                            self.events_tx.send(Event::Hero(cached_hero_obj.xy.unwrap_or(ObjXY::new())))?;
+                            self.hero.obj = Some(cached_hero_obj);
+                            info!("HERO: obj: {:?}", self.hero.obj);
+                            self.request_grids_around_hero();
+                        }
+                        None => {}
                     }
-
-                    //self.hero.start_xy = match self.hero_xy() {
-                    //    Some(xy) => Some(xy),
-                    //    None => panic!("we have received hero object ID, but hero XY is None"),
-                    //};
                 }
             }
             "mapview" => {
                 if let Some(&List::Coord(xy)) = wdg.cargs.get(0) {
-                    //self.origin = Some(xy);
-                    info!("origin = '{:?}'", xy);//self.origin);
+                    info!("origin = '{:?}'", xy);
                 }
             }
             "item" => {
@@ -850,6 +853,7 @@ impl State {
             }
             _ => {}
         }
+        Ok(())
     }
 
     fn dispatch_wdgmsg(&mut self, msg: &WdgMsg) {
@@ -989,7 +993,7 @@ impl State {
         // TODO replace with client.send(Message::MapReq::new(x,y).to_buf())
         //     or client.send(Message::mapreq(x,y).to_buf())
         // TODO add "force" flag to update this grid forcelly
-        if !self.map.grids.contains_key(&(x, y)) {
+        if !self.map.grids.contains(&(x, y)) {
             self.enqueue_to_send(ClientMessage::MAPREQ(MapReq::new(x, y)))?;
         }
         Ok(())
@@ -1037,17 +1041,6 @@ impl State {
     pub fn close(&mut self) -> Result<()> {
         self.enqueue_to_send(ClientMessage::CLOSE(Close))
     }
-
-    // pub fn ready_to_go (&self) -> bool {
-    //     let mut ret = false;
-    //     for name in self.widgets.values() {
-    //         if name == "mapview" {
-    //             ret = true;
-    //             break;
-    //         }
-    //     }
-    //     return ret;
-    // }
 
     pub fn go(&mut self, xy: ObjXY) -> Result<()> {
         use failure::err_msg;
@@ -1108,9 +1101,6 @@ impl State {
         Ok(())
     }
 
-    // TODO fn grid(Coord) {...}, fn xy(Grid) {...}
-    //     and then we can do: hero.grid().xy();
-
     pub fn hero_xy(&self) -> Option<ObjXY> {
         match self.hero.obj {
             Some(ref hero) => hero.xy,
@@ -1125,13 +1115,6 @@ impl State {
         }
     }
 
-    pub fn hero_grid(&self) -> Option<&Surface> {
-        match self.hero_grid_xy() {
-            Some(xy) => self.map.grids.get(&xy),
-            None => None,
-        }
-    }
-
     pub fn hero_exists(&self) -> bool {
         match self.hero.obj {
             Some(_) => true,
@@ -1140,8 +1123,8 @@ impl State {
     }
 
     pub fn hero_grid_exists(&self) -> bool {
-        match self.hero_grid() {
-            Some(_) => true,
+        match self.hero_grid_xy() {
+            Some(xy) => self.map.grids.contains(&xy),
             None => false,
         }
     }
@@ -1155,14 +1138,6 @@ impl State {
 
     pub fn hero_is_moving(&self) -> bool {
         self.hero_movement().is_some()
-    }
-
-    //pub fn start_point(&self) -> Option<Coord> {
-    //    self.hero.start_xy
-    //}
-
-    pub fn next_event(&mut self) -> Option<Event> {
-        self.events.pop_back()
     }
 }
 

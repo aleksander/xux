@@ -1,7 +1,6 @@
 use std::sync::mpsc::Sender;
 use std::thread;
 use driver;
-use proto::*;
 use state::Wdg;
 use std::slice::Iter;
 use std::iter::Iterator;
@@ -9,23 +8,7 @@ use std::sync::mpsc::channel;
 use std::sync::mpsc::TryRecvError::*;
 use failure::err_msg;
 use Result;
-
-#[derive(Serialize,Deserialize,Debug)]
-pub enum Event {
-    Tiles(Vec<Tile>),
-    Grid(i32, i32, Vec<u8>, Vec<i16>, Vec<u8>),
-    Obj(ObjID, ObjXY, ResID),
-    ObjRemove(ObjID),
-    Res(ResID, String),
-    Hero(ObjXY),
-    // NewObj(i32,i32),
-    // UpdObj(...),
-    // AI(...ai desigions...),
-    // AI: going to pick obj (ID)
-    // AI: going by path (PATH CHAIN)
-    Input,
-    Wdg(Wdg),
-}
+use state;
 
 struct Widget {
     id: u16,
@@ -94,10 +77,6 @@ impl XUi {
             root: Widget::new(0, "root".into())
         }
     }
-
-    //fn find_widget (&mut self, id: u16) -> Option<&mut Widget> {
-    //    self.root.find(id)
-    //}
 
     fn add_widget (&mut self, id: u16, name: String, parent: u16) -> Result<()> {
         debug!("adding widget {} '{}' [{}]", id, name, parent);
@@ -189,12 +168,10 @@ mod dumper {
 #[cfg_attr(feature = "render_2d_gfx", path = "render_2d_gfx.rs")]
 mod render_impl;
 
-pub struct Render {
-    tx: Sender<Event>,
-}
+pub struct Render;
 
 impl Render {
-    pub fn new(render_tx: Sender<driver::Event>) -> Render {
+    pub fn new(render_tx: Sender<driver::Event>) -> Sender<state::Event> {
         let (tx, rx) = channel();
 
         thread::Builder::new().name("render".to_string()).spawn(move || {
@@ -219,12 +196,6 @@ impl Render {
             render_impl.end();
         }).expect("unable to create render thread");
 
-        Render {
-            tx: tx,
-        }
-    }
-
-    pub fn update(&mut self, event: Event) -> Result<()> {
-        Ok(self.tx.send(event)?)
+        tx
     }
 }

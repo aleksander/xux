@@ -1,9 +1,9 @@
 use driver::Driver;
 use ai::Ai;
-use render::Render;
 use state::State;
 use Result;
 use failure::err_msg;
+use std::sync::mpsc::Sender;
 
 pub fn authorize(host: &str, port: u16, user: String, pass: String) -> Result<(String, Vec<u8>)> {
 
@@ -90,17 +90,15 @@ pub fn authorize(host: &str, port: u16, user: String, pass: String) -> Result<(S
 }
 
 pub struct Client<'a, D: Driver + 'a, A: Ai + 'a> {
-    render: Render, // TODO Render trait
     state: State,
     ai: &'a mut A,
     driver: &'a mut D,
 }
 
 impl<'a, D: Driver, A: Ai> Client<'a, D, A> {
-    pub fn new(driver: &'a mut D, ai: &'a mut A, render: Render) -> Client<'a, D, A> {
+    pub fn new(driver: &'a mut D, ai: &'a mut A, events_tx: Sender<::state::Event>) -> Client<'a, D, A> {
         Client {
-            render: render, // TODO Render trait
-            state: State::new(),
+            state: State::new(events_tx),
             ai: ai,
             driver: driver,
         }
@@ -164,49 +162,12 @@ impl<'a, D: Driver, A: Ai> Client<'a, D, A> {
 
     pub fn run(&mut self, login: &str, cookie: &[u8]) -> Result<()> {
         use rustc_serialize::hex::ToHex;
-        use state;
-        use render;
-        use util;
-        use chrono;
 
         info!("connect {} / {}", login, cookie.to_hex());
         self.state.connect(login, cookie)?;
-
-        let start_time = &chrono::Local::now().format("%Y-%m-%d %H-%M-%S").to_string();
+        self.state.login = login.into();
 
         loop {
-            while let Some(event) = self.state.next_event() {
-                let event = match event {
-                    state::Event::Grid((x, y)) => {
-                        match self.state.map.grids.get(&(x, y)) {
-                            Some(ref grid) => {
-                                let name = if let Some(ref name) = self.state.hero.name { name } else { "none" };
-                                util::grid_to_png(login, name, start_time, grid.x, grid.y, &grid.tiles, &grid.z)?;
-                                render::Event::Grid(x, y, grid.tiles.clone(), grid.z.clone(), grid.ol.clone())
-                            }
-                            None => {
-                                warn!("Event::Grig received, but no such grid!");
-                                continue;
-                            }
-                        }
-                    }
-                    state::Event::Obj(id, xy, resid) => render::Event::Obj(id, xy, resid),
-                    state::Event::ObjRemove(id) => render::Event::ObjRemove(id),
-                    state::Event::Res(resid,name) => render::Event::Res(resid,name),
-                    state::Event::Hero => match self.state.hero.obj {
-                        Some(ref hero) => {
-                            match hero.xy {
-                                Some(xy) => render::Event::Hero(xy),
-                                None => panic!("hero's xy is None")
-                            }
-                        }
-                        None => panic!("received Event::Hero while hero.obj is None")
-                    },
-                    state::Event::Wdg(wdg) => render::Event::Wdg(wdg),
-                    state::Event::Tiles(tiles) => render::Event::Tiles(tiles),
-                };
-                self.render.update(event)?;
-            }
             self.send_all_enqueued()?;
             self.dispatch_single_event()?;
             self.ai.update(&mut self.state);
