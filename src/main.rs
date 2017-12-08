@@ -9,9 +9,10 @@ use std::process;
 use xux::ai::Ai;
 use xux::ai_decl::AiDecl;
 use xux::driver_std::DriverStd;
-use xux::render::Render;
+use xux::render;
 use xux::client::Client;
 use xux::Result;
+use xux::client;
 
 use failure::err_msg;
 
@@ -82,14 +83,14 @@ fn run() -> Result<()> {
 
     // run::<DriverMio,AiLua>(ip, username, password);
     //run(host, username, password);
-    let (login, cookie) = xux::client::authorize(host, auth_port, username, password)?;
+    let (login, cookie) = client::authorize(host, auth_port, username, password)?;
 
     let mut ai = AiDecl::new();
     ai.init();
 
     let mut driver = DriverStd::new(host, game_port)?;
 
-    let events_tx = Render::new(driver.sender());
+    let events_tx = render::new(driver.sender());
 
     Client::new(&mut driver, &mut ai, events_tx).run(&login, &cookie)
 }

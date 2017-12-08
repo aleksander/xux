@@ -168,34 +168,30 @@ mod dumper {
 #[cfg_attr(feature = "render_2d_gfx", path = "render_2d_gfx.rs")]
 mod render_impl;
 
-pub struct Render;
+pub fn new(render_tx: Sender<driver::Event>) -> Sender<state::Event> {
+    let (tx, rx) = channel();
 
-impl Render {
-    pub fn new(render_tx: Sender<driver::Event>) -> Sender<state::Event> {
-        let (tx, rx) = channel();
-
-        thread::Builder::new().name("render".to_string()).spawn(move || {
-            let mut render_impl = render_impl::RenderImpl::new(); //TODO pass render_tx to new()
-            #[cfg(feature = "dump_events")]
-            let mut dumper = dumper::Dumper::init().expect("unable to create dumper");
-            render_impl.init();
-            'outer: loop {
-                if ! render_impl.update(&render_tx) { break; }
-                loop {
-                    match rx.try_recv() {
-                        Ok(event) => {
-                            #[cfg(feature = "dump_events")]
-                            dumper.dump(&event).expect("unable to dump event");
-                            render_impl.event(event);
-                        }
-                        Err(Empty) => { break; }
-                        Err(Disconnected) => { break 'outer; }
+    thread::Builder::new().name("render".to_string()).spawn(move || {
+        let mut render_impl = render_impl::RenderImpl::new(); //TODO pass render_tx to new()
+        #[cfg(feature = "dump_events")]
+        let mut dumper = dumper::Dumper::init().expect("unable to create dumper");
+        render_impl.init();
+        'outer: loop {
+            if ! render_impl.update(&render_tx) { break; }
+            loop {
+                match rx.try_recv() {
+                    Ok(event) => {
+                        #[cfg(feature = "dump_events")]
+                        dumper.dump(&event).expect("unable to dump event");
+                        render_impl.event(event);
                     }
+                    Err(Empty) => { break; }
+                    Err(Disconnected) => { break 'outer; }
                 }
             }
-            render_impl.end();
-        }).expect("unable to create render thread");
+        }
+        render_impl.end();
+    }).expect("unable to create render thread");
 
-        tx
-    }
+    tx
 }
