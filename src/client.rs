@@ -1,12 +1,11 @@
 use driver::Driver;
 use ai::Ai;
-use state::State;
+use state::{self, State};
 use Result;
 use failure::err_msg;
 use std::sync::mpsc::Sender;
 
 pub fn authorize(host: &str, port: u16, user: String, pass: String) -> Result<(String, Vec<u8>)> {
-
     use std::net;
     use std::str;
     use openssl::hash::{hash2, MessageDigest};
@@ -89,85 +88,17 @@ pub fn authorize(host: &str, port: u16, user: String, pass: String) -> Result<(S
     Ok((login, cookie))
 }
 
-pub struct Client<'a, D: Driver + 'a, A: Ai + 'a> {
+pub struct Client<'a, A: Ai + 'a> {
     state: State,
     ai: &'a mut A,
-    driver: &'a mut D,
 }
 
-impl<'a, D: Driver, A: Ai> Client<'a, D, A> {
-    pub fn new(driver: &'a mut D, ai: &'a mut A, events_tx: Sender<::state::Event>) -> Client<'a, D, A> {
+impl<'a, A: Ai> Client<'a, A> {
+    pub fn new(driver: Driver, ai: &'a mut A, hl_que_tx: Sender<state::Event>) -> Client<'a, A> {
         Client {
-            state: State::new(events_tx),
+            state: State::new(hl_que_tx, driver),
             ai: ai,
-            driver: driver,
         }
-    }
-
-    fn send_all_enqueued(&mut self) -> Result<()> {
-        // TODO use iterator
-        while let Some(ebuf) = self.state.tx() {
-            self.driver.tx(&ebuf.buf)?;
-            if let Some(timeout) = ebuf.timeout {
-                self.driver.timeout(timeout.seq, timeout.ms);
-            }
-        }
-        Ok(())
-    }
-
-    fn dispatch_single_event(&mut self) -> Result<()> {
-        use driver;
-        use proto::ObjXY;
-
-        let event = self.driver.event()?;
-        match event {
-            driver::Event::Rx(buf) => {
-                // info!("event::rx: {} bytes", buf.len());
-                self.state.rx(&buf)?;
-            }
-            driver::Event::Timeout(seq) => {
-                // info!("event::timeout: {} seq", seq);
-                self.state.timeout(seq);
-            }
-            #[cfg(feature = "salem")]
-            driver::Event::Render(re) => {
-                match re {
-                    driver::RenderEvent::Up    => if let Some(ObjXY(x,y)) = self.state.hero_xy() {
-                        self.state.go(ObjXY(x,y+100))?;
-                    },
-                    driver::RenderEvent::Down  => if let Some(ObjXY(x,y)) = self.state.hero_xy() {
-                        self.state.go(ObjXY(x,y-100))?;
-                    },
-                    driver::RenderEvent::Left  => if let Some(ObjXY(x,y)) = self.state.hero_xy() {
-                        self.state.go(ObjXY(x-100,y))?;
-                    },
-                    driver::RenderEvent::Right => if let Some(ObjXY(x,y)) = self.state.hero_xy() {
-                        self.state.go(ObjXY(x+100,y))?;
-                    },
-                    driver::RenderEvent::Quit  => self.state.close()?,
-                }
-            }
-            #[cfg(feature = "hafen")]
-            driver::Event::Render(re) => {
-                info!("event: {:?}", re);
-                match re {
-                    driver::RenderEvent::Up    => if let Some(ObjXY(x,y)) = self.state.hero_xy() {
-                        self.state.go(ObjXY(x,y+100.0))?;
-                    },
-                    driver::RenderEvent::Down  => if let Some(ObjXY(x,y)) = self.state.hero_xy() {
-                        self.state.go(ObjXY(x,y-100.0))?;
-                    },
-                    driver::RenderEvent::Left  => if let Some(ObjXY(x,y)) = self.state.hero_xy() {
-                        self.state.go(ObjXY(x-100.0,y))?;
-                    },
-                    driver::RenderEvent::Right => if let Some(ObjXY(x,y)) = self.state.hero_xy() {
-                        self.state.go(ObjXY(x+100.0,y))?;
-                    },
-                    driver::RenderEvent::Quit  => self.state.close()?,
-                }
-            }
-        }
-        Ok(())
     }
 
     pub fn run(&mut self, login: &str, cookie: &[u8]) -> Result<()> {
@@ -176,11 +107,6 @@ impl<'a, D: Driver, A: Ai> Client<'a, D, A> {
         info!("connect {} / {}", login, cookie.to_hex());
         self.state.connect(login, cookie)?;
         self.state.login = login.into();
-
-        loop {
-            self.send_all_enqueued()?;
-            self.dispatch_single_event()?;
-            self.ai.update(&mut self.state);
-        }
+        self.state.run(self.ai)
     }
 }

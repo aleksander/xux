@@ -8,6 +8,8 @@ use Result;
 use failure::err_msg;
 use flate2::read::ZlibDecoder;
 use std::sync::mpsc::Sender;
+use driver::Driver;
+use ai::Ai;
 
 struct ObjProp {
     frame: i32,
@@ -447,10 +449,11 @@ pub struct State {
     requested_grids: BTreeSet<(i32, i32)>,
     timestamp: String,
     pub login: String,
+    driver: Driver,
 }
 
 impl State {
-    pub fn new(events_tx: Sender<Event>) -> State {
+    pub fn new(events_tx: Sender<Event>, driver: Driver) -> State {
         use chrono;
 
         let mut widgets = HashMap::new();
@@ -492,6 +495,7 @@ impl State {
             requested_grids: BTreeSet::new(),
             timestamp: chrono::Local::now().format("%Y-%m-%d %H-%M-%S").to_string(),
             login: "".into(),
+            driver: driver,
         }
     }
 
@@ -1030,7 +1034,7 @@ impl State {
         let buf = self.tx_buf.pop_back();
         if let Some(ref buf) = buf {
             let mut r = Cursor::new(buf.buf.as_slice());
-            match ClientMessage::from_buf(&mut r/*buf.buf.as_slice()*/) {
+            match ClientMessage::from_buf(&mut r) {
                 Ok((msg, _)) => info!("TX: {:?}", msg),
                 Err(e) => panic!("ERROR: malformed TX message: {:?}", e),
             }
@@ -1138,6 +1142,80 @@ impl State {
 
     pub fn hero_is_moving(&self) -> bool {
         self.hero_movement().is_some()
+    }
+
+    fn dispatch_single_event(&mut self) -> Result<()> {
+        use driver;
+        use proto::ObjXY;
+
+        let event = self.driver.next_event()?;
+        match event {
+            driver::Event::Rx(buf) => {
+                // info!("event::rx: {} bytes", buf.len());
+                self.rx(&buf)?;
+            }
+            driver::Event::Timeout(seq) => {
+                // info!("event::timeout: {} seq", seq);
+                self.timeout(seq);
+            }
+            #[cfg(feature = "salem")]
+            driver::Event::Render(re) => {
+                match re {
+                    driver::RenderEvent::Up    => if let Some(ObjXY(x,y)) = self.hero_xy() {
+                        self.go(ObjXY(x,y+100))?;
+                    },
+                    driver::RenderEvent::Down  => if let Some(ObjXY(x,y)) = self.hero_xy() {
+                        self.go(ObjXY(x,y-100))?;
+                    },
+                    driver::RenderEvent::Left  => if let Some(ObjXY(x,y)) = self.hero_xy() {
+                        self.go(ObjXY(x-100,y))?;
+                    },
+                    driver::RenderEvent::Right => if let Some(ObjXY(x,y)) = self.hero_xy() {
+                        self.go(ObjXY(x+100,y))?;
+                    },
+                    driver::RenderEvent::Quit  => self.close()?,
+                }
+            }
+            #[cfg(feature = "hafen")]
+            driver::Event::Render(re) => {
+                info!("event: {:?}", re);
+                match re {
+                    driver::RenderEvent::Up    => if let Some(ObjXY(x,y)) = self.hero_xy() {
+                        self.go(ObjXY(x,y+100.0))?;
+                    },
+                    driver::RenderEvent::Down  => if let Some(ObjXY(x,y)) = self.hero_xy() {
+                        self.go(ObjXY(x,y-100.0))?;
+                    },
+                    driver::RenderEvent::Left  => if let Some(ObjXY(x,y)) = self.hero_xy() {
+                        self.go(ObjXY(x-100.0,y))?;
+                    },
+                    driver::RenderEvent::Right => if let Some(ObjXY(x,y)) = self.hero_xy() {
+                        self.go(ObjXY(x+100.0,y))?;
+                    },
+                    driver::RenderEvent::Quit  => self.close()?,
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn send_all_enqueued(&mut self) -> Result<()> {
+        // TODO use iterator
+        while let Some(ebuf) = self.tx() {
+            self.driver.transmit(&ebuf.buf)?;
+            if let Some(timeout) = ebuf.timeout {
+                self.driver.add_timeout(timeout.seq, timeout.ms);
+            }
+        }
+        Ok(())
+    }
+
+    pub fn run <'a, A: Ai> (&mut self, ai: &mut A) -> Result<()> {
+        loop {
+            self.send_all_enqueued()?;
+            self.dispatch_single_event()?;
+            ai.update(self);
+        }
     }
 }
 

@@ -8,13 +8,14 @@ use std::process;
 
 use xux::ai::Ai;
 use xux::ai_decl::AiDecl;
-use xux::driver_std::DriverStd;
+use xux::driver;
 use xux::render;
 use xux::client::Client;
 use xux::Result;
 use xux::client;
 
 use failure::err_msg;
+use std::sync::mpsc::channel;
 
 // TODO fn run_std_lua() { run::<Std,Lua>() }
 // TODO fn run<D,A>(ip: IpAddr, username: String, password: String) where D:Driver,A:Ai {
@@ -81,18 +82,18 @@ fn run() -> Result<()> {
     let auth_port = 1871;
     let game_port = 1870;
 
-    // run::<DriverMio,AiLua>(ip, username, password);
-    //run(host, username, password);
     let (login, cookie) = client::authorize(host, auth_port, username, password)?;
 
     let mut ai = AiDecl::new();
     ai.init();
 
-    let mut driver = DriverStd::new(host, game_port)?;
+    let driver = driver::new(host, game_port)?;
 
-    let events_tx = render::new(driver.sender());
+    let (hl_que_tx, hl_que_rx) = channel();
 
-    Client::new(&mut driver, &mut ai, events_tx).run(&login, &cookie)
+    render::new(driver.sender(), hl_que_rx);
+
+    Client::new(driver, &mut ai, hl_que_tx).run(&login, &cookie)
 }
 
 fn main () {

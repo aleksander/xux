@@ -45,7 +45,6 @@ pub mod proto;
 pub mod state;
 
 pub mod driver;
-pub mod driver_std;
 
 pub mod ai;
 pub mod ai_decl;

@@ -1,10 +1,9 @@
-use std::sync::mpsc::Sender;
+use std::sync::mpsc::{Sender, Receiver};
 use std::thread;
 use driver;
 use state::Wdg;
 use std::slice::Iter;
 use std::iter::Iterator;
-use std::sync::mpsc::channel;
 use std::sync::mpsc::TryRecvError::*;
 use failure::err_msg;
 use Result;
@@ -168,18 +167,16 @@ mod dumper {
 #[cfg_attr(feature = "render_2d_gfx", path = "render_2d_gfx.rs")]
 mod render_impl;
 
-pub fn new(render_tx: Sender<driver::Event>) -> Sender<state::Event> {
-    let (tx, rx) = channel();
-
+pub fn new (ll_que_tx: Sender<driver::Event>, hl_que_rx: Receiver<state::Event>) {
     thread::Builder::new().name("render".to_string()).spawn(move || {
         let mut render_impl = render_impl::RenderImpl::new(); //TODO pass render_tx to new()
         #[cfg(feature = "dump_events")]
         let mut dumper = dumper::Dumper::init().expect("unable to create dumper");
         render_impl.init();
         'outer: loop {
-            if ! render_impl.update(&render_tx) { break; }
+            if ! render_impl.update(&ll_que_tx) { break; }
             loop {
-                match rx.try_recv() {
+                match hl_que_rx.try_recv() {
                     Ok(event) => {
                         #[cfg(feature = "dump_events")]
                         dumper.dump(&event).expect("unable to dump event");
@@ -192,6 +189,4 @@ pub fn new(render_tx: Sender<driver::Event>) -> Sender<state::Event> {
         }
         render_impl.end();
     }).expect("unable to create render thread");
-
-    tx
 }
