@@ -1,7 +1,6 @@
 use std;
 use std::thread;
 use std::sync::mpsc::{channel, Sender, Receiver};
-use std::io::{Read, Write};
 use driver::{Driver, Event};
 use Result;
 use failure::err_msg;
@@ -56,34 +55,6 @@ impl DriverStd {
                 let len = sock_rx.recv(&mut buf).expect("driver::recv");
                 // TODO zero-copy data processing
                 receiver_tx.send(Event::Rx(buf[..len].to_vec())).expect("driver::send(event::rx)");
-            }
-        });
-
-        let render_tx = tx.clone();
-        thread::spawn(move || {
-            let listener = std::net::TcpListener::bind("127.0.0.1:8080").expect("driver::new.tcp_new");
-            for stream in listener.incoming() {
-                match stream {
-                    Ok(mut stream) => {
-                        let _tx = render_tx.clone();
-                        thread::spawn(move || {
-                            let mut buf = vec![0; 1024];
-                            let (reply_tx, reply_rx) = channel();
-                            loop {
-                                let len = stream.read(&mut buf).expect("driver::tcp_stream.read");
-                                _tx.send(Event::Tcp((reply_tx.clone(), buf[..len].to_vec())))
-                                    .expect("driver::send(event::tcp)");
-                                let reply = reply_rx.recv().expect("driver::recv_rx");
-                                // info!("RENDERRED REPLY: {:?}", reply);
-                                let _len = stream.write(reply.as_bytes()).expect("strem.write");
-                            }
-                        });
-                    }
-                    Err(e) => {
-                        info!("connection error: {:?}", e);
-                        break;
-                    }
-                }
             }
         });
 

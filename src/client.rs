@@ -117,7 +117,6 @@ impl<'a, D: Driver, A: Ai> Client<'a, D, A> {
 
     fn dispatch_single_event(&mut self) -> Result<()> {
         use driver;
-        use web;
         use proto::ObjXY;
 
         let event = self.driver.event()?;
@@ -130,18 +129,21 @@ impl<'a, D: Driver, A: Ai> Client<'a, D, A> {
                 // info!("event::timeout: {} seq", seq);
                 self.state.timeout(seq);
             }
-            driver::Event::Tcp((tx, buf)) => {
-                let reply = web::responce(&buf, &self.state);
-                tx.send(reply)?;
-                // self.driver.reply(reply);
-            }
             #[cfg(feature = "salem")]
             driver::Event::Render(re) => {
                 match re {
-                    driver::RenderEvent::Up    => if let Some(ObjXY(x,y)) = self.state.hero_xy() { self.state.go(ObjXY(x,y+100))?; },
-                    driver::RenderEvent::Down  => if let Some(ObjXY(x,y)) = self.state.hero_xy() { self.state.go(ObjXY(x,y-100))?; },
-                    driver::RenderEvent::Left  => if let Some(ObjXY(x,y)) = self.state.hero_xy() { self.state.go(ObjXY(x-100,y))?; },
-                    driver::RenderEvent::Right => if let Some(ObjXY(x,y)) = self.state.hero_xy() { self.state.go(ObjXY(x+100,y))?; },
+                    driver::RenderEvent::Up    => if let Some(ObjXY(x,y)) = self.state.hero_xy() {
+                        self.state.go(ObjXY(x,y+100))?;
+                    },
+                    driver::RenderEvent::Down  => if let Some(ObjXY(x,y)) = self.state.hero_xy() {
+                        self.state.go(ObjXY(x,y-100))?;
+                    },
+                    driver::RenderEvent::Left  => if let Some(ObjXY(x,y)) = self.state.hero_xy() {
+                        self.state.go(ObjXY(x-100,y))?;
+                    },
+                    driver::RenderEvent::Right => if let Some(ObjXY(x,y)) = self.state.hero_xy() {
+                        self.state.go(ObjXY(x+100,y))?;
+                    },
                     driver::RenderEvent::Quit  => self.state.close()?,
                 }
             }
@@ -149,10 +151,18 @@ impl<'a, D: Driver, A: Ai> Client<'a, D, A> {
             driver::Event::Render(re) => {
                 info!("event: {:?}", re);
                 match re {
-                    driver::RenderEvent::Up    => if let Some(ObjXY(x,y)) = self.state.hero_xy() { self.state.go(ObjXY(x,y+100.0))?; },
-                    driver::RenderEvent::Down  => if let Some(ObjXY(x,y)) = self.state.hero_xy() { self.state.go(ObjXY(x,y-100.0))?; },
-                    driver::RenderEvent::Left  => if let Some(ObjXY(x,y)) = self.state.hero_xy() { self.state.go(ObjXY(x-100.0,y))?; },
-                    driver::RenderEvent::Right => if let Some(ObjXY(x,y)) = self.state.hero_xy() { self.state.go(ObjXY(x+100.0,y))?; },
+                    driver::RenderEvent::Up    => if let Some(ObjXY(x,y)) = self.state.hero_xy() {
+                        self.state.go(ObjXY(x,y+100.0))?;
+                    },
+                    driver::RenderEvent::Down  => if let Some(ObjXY(x,y)) = self.state.hero_xy() {
+                        self.state.go(ObjXY(x,y-100.0))?;
+                    },
+                    driver::RenderEvent::Left  => if let Some(ObjXY(x,y)) = self.state.hero_xy() {
+                        self.state.go(ObjXY(x-100.0,y))?;
+                    },
+                    driver::RenderEvent::Right => if let Some(ObjXY(x,y)) = self.state.hero_xy() {
+                        self.state.go(ObjXY(x+100.0,y))?;
+                    },
                     driver::RenderEvent::Quit  => self.state.close()?,
                 }
             }
