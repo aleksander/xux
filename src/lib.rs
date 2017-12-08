@@ -11,7 +11,6 @@ extern crate byteorder;
 extern crate openssl;
 #[cfg(feature = "render_text")]
 extern crate ncurses;
-extern crate rustc_serialize;
 extern crate image;
 #[cfg(feature = "render_2d_piston")]
 extern crate piston_window;

@@ -6,10 +6,8 @@ authors = ["Aleksander Usov <aleksander.usov@gmail.com>"]
 description = "Salem and Hafen alternative client"
 
 [dependencies]
-rustc-serialize = "*"
 byteorder = "*"
 openssl = "*"
-mio = "*"
 flate2 = "*"
 nom = "*"
 ncurses = { version = "*", optional = true }
@@ -19,7 +17,6 @@ pnet = "*"
 pcap = "*"
 piston_window = { version = "*", optional = true }
 piston2d-gfx_graphics = { version = "0.46.0", optional = true }
-crossbeam = "*"
 chrono = "*"
 bincode = { version = "*", optional = true }
 gfx = { version = "*", optional = true }
