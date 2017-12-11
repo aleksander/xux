@@ -440,7 +440,6 @@ pub struct State {
     pub seq: u16,
     pub rx_rel_seq: u16, //TODO wrap this to struct OverflowableCounter to incapsulate correct handling of all the operations on it
     pub que: LinkedList<EnqueuedBuffer>,
-    pub tx_buf: LinkedList<EnqueuedBuffer>,
     pub enqueue_seq: usize,
     pub rel_cache: HashMap<u16, Rels>, //TODO unify with rx_rel_seq to have more consistent entity (struct Rel { ... })
     pub hero: Hero,
@@ -474,7 +473,6 @@ impl State {
             seq: 0,
             rx_rel_seq: 0,
             que: LinkedList::new(),
-            tx_buf: LinkedList::new(),
             enqueue_seq: 0,
             rel_cache: HashMap::new(),
             hero: Hero {
@@ -552,19 +550,14 @@ impl State {
                     msg_hint: msg_hint,
                 };
 
-                match ebuf.timeout {
-                    Some(_) => {
-                        // FIXME TODO merge que and tx_buf (remove tx_buf and que only)
-                        //     + remove EnqueuedBuffer clone deriving
-                        if self.que.is_empty() {
-                            self.tx_buf.push_front(ebuf.clone());
-                        }
-                        self.que.push_front(ebuf);
-                        self.enqueue_seq += 1;
+                if ebuf.timeout.is_some() {
+                    if self.que.is_empty() {
+                        self.send(ebuf.clone())?;
                     }
-                    None => {
-                        self.tx_buf.push_front(ebuf);
-                    }
+                    self.que.push_front(ebuf);
+                    self.enqueue_seq += 1;
+                } else {
+                    self.send(ebuf)?;
                 }
 
                 Ok(())
@@ -603,7 +596,7 @@ impl State {
                         // ??? or can we re-send our SESS requests in case of BUSY err ?
                     }
                 }
-                self.remove_from_que(MessageHint::SESS);
+                self.remove_from_que(MessageHint::SESS)?;
                 Self::start_send_beats();
             }
             ServerMessage::REL(rel) => {
@@ -625,7 +618,7 @@ impl State {
             ServerMessage::ACK(ack) => {
                 // info!("RX: ACK {}", ack.seq);
                 // info!("our rel {} acked", self.seq);
-                self.remove_from_que(MessageHint::REL(ack.seq));
+                self.remove_from_que(MessageHint::REL(ack.seq))?;
             }
             ServerMessage::MAPDATA(mapdata) => {
                 // info!("RX: MAPDATA {:?}", mapdata);
@@ -638,7 +631,7 @@ impl State {
                     assert!(map.tiles.len() == 10_000);
                     assert!(map.z.len() == 10_000);
                     info!("MAP COMPLETE ({},{}) name='{}' id={}", map.x, map.y, map.name, map.id);
-                    self.remove_from_que(MessageHint::MAPREQ(map.x, map.y));
+                    self.remove_from_que(MessageHint::MAPREQ(map.x, map.y))?;
                     // FIXME TODO update grid only if new grid id != cached grid id
                     match self.map.grids.get(&(map.x, map.y)) {
                         Some(_) => info!("MAP DUPLICATE"),
@@ -905,11 +898,8 @@ impl State {
     fn request_grids_around_hero (&mut self) {
         // TODO move to fn client.update_grids_around(...) { ... }
         //     if client.hero.current_grid_is_changed() { client.update_grids_around(); }
-        match self.hero_grid_xy() {
-            Some(xy) => {
-                self.request_grids_around(xy);
-            }
-            None => {}
+        if let Some(xy) = self.hero_grid_xy() {
+            self.request_grids_around(xy);
         }
     }
 
@@ -935,25 +925,21 @@ impl State {
         }
     }
 
-    fn remove_from_que(&mut self, msg_hint: MessageHint) {
-        let mut should_be_removed = false;
-        if let Some(ref emsg) = self.que.back() {
-            if emsg.msg_hint == msg_hint {
-                should_be_removed = true;
-            }
-        }
-        if should_be_removed {
-            self.que.pop_back();
-            match self.que.back() {
-                Some(buf) => {
+    fn remove_from_que(&mut self, msg_hint: MessageHint) -> Result<()> {
+        if let Some(msg) = self.que.pop_back() {
+            if msg.msg_hint == msg_hint {
+                if let Some(buf) = self.que.pop_back() {
                     // info!("enqueue next packet");
-                    self.tx_buf.push_front(buf.clone());
-                }
-                None => {
+                    self.send(buf.clone())?;
+                    self.que.push_back(buf);
+                } else {
                     // info!("remove_from_que: empty que");
                 }
+            } else {
+                self.que.push_back(msg);
             }
         }
+        Ok(())
     }
 
     pub fn widget_id(&self, typ: &str, name: Option<String>) -> Option<u16> {
@@ -973,10 +959,7 @@ impl State {
     }
 
     pub fn connect(&mut self, login: &str, cookie: &[u8]) -> Result<()> {
-        // TODO send SESS until reply
         // TODO get username from server responce, not from auth username
-        // let cookie = self.cookie.clone();
-        // let user = self.user.clone();
         self.enqueue_to_send(ClientMessage::SESS(cSess::new(login.to_owned(), cookie.to_vec())))?;
         Ok(())
     }
@@ -1007,39 +990,21 @@ impl State {
         self.dispatch_message(buf)
     }
 
-    pub fn timeout(&mut self, seq: usize) {
-        match self.que.back() {
-            Some(ref mut buf) => {
-                match buf.timeout {
-                    Some(ref timeout) => {
-                        if timeout.seq == seq {
-                            // info!("timeout {}: re-enqueue", seq);
-                            self.tx_buf.push_front(buf.clone());
-                        } else {
-                            // info!("timeout {}: packet dropped", seq);
-                        }
-                    }
-                    None => {
-                        info!("ERROR: enqueued packet without timeout");
-                    }
+    pub fn timeout(&mut self, seq: usize) -> Result<()> {
+        if let Some(buf) = self.que.pop_back() {
+            if let Some(ref timeout) = buf.timeout {
+                if timeout.seq == seq {
+                    // info!("timeout {}: re-enqueue", seq);
+                    self.send(buf.clone())?;
+                } else {
+                    // info!("timeout {}: packet dropped", seq);
                 }
             }
-            None => {
-                // info!("timeout {}: empty que", seq);
-            }
+            self.que.push_back(buf);
+        } else {
+            // info!("timeout {}: empty que", seq);
         }
-    }
-
-    pub fn tx(&mut self) -> Option<EnqueuedBuffer> {
-        let buf = self.tx_buf.pop_back();
-        if let Some(ref buf) = buf {
-            let mut r = Cursor::new(buf.buf.as_slice());
-            match ClientMessage::from_buf(&mut r) {
-                Ok((msg, _)) => info!("TX: {:?}", msg),
-                Err(e) => panic!("ERROR: malformed TX message: {:?}", e),
-            }
-        }
-        buf
+        Ok(())
     }
 
     pub fn close(&mut self) -> Result<()> {
@@ -1156,7 +1121,7 @@ impl State {
             }
             driver::Event::Timeout(seq) => {
                 // info!("event::timeout: {} seq", seq);
-                self.timeout(seq);
+                self.timeout(seq)?;
             }
             #[cfg(feature = "salem")]
             driver::Event::Render(re) => {
@@ -1199,20 +1164,24 @@ impl State {
         Ok(())
     }
 
-    fn send_all_enqueued(&mut self) -> Result<()> {
-        // TODO use iterator
-        while let Some(ebuf) = self.tx() {
-            self.driver.transmit(&ebuf.buf)?;
-            if let Some(timeout) = ebuf.timeout {
-                self.driver.add_timeout(timeout.seq, timeout.ms);
-            }
+    pub fn send (&mut self, buf: EnqueuedBuffer) -> Result<()> {
+        let mut r = Cursor::new(buf.buf.as_slice());
+        match ClientMessage::from_buf(&mut r) {
+            Ok((msg, _)) => info!("TX: {:?}", msg),
+            Err(e) => return Err(format_err!("ERROR: malformed TX message: {:?}", e)),
+        }
+        self.driver.transmit(&buf.buf)?;
+        if let Some(timeout) = buf.timeout {
+            self.driver.add_timeout(timeout.seq, timeout.ms);
         }
         Ok(())
     }
 
-    pub fn run <'a, A: Ai> (&mut self, ai: &mut A) -> Result<()> {
+    pub fn run <'a, A: Ai> (&mut self, ai: &mut A, login: &str, cookie: &[u8]) -> Result<()> {
+        info!("connect {} / {}", login, cookie.iter().fold(String::new(), |s,b|format!("{}{:02x}",s,b)));
+        self.login = login.into();
+        self.connect(login, cookie)?;
         loop {
-            self.send_all_enqueued()?;
             self.dispatch_single_event()?;
             ai.update(self);
         }

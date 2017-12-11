@@ -102,9 +102,6 @@ impl<'a, A: Ai> Client<'a, A> {
     }
 
     pub fn run(&mut self, login: &str, cookie: &[u8]) -> Result<()> {
-        info!("connect {} / {}", login, cookie.iter().fold(String::new(), |s,b|format!("{}{:02x}",s,b)));
-        self.state.connect(login, cookie)?;
-        self.state.login = login.into();
-        self.state.run(self.ai)
+        self.state.run(self.ai, login, cookie)
     }
 }
