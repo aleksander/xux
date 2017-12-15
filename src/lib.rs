@@ -41,16 +41,16 @@ extern crate ron;
 extern crate flate2;
 
 pub mod proto;
-pub mod state;
+mod state;
 
-pub mod driver;
+mod driver;
 
-pub mod ai;
-pub mod ai_decl;
+mod ai;
 
 pub mod client;
-pub mod render;
+mod render;
 mod util;
 mod shift_to_unsigned;
+mod widgets;
 
 pub type Result<T> = std::result::Result<T, failure::Error>;

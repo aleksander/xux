@@ -5,17 +5,9 @@ extern crate xux;
 extern crate failure;
 
 use std::process;
-
-use xux::ai::Ai;
-use xux::ai_decl::AiDecl;
-use xux::driver;
-use xux::render;
-use xux::client::Client;
 use xux::Result;
 use xux::client;
-
 use failure::err_msg;
-use std::sync::mpsc::channel;
 
 // TODO fn run_std_lua() { run::<Std,Lua>() }
 // TODO fn run<D,A>(ip: IpAddr, username: String, password: String) where D:Driver,A:Ai {
@@ -75,25 +67,18 @@ fn run() -> Result<()> {
 
     let username = args[1].clone();
     let password = args[2].clone();
+
     #[cfg(feature = "salem")]
     let host = "game.salemthegame.com";
     #[cfg(feature = "hafen")]
     let host = "game.havenandhearth.com";
+
     let auth_port = 1871;
     let game_port = 1870;
 
     let (login, cookie) = client::authorize(host, auth_port, username, password)?;
 
-    let mut ai = AiDecl::new();
-    ai.init();
-
-    let driver = driver::new(host, game_port)?;
-
-    let (hl_que_tx, hl_que_rx) = channel();
-
-    render::new(driver.sender(), hl_que_rx);
-
-    Client::new(driver, &mut ai, hl_que_tx).run(&login, &cookie)
+    client::run(host, game_port, &login, &cookie)
 }
 
 fn main () {

@@ -7,9 +7,8 @@ use proto::*;
 use Result;
 use failure::err_msg;
 use flate2::read::ZlibDecoder;
-use std::sync::mpsc::Sender;
+use std::sync::mpsc;
 use driver::Driver;
-use ai::Ai;
 
 struct ObjProp {
     frame: i32,
@@ -222,6 +221,7 @@ pub struct MapPieces {
 
 //TODO rename to Grid
 //TODO rename to Map
+#[derive(Clone)]
 pub struct Surface {
     pub x: i32,
     pub y: i32,
@@ -414,13 +414,16 @@ impl Map {
     }
 }
 
-#[derive(Serialize,Deserialize,Debug)]
+pub type WdgID = u16;
+
+#[derive(Serialize,Deserialize,Debug,Clone)]
 pub enum Wdg {
-    New(u16,String,u16),
-    Msg(u16,String),
-    Del(u16),
+    New(WdgID,String,WdgID),
+    Msg(WdgID,String,Vec<List>),
+    Del(WdgID),
 }
 
+#[derive(Clone)]
 pub enum Event {
     Tiles(Vec<Tile>),
     Grid(Surface),
@@ -428,7 +431,21 @@ pub enum Event {
     ObjRemove(ObjID),
     Res(ResID, String),
     Hero(ObjXY),
-    Wdg(Wdg)
+    Wdg(Wdg),
+    Hearthfire(ObjXY),
+}
+
+struct Sender {
+    events_tx1: mpsc::Sender<Event>,
+    events_tx2: mpsc::Sender<Event>,
+}
+
+impl Sender {
+    fn send_event (&self, event: Event) -> Result<()> {
+        self.events_tx1.send(event.clone())?;
+        self.events_tx2.send(event)?;
+        Ok(())
+    }
 }
 
 pub struct State {
@@ -444,7 +461,7 @@ pub struct State {
     pub rel_cache: HashMap<u16, Rels>, //TODO unify with rx_rel_seq to have more consistent entity (struct Rel { ... })
     pub hero: Hero,
     pub map: Map,
-    events_tx: Sender<Event>,
+    sender: Sender,
     requested_grids: BTreeSet<(i32, i32)>,
     timestamp: String,
     pub login: String,
@@ -452,14 +469,14 @@ pub struct State {
 }
 
 impl State {
-    pub fn new(events_tx: Sender<Event>, driver: Driver) -> State {
+    pub fn new(events_tx1: mpsc::Sender<Event>, events_tx2: mpsc::Sender<Event>, driver: Driver) -> State {
         use chrono;
 
         let mut widgets = HashMap::new();
         widgets.insert(0,
             Widget {
                 id: 0,
-                typ: "root".to_owned(),
+                typ: "root".into(),
                 parent: 0,
                 name: None,
             }
@@ -489,7 +506,10 @@ impl State {
                 partial: HashMap::new(),
                 grids: BTreeSet::new(),
             },
-            events_tx: events_tx,
+            sender: Sender {
+                events_tx1: events_tx1,
+                events_tx2: events_tx2,
+            },
             requested_grids: BTreeSet::new(),
             timestamp: chrono::Local::now().format("%Y-%m-%d %H-%M-%S").to_string(),
             login: "".into(),
@@ -514,7 +534,7 @@ impl State {
                     ClientMessage::SESS(_) => {
                         (MessageHint::SESS,
                          Some(Timeout {
-                            ms: 100,
+                            ms: 200,
                             seq: self.enqueue_seq,
                         }))
                     }
@@ -528,7 +548,7 @@ impl State {
                     ClientMessage::CLOSE(_) => {
                         (MessageHint::CLOSE,
                          Some(Timeout {
-                            ms: 100,
+                            ms: 200,
                             seq: self.enqueue_seq,
                         }))
                     }
@@ -641,11 +661,11 @@ impl State {
                             let name = if let Some(ref name) = self.hero.name { name } else { "none" };
                             grid_to_png(&self.login, name, &self.timestamp, map.x, map.y, &map.tiles, &map.z)?;
                             #[cfg(feature = "salem")]
-                            self.events_tx.send(Event::Grid((map.x, map.y)))?;
+                            self.sender.send_event(Event::Grid((map.x, map.y)))?;
                             #[cfg(feature = "hafen")]
-                            self.events_tx.send(Event::Tiles(map.tileres.clone()))?;
+                            self.sender.send_event(Event::Tiles(map.tileres.clone()))?;
                             #[cfg(feature = "hafen")]
-                            self.events_tx.send(Event::Grid(map))?;
+                            self.sender.send_event(Event::Grid(map))?;
                         }
                     }
                 }
@@ -660,25 +680,28 @@ impl State {
 
                             if let Some(hero_id) = self.hero.id {
                                 if o.id == hero_id {
-                                    match self.hero.obj {
-                                        Some(ref mut hero_obj) => {
+                                    if let Some(ref mut hero_obj) = self.hero.obj {
+                                        hero_obj.update(new_obj_prop);
+                                    } else {
+                                        if let Some(mut cached_hero_obj) = self.objects.remove(&hero_id) {
+                                            cached_hero_obj.update(new_obj_prop);
+                                            self.hero.obj = Some(cached_hero_obj);
+                                            self.sender.send_event(Event::ObjRemove(hero_id))?;
+                                        } else {
+                                            let mut hero_obj = Obj::new(o.id, None, None, None, None);
                                             hero_obj.update(new_obj_prop);
-                                            self.events_tx.send(Event::Hero(hero_obj.xy.unwrap_or(ObjXY::new())))?;
+                                            self.hero.obj = Some(hero_obj);
                                         }
-                                        None => {
-                                            if let Some(mut cached_hero_obj) = self.objects.remove(&hero_id) {
-                                                cached_hero_obj.update(new_obj_prop);
-                                                self.events_tx.send(Event::Hero(cached_hero_obj.xy.unwrap_or(ObjXY::new())))?;
-                                                self.hero.obj = Some(cached_hero_obj);
-                                                self.events_tx.send(Event::ObjRemove(hero_id))?;
-                                            } else {
-                                                let mut hero_obj = Obj::new(o.id, None, None, None, None);
-                                                hero_obj.update(new_obj_prop);
-                                                self.events_tx.send(Event::Hero(hero_obj.xy.unwrap_or(ObjXY::new())))?;
-                                                self.hero.obj = Some(hero_obj);
-                                            }
-                                            info!("HERO: obj: {:?}", self.hero.obj);
+                                        info!("HERO: obj: {:?}", self.hero.obj);
+                                    }
+                                    if let Some(ref obj) = self.hero.obj {
+                                        if let Some(xy) = obj.xy {
+                                            self.sender.send_event(Event::Hero(xy))?;
+                                        } else {
+                                            return Err(err_msg("hero without coordinates"));
                                         }
+                                    } else {
+                                        unreachable!();
                                     }
                                     self.request_grids_around_hero();
                                     continue;
@@ -691,14 +714,14 @@ impl State {
 
                             if obj.update(&new_obj_prop) {
                                 if let Some(xy) = obj.xy {
-                                    self.events_tx.send(Event::Obj(obj.id, xy, obj.resid.unwrap_or(0)))?;
+                                    self.sender.send_event(Event::Obj(obj.id, xy, obj.resid.unwrap_or(0)))?;
                                 }
                                 info!("OBJ: {:?}", obj);
                             }
                         }
                         None => {
                             self.objects.remove(&o.id);
-                            self.events_tx.send(Event::ObjRemove(o.id))?;
+                            self.sender.send_event(Event::ObjRemove(o.id))?;
                             info!("OBJ: {} removed", o.id);
                         }
                     }
@@ -753,17 +776,17 @@ impl State {
                 Rel::NEWWDG(ref wdg) => {
                     // info!("      {:?}", wdg);
                     self.dispatch_newwdg(wdg)?;
-                    self.events_tx.send(Event::Wdg(Wdg::New(wdg.id, wdg.name.clone(), wdg.parent)))?;
+                    self.sender.send_event(Event::Wdg(Wdg::New(wdg.id, wdg.name.clone(), wdg.parent)))?;
                 }
                 Rel::WDGMSG(ref msg) => {
                     // info!("      {:?}", msg);
-                    self.dispatch_wdgmsg(msg);
-                    self.events_tx.send(Event::Wdg(Wdg::Msg(msg.id, msg.name.clone())))?;
+                    self.dispatch_wdgmsg(msg)?;
+                    self.sender.send_event(Event::Wdg(Wdg::Msg(msg.id, msg.name.clone(), msg.args.clone())))?;
                 }
                 Rel::DSTWDG(ref wdg) => {
                     // info!("      {:?}", wdg);
                     self.widgets.remove(&wdg.id);
-                    self.events_tx.send(Event::Wdg(Wdg::Del(wdg.id)))?;
+                    self.sender.send_event(Event::Wdg(Wdg::Del(wdg.id)))?;
                 }
                 Rel::MAPIV(_) => {}
                 Rel::GLOBLOB(_) => {}
@@ -771,14 +794,14 @@ impl State {
                 Rel::RESID(ref res) => {
                     // info!("      {:?}", res);
                     self.resources.insert(res.id, res.name.clone());
-                    self.events_tx.send(Event::Res(res.id, res.name.clone()))?;
+                    self.sender.send_event(Event::Res(res.id, res.name.clone()))?;
                 }
                 Rel::PARTY(_) => {}
                 Rel::SFX(_) => {}
                 Rel::CATTR(_) => {}
                 Rel::MUSIC(_) => {}
                 Rel::TILES(ref tiles) => {
-                    self.events_tx.send(Event::Tiles(tiles.tiles.clone()))?;
+                    self.sender.send_event(Event::Tiles(tiles.tiles.clone()))?;
                 }
                 Rel::BUFF(_) => {}
                 Rel::SESSKEY(_) => {}
@@ -810,8 +833,8 @@ impl State {
                     let cached_hero_obj = self.objects.remove(&id);
                     match cached_hero_obj {
                         Some(cached_hero_obj) => {
-                            self.events_tx.send(Event::ObjRemove(id))?;
-                            self.events_tx.send(Event::Hero(cached_hero_obj.xy.unwrap_or(ObjXY::new())))?;
+                            self.sender.send_event(Event::ObjRemove(id))?;
+                            self.sender.send_event(Event::Hero(cached_hero_obj.xy.unwrap_or(ObjXY::new())))?;
                             self.hero.obj = Some(cached_hero_obj);
                             info!("HERO: obj: {:?}", self.hero.obj);
                             self.request_grids_around_hero();
@@ -853,7 +876,7 @@ impl State {
         Ok(())
     }
 
-    fn dispatch_wdgmsg(&mut self, msg: &WdgMsg) {
+    fn dispatch_wdgmsg(&mut self, msg: &WdgMsg) -> Result<()> {
         if let Some(w) = self.widgets.get(&(msg.id)) {
             match w.typ.as_str() {
                 "charlist" => {
@@ -883,16 +906,17 @@ impl State {
                 }
                 "ui/hrtptr:11" => {
                     if msg.name == "upd" {
-                        if let Some(&List::Coord((x, y))) = msg.args.get(0) {
-                            self.hero.hearthfire = Some((x, y));
+                        if let Some(&List::Coord(xy)) = msg.args.get(0) {
+                            self.hero.hearthfire = Some(xy);
                             info!("HERO: heathfire = '{:?}'", self.hero.hearthfire);
-                            //TODO send Event::Hearthfire
+                            self.sender.send_event(Event::Hearthfire(xy.into()))?;
                         }
                     }
                 }
                 _ => {}
             }
         }
+        Ok(())
     }
 
     fn request_grids_around_hero (&mut self) {
@@ -951,29 +975,10 @@ impl State {
         None
     }
 
-    pub fn widget_exists(&self, typ: &str, name: Option<String>) -> bool {
-        match self.widget_id(typ, name) {
-            Some(_) => true,
-            None => false,
-        }
-    }
-
     pub fn connect(&mut self, login: &str, cookie: &[u8]) -> Result<()> {
         // TODO get username from server responce, not from auth username
         self.enqueue_to_send(ClientMessage::SESS(cSess::new(login.to_owned(), cookie.to_vec())))?;
         Ok(())
-    }
-
-    pub fn send_play(&mut self, i: usize) -> Result<()> {
-        let id = self.widget_id("charlist", None).expect("charlist widget is not found");
-        let name = "play".to_owned();
-        let charname = self.charlist[i].clone();
-        info!("send play '{}'", charname);
-        let mut args: Vec<List> = Vec::new();
-        args.push(List::Str(charname));
-        let mut rels = Rels::new(0);
-        rels.append(Rel::WDGMSG(WdgMsg::new(id, name, args)));
-        self.enqueue_to_send(ClientMessage::REL(rels))
     }
 
     pub fn mapreq(&mut self, x: i32, y: i32) -> Result<()> {
@@ -1027,49 +1032,6 @@ impl State {
         Ok(())
     }
 
-    pub fn pick(&mut self, obj_id: u32) -> Result<()> {
-        info!("PICK");
-        let id = self.widget_id("mapview", None).expect("mapview widget is not found");
-        let name = "click".to_string();
-        let mut args = Vec::new();
-        let xy = {
-            match self.objects.get(&obj_id) {
-                Some(obj) => {
-                    match obj.xy {
-                        Some(xy) => xy.into(),
-                        None => panic!("pick(): picking object has no XY"),
-                    }
-                }
-                None => panic!("pick(): picking object is not found"),
-            }
-        };
-        args.push(List::Coord((863, 832))); //TODO set some random coords in the center of screen
-        args.push(List::Coord(xy));
-        args.push(List::Int(3));
-        args.push(List::Int(0));
-        args.push(List::Int(0));
-        args.push(List::Int(obj_id as i32));
-        args.push(List::Coord(xy));
-        args.push(List::Int(0));
-        args.push(List::Int(-1));
-        let mut rels = Rels::new(0);
-        rels.append(Rel::WDGMSG(WdgMsg::new(id, name, args)));
-        self.enqueue_to_send(ClientMessage::REL(rels))?;
-        Ok(())
-    }
-
-    pub fn choose_pick(&mut self, wdg_id: u16) -> Result<()> {
-        info!("CHOOSE PICK");
-        let name = "cl".to_string();
-        let mut args = Vec::new();
-        args.push(List::Int(0));
-        args.push(List::Int(0));
-        let mut rels = Rels::new(0);
-        rels.append(Rel::WDGMSG(WdgMsg::new(wdg_id, name, args)));
-        self.enqueue_to_send(ClientMessage::REL(rels))?;
-        Ok(())
-    }
-
     pub fn hero_xy(&self) -> Option<ObjXY> {
         match self.hero.obj {
             Some(ref hero) => hero.xy,
@@ -1082,31 +1044,6 @@ impl State {
             Some(xy) => Some(xy.grid()),
             None => None,
         }
-    }
-
-    pub fn hero_exists(&self) -> bool {
-        match self.hero.obj {
-            Some(_) => true,
-            None => false,
-        }
-    }
-
-    pub fn hero_grid_exists(&self) -> bool {
-        match self.hero_grid_xy() {
-            Some(xy) => self.map.grids.contains(&xy),
-            None => false,
-        }
-    }
-
-    pub fn hero_movement(&self) -> Option<Movement> {
-        match self.hero.obj {
-            Some(ref hero) => hero.movement,
-            None => None,
-        }
-    }
-
-    pub fn hero_is_moving(&self) -> bool {
-        self.hero_movement().is_some()
     }
 
     fn dispatch_single_event(&mut self) -> Result<()> {
@@ -1124,40 +1061,49 @@ impl State {
                 self.timeout(seq)?;
             }
             #[cfg(feature = "salem")]
-            driver::Event::Render(re) => {
-                match re {
-                    driver::RenderEvent::Up    => if let Some(ObjXY(x,y)) = self.hero_xy() {
+            driver::Event::User(u) => {
+                use driver::UserInput::*;
+                match u {
+                    Up    => if let Some(ObjXY(x,y)) = self.hero_xy() {
                         self.go(ObjXY(x,y+100))?;
                     },
-                    driver::RenderEvent::Down  => if let Some(ObjXY(x,y)) = self.hero_xy() {
+                    Down  => if let Some(ObjXY(x,y)) = self.hero_xy() {
                         self.go(ObjXY(x,y-100))?;
                     },
-                    driver::RenderEvent::Left  => if let Some(ObjXY(x,y)) = self.hero_xy() {
+                    Left  => if let Some(ObjXY(x,y)) = self.hero_xy() {
                         self.go(ObjXY(x-100,y))?;
                     },
-                    driver::RenderEvent::Right => if let Some(ObjXY(x,y)) = self.hero_xy() {
+                    Right => if let Some(ObjXY(x,y)) = self.hero_xy() {
                         self.go(ObjXY(x+100,y))?;
                     },
-                    driver::RenderEvent::Quit  => self.close()?,
+                    Quit  => self.close()?,
                 }
             }
             #[cfg(feature = "hafen")]
-            driver::Event::Render(re) => {
-                info!("event: {:?}", re);
-                match re {
-                    driver::RenderEvent::Up    => if let Some(ObjXY(x,y)) = self.hero_xy() {
+            driver::Event::User(u) => {
+                use driver::UserInput::*;
+                //info!("event: {:?}", u);
+                match u {
+                    Up    => if let Some(ObjXY(x,y)) = self.hero_xy() {
                         self.go(ObjXY(x,y+100.0))?;
                     },
-                    driver::RenderEvent::Down  => if let Some(ObjXY(x,y)) = self.hero_xy() {
+                    Down  => if let Some(ObjXY(x,y)) = self.hero_xy() {
                         self.go(ObjXY(x,y-100.0))?;
                     },
-                    driver::RenderEvent::Left  => if let Some(ObjXY(x,y)) = self.hero_xy() {
+                    Left  => if let Some(ObjXY(x,y)) = self.hero_xy() {
                         self.go(ObjXY(x-100.0,y))?;
                     },
-                    driver::RenderEvent::Right => if let Some(ObjXY(x,y)) = self.hero_xy() {
+                    Right => if let Some(ObjXY(x,y)) = self.hero_xy() {
                         self.go(ObjXY(x+100.0,y))?;
                     },
-                    driver::RenderEvent::Quit  => self.close()?,
+                    Quit  => {
+                        self.close()?;
+                    }
+                    Message(id, name, args) => {
+                        let mut rels = Rels::new(0);
+                        rels.append(Rel::WDGMSG(WdgMsg::new(id, name, args)));
+                        self.enqueue_to_send(ClientMessage::REL(rels))?;
+                    }
                 }
             }
         }
@@ -1177,58 +1123,12 @@ impl State {
         Ok(())
     }
 
-    pub fn run <'a, A: Ai> (&mut self, ai: &mut A, login: &str, cookie: &[u8]) -> Result<()> {
+    pub fn run (&mut self, login: &str, cookie: &[u8]) -> Result<()> {
         info!("connect {} / {}", login, cookie.iter().fold(String::new(), |s,b|format!("{}{:02x}",s,b)));
         self.login = login.into();
         self.connect(login, cookie)?;
         loop {
             self.dispatch_single_event()?;
-            ai.update(self);
         }
     }
 }
-
-// CLIENT
-//  REL  seq=4
-//   WDGMSG len=65
-//    id=6 name=click
-//      COORD : [907, 755]        Coord pc
-//      COORD : [39683, 36377]    Coord mc
-//      INT : 1                   int clickb
-//      INT : 0                   ui.modflags()
-//      INT : 0                   inf.ol != null
-//      INT : 325183464           (int)inf.gob.id
-//      COORD : [39737, 36437]    inf.gob.rc
-//      INT : 0                   inf.ol.id
-//      INT : -1                  inf.r.id or -1
-//
-// CLIENT
-//  REL  seq=5
-//   WDGMSG len=36
-//    id=6 name=click
-//      COORD : [1019, 759]        Coord pc
-//      COORD : [39709, 36386]     Coord mc
-//      INT : 1                    int clickb
-//      INT : 0                    ui.modflags()
-//
-// private class Click extends Hittest {
-//     int clickb;
-//
-//     private Click(Coord c, int b) {
-//         super(c);
-//         clickb = b;
-//     }
-//
-//     protected void hit(Coord pc, Coord mc, ClickInfo inf) {
-//         if(inf == null) {
-//             wdgmsg("click", pc, mc, clickb, ui.modflags());
-//         } else {
-//             if(inf.ol == null) {
-//                 wdgmsg("click", pc, mc, clickb, ui.modflags(), 0, (int)inf.gob.id, inf.gob.rc, 0, getid(inf.r));
-//             } else {
-//                 wdgmsg("click", pc, mc, clickb, ui.modflags(), 1, (int)inf.gob.id, inf.gob.rc, inf.ol.id, getid(inf.r));
-//             }
-//         }
-//     }
-// }
-//

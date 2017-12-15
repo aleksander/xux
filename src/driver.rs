@@ -3,21 +3,24 @@ use std::thread;
 use std::sync::mpsc::{channel, Sender, Receiver};
 use Result;
 use failure::err_msg;
+use proto::list::List;
+use state::WdgID;
 
 #[derive(Debug)]
 pub enum Event {
     Rx(Vec<u8>),
     Timeout(usize),
-    Render(RenderEvent),
+    User(UserInput),
 }
 
 #[derive(Debug)]
-pub enum RenderEvent {
+pub enum UserInput {
     Up,
     Down,
     Left,
     Right,
     Quit,
+    Message(WdgID,String,Vec<List>),
 }
 
 pub struct Driver {

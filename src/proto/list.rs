@@ -3,7 +3,7 @@ use proto::Color;
 use Result;
 use failure::err_msg;
 
-#[derive(Debug)]
+#[derive(Serialize,Deserialize,Debug,Clone)]
 pub enum List {
     Int(i32),
     Str(String),

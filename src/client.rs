@@ -1,9 +1,6 @@
-use driver::Driver;
-use ai::Ai;
-use state::{self, State};
+use state::State;
 use Result;
 use failure::err_msg;
-use std::sync::mpsc::Sender;
 
 pub fn authorize(host: &str, port: u16, user: String, pass: String) -> Result<(String, Vec<u8>)> {
     use std::net;
@@ -88,20 +85,20 @@ pub fn authorize(host: &str, port: u16, user: String, pass: String) -> Result<(S
     Ok((login, cookie))
 }
 
-pub struct Client<'a, A: Ai + 'a> {
-    state: State,
-    ai: &'a mut A,
-}
+pub fn run(host: &str, port: u16, login: &str, cookie: &[u8]) -> Result<()> {
+    use std::sync::mpsc::channel;
+    use driver;
+    use render;
+    use ai;
 
-impl<'a, A: Ai> Client<'a, A> {
-    pub fn new(driver: Driver, ai: &'a mut A, hl_que_tx: Sender<state::Event>) -> Client<'a, A> {
-        Client {
-            state: State::new(hl_que_tx, driver),
-            ai: ai,
-        }
-    }
+    let driver = driver::new(host, port)?;
 
-    pub fn run(&mut self, login: &str, cookie: &[u8]) -> Result<()> {
-        self.state.run(self.ai, login, cookie)
-    }
+    let (hl_que_tx_render, hl_que_rx) = channel();
+    render::new(driver.sender(), hl_que_rx);
+
+    let (hl_que_tx_ai, hl_que_rx) = channel();
+    ai::new(driver.sender(), hl_que_rx);
+
+    let mut state = State::new(hl_que_tx_render, hl_que_tx_ai, driver);
+    state.run(login, cookie)
 }

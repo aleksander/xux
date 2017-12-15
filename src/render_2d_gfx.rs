@@ -15,7 +15,6 @@ use imgui_gfx_renderer::{Renderer, Shaders};
 use image;
 use proto::{ObjXY,ObjID,ResID};
 use std::collections::{HashMap, BTreeMap};
-use render::XUi;
 
 mod delta {
     use std::time::Instant;
@@ -277,12 +276,13 @@ impl ObjCol {
         self.indices.push(len+3);
     }
 
-    fn from_objects (objects: &BTreeMap<ObjID,(ObjXY,ResID)>, hero_x: f32, hero_y: f32) -> ObjCol {
+    fn from_objects (objects: &BTreeMap<ObjID,(ObjXY,ResID)>, hero_x: f32, hero_y: f32, hf_x: f32, hf_y: f32) -> ObjCol {
         let mut obj = ObjCol::with_capacity(objects.len()*4, objects.len()*6);
         for &(ObjXY(x,y),_resid) in objects.values() {
             obj.add_quad(x as f32 - 2.0, y as f32 - 2.0, x as f32 + 2.0, y as f32 + 2.0, [1.0,1.0,1.0], 1);
         }
         obj.add_quad(hero_x - 2.0, hero_y - 2.0, hero_x + 2.0, hero_y + 2.0, [0.1,1.0,0.1], 1);
+        obj.add_quad(hf_x - 2.0, hf_y - 2.0, hf_x + 2.0, hf_y + 2.0, [0.1,1.0,1.0], 1);
         obj
     }
 
@@ -563,43 +563,51 @@ fn update_mouse(imgui: &mut ImGui, mouse_state: &mut MouseState) {
 }
 
 struct RenderImplState {
-    tile_colors: HashMap<String,[u8;4]>,
-    palette: [[u8; 4]; 256],
-    window: glutin::GlWindow,
-    device: gfx_device_gl::Device,
-    factory: gfx_device_gl::Factory,
-    main_color: gfx::handle::RenderTargetView<gfx_device_gl::Resources, Rgba8>,
-    main_depth: gfx::handle::DepthStencilView<gfx_device_gl::Resources, DepthStencil>,
-    encoder: gfx::Encoder<gfx_device_gl::Resources, gfx_device_gl::CommandBuffer>,
-    pso_col: gfx::PipelineState<gfx_device_gl::Resources, pipe_col::Meta>,
-    pso_tex: gfx::PipelineState<gfx_device_gl::Resources, pipe_tex::Meta>,
-    imgui: ImGui,
-    imgui_renderer: Renderer<gfx_device_gl::Resources>,
-    angle: f32, //TODO replace by camera.angle
-    zoom: f32, //TODO replace by camera.zoom
-    w: u32,
-    h: u32,
-    delta: delta::Delta,
-    mouse_state: MouseState, //TODO move to struct Ui
-    grids_tiles: Vec<BakedObjTex>,
-    grids_owning: Vec<BakedObjTex>,
-    grids_heights: Vec<BakedObjCol>,
-    objects: BTreeMap<ObjID, (ObjXY, ResID)>,
-    hero_x: f32,
-    hero_y: f32,
-    resources: BTreeMap<ResID, String>,
-    dragging: bool,
-    last_mouse_x: f64,
-    last_mouse_y: f64,
-    shift: Vector2<f32>, //TODO replace by camera.{x,y}
-    ctrl_pressed: bool,
-    threshold: usize,
-    show_tiles: bool,
-    show_heights: bool,
-    show_owning: bool,
-    v1: i32,
-    widgets: BTreeMap<u16, (String, u16)>,
-    xui: XUi,
+    #[warn(TODO)]
+    //struct State {
+        widgets: BTreeMap<u16, (String, u16)>, //TODO add Vec<messages> to every widget
+        resources: BTreeMap<ResID, String>,
+        objects: BTreeMap<ObjID, (ObjXY, ResID)>,
+        hero_x: f32,
+        hero_y: f32,
+        hf_x: f32,
+        hf_y:f32,
+    //}
+    #[warn(TODO)]
+    //struct RenderState {
+        tile_colors: HashMap<String,[u8;4]>,
+        palette: [[u8; 4]; 256],
+        window: glutin::GlWindow,
+        device: gfx_device_gl::Device,
+        factory: gfx_device_gl::Factory,
+        main_color: gfx::handle::RenderTargetView<gfx_device_gl::Resources, Rgba8>,
+        main_depth: gfx::handle::DepthStencilView<gfx_device_gl::Resources, DepthStencil>,
+        encoder: gfx::Encoder<gfx_device_gl::Resources, gfx_device_gl::CommandBuffer>,
+        pso_col: gfx::PipelineState<gfx_device_gl::Resources, pipe_col::Meta>,
+        pso_tex: gfx::PipelineState<gfx_device_gl::Resources, pipe_tex::Meta>,
+        imgui: ImGui,
+        imgui_renderer: Renderer<gfx_device_gl::Resources>,
+        angle: f32, //TODO replace by camera.angle
+        zoom: f32, //TODO replace by camera.zoom
+        w: u32,
+        h: u32,
+        delta: delta::Delta,
+        mouse_state: MouseState, //TODO move to struct Ui
+        grids_tiles: Vec<BakedObjTex>,
+        grids_owning: Vec<BakedObjTex>,
+        grids_heights: Vec<BakedObjCol>,
+        dragging: bool,
+        last_mouse_x: f64,
+        last_mouse_y: f64,
+        shift: Vector2<f32>, //TODO replace by camera.{x,y}
+        ctrl_pressed: bool,
+        threshold: usize,
+        show_tiles: bool,
+        show_heights: bool,
+        show_owning: bool,
+        v1: i32,
+        //xui: Widgets,
+    //}
 }
 
 impl RenderImplState {
@@ -655,14 +663,18 @@ impl RenderImplState {
             }
             Event::Wdg(Wdg::New(id,name,parent)) => {
                 self.widgets.insert(id,(name.clone(),parent));
-                self.xui.add_widget(id,name,parent).expect("unable to ui.add_widget");
+                //self.xui.add_widget(id,name,parent).expect("unable to ui.add_widget");
             }
-            Event::Wdg(Wdg::Msg(id,name)) => {
-                self.xui.message(id,name).expect("unable to ui.message");
+            Event::Wdg(Wdg::Msg(_id,_name,_args)) => {
+                //self.xui.message(id,(name,args)).expect("unable to ui.message");
             }
             Event::Wdg(Wdg::Del(id)) => {
                 self.widgets.remove(&id);
-                self.xui.del_widget(id).expect("unable to ui.del_widget");
+                //self.xui.del_widget(id).expect("unable to ui.del_widget");
+            }
+            Event::Hearthfire(ObjXY(x,y)) => {
+                self.hf_x = x as f32;
+                self.hf_y = y as f32;
             }
         }
     }
@@ -678,23 +690,40 @@ impl RenderImplState {
         //}
         match *event {
             glutin::Event::WindowEvent { ref event, .. } => {
-                //use glutin::KeyboardInput;
                 use glutin::ElementState::Pressed;
+                use driver::Event::User;
+                use driver::UserInput::*;
                 match *event {
                     KeyboardInput { input, .. } => {
                         use glutin::VirtualKeyCode as Key;
                         let pressed = input.state == Pressed;
                         match input.virtual_keycode {
-                            Some(Key::Escape) => { render_tx.send(driver::Event::Render(driver::RenderEvent::Quit)).expect("unable to send Render::Quit"); *should_stop = true; }
-                            Some(Key::LControl) | Some(Key::RControl) => self.ctrl_pressed = pressed, //TODO use some kind of keys_state { ... }
-                            Some(Key::Up) => { render_tx.send(driver::Event::Render(driver::RenderEvent::Up)).expect("unable to send Render::Up"); }
-                            Some(Key::Down) => { render_tx.send(driver::Event::Render(driver::RenderEvent::Down)).expect("unable to send Render::Down"); }
-                            Some(Key::Left) => { render_tx.send(driver::Event::Render(driver::RenderEvent::Left)).expect("unable to send Render::Left"); }
-                            Some(Key::Right) => { render_tx.send(driver::Event::Render(driver::RenderEvent::Right)).expect("unable to send Render::Right"); }
+                            Some(Key::Escape) => {
+                                render_tx.send(User(Quit)).expect("unable to send Render::Quit");
+                                *should_stop = true;
+                            }
+                            Some(Key::LControl) | Some(Key::RControl) => {
+                                self.ctrl_pressed = pressed; //TODO use some kind of keys_state { ... }
+                            }
+                            Some(Key::Up) => {
+                                render_tx.send(User(Up)).expect("unable to send Render::Up");
+                            }
+                            Some(Key::Down) => {
+                                render_tx.send(User(Down)).expect("unable to send Render::Down");
+                            }
+                            Some(Key::Left) => {
+                                render_tx.send(User(Left)).expect("unable to send Render::Left");
+                            }
+                            Some(Key::Right) => {
+                                render_tx.send(User(Right)).expect("unable to send Render::Right");
+                            }
                             _ => {}
                         }
                     }
-                    Closed => { render_tx.send(driver::Event::Render(driver::RenderEvent::Quit)).expect("unable to send Render::Quit"); *should_stop = true; }
+                    Closed => {
+                        render_tx.send(User(Quit)).expect("unable to send Render::Quit");
+                        *should_stop = true;
+                    }
                     Resized(width, height) => {
                         //TODO app.resize()
                         //TODO ui.resize()
@@ -818,6 +847,8 @@ impl RenderImpl {
                 objects: BTreeMap::new(),
                 hero_x: 0.0,
                 hero_y: 0.0,
+                hf_x: 0.0,
+                hf_y: 0.0,
                 resources: BTreeMap::new(),
                 dragging: false,
                 last_mouse_x: 0.0,
@@ -830,7 +861,7 @@ impl RenderImpl {
                 show_owning: false,
                 v1: 0,
                 widgets: BTreeMap::new(),
-                xui: XUi::new(),
+                //xui: Widgets::new(),
             }
         }
     }
@@ -913,7 +944,7 @@ impl RenderImpl {
         }
 
         {
-            let mut obj = ObjCol::from_objects(&self.state.objects, self.state.hero_x, self.state.hero_y).bake(self.state.main_color.clone(), &mut self.state.factory, self.state.threshold);
+            let mut obj = ObjCol::from_objects(&self.state.objects, self.state.hero_x, self.state.hero_y, self.state.hf_x, self.state.hf_y).bake(self.state.main_color.clone(), &mut self.state.factory, self.state.threshold);
             obj.data.transform = transform;
             obj.data.threshold = 0;
             self.state.encoder.draw(&obj.slice, &self.state.pso_col, &obj.data);
