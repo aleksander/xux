@@ -805,6 +805,17 @@ impl State {
                 }
                 Rel::BUFF(_) => {}
                 Rel::SESSKEY(_) => {}
+                Rel::FRAGMENT(ref fragment) => {
+                    info!("      fragment {}", match fragment {
+                        &Fragment::Head(_,_) => "head",
+                        &Fragment::Middle(_) => "middle",
+                        &Fragment::Tail(_) => "head",
+                    });
+                    panic!("must handle fragments!");
+                }
+                Rel::ADDWDG(ref wdg) => {
+                    info!("      {:?}", wdg);
+                }
             }
         }
         Ok(())

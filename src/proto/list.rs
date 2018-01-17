@@ -18,6 +18,8 @@ pub enum List {
     Bytes(Vec<u8>),
     Float32(f32),
     Float64(f64),
+    FCoord32((f32,f32)),
+    FCoord64((f64,f64)),
 }
 
 const T_END: u8 = 0;
@@ -34,6 +36,9 @@ const T_NIL: u8 = 12;
 const T_BYTES: u8 = 14;
 const T_FLOAT32: u8 = 15;
 const T_FLOAT64: u8 = 16;
+const T_FCOORD32: u8 = 18;
+const T_FCOORD64: u8 = 19;
+
 
 impl FromBuf for List {
     fn from_buf <R:ReadBytesSac> (r: &mut R) -> Result<Vec<Self>> where Self: ::std::marker::Sized {
@@ -115,6 +120,12 @@ impl FromBuf for List {
                 T_FLOAT64 => {
                     list[deep].push(List::Float64(r.f64()?));
                 }
+                T_FCOORD32 => {
+                    list[deep].push(List::FCoord32((r.f32()?, r.f32()?)));
+                }
+                T_FCOORD64 => {
+                    list[deep].push(List::FCoord64((r.f64()?, r.f64()?)));
+                }
                 _ => {
                     return Err(format_err!("unknown MstList type: {}", t));
                 }
@@ -184,6 +195,16 @@ impl ToBuf for List {
             List::Float64(f) => {
                 w.u8(T_FLOAT64)?;
                 w.f64(f)?;
+            }
+            List::FCoord32((x,y)) => {
+                w.u8(T_FCOORD32)?;
+                w.f32(x)?;
+                w.f32(y)?;
+            }
+            List::FCoord64((x,y)) => {
+                w.u8(T_FCOORD64)?;
+                w.f64(x)?;
+                w.f64(y)?;
             }
         }
         Ok(())

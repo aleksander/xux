@@ -79,6 +79,8 @@ pub enum Rel {
     TILES(Tiles),
     BUFF(Buff),
     SESSKEY(SessKey),
+    FRAGMENT(Fragment),
+    ADDWDG(AddWdg),
 }
 
 impl Rel {
@@ -101,6 +103,8 @@ impl Rel {
             Tiles::ID => Ok(Rel::TILES(Tiles::from_buf(r)?)),
             Buff::ID => Ok(Rel::BUFF(Buff)),
             SessKey::ID => Ok(Rel::SESSKEY(SessKey)),
+            Fragment::ID => Ok(Rel::FRAGMENT(Fragment::from_buf(r)?)),
+            AddWdg::ID => Ok(Rel::ADDWDG(AddWdg::from_buf(r)?)),
             id => {
                 Err(format_err!("unknown REL type: {}", id))
             }
@@ -463,4 +467,61 @@ pub struct SessKey;
 
 impl SessKey {
     pub const ID: u8 = 13;
+}
+
+#[derive(Debug)]
+pub enum Fragment {
+    Head(u8, Vec<u8>),
+    Middle(Vec<u8>),
+    Tail(Vec<u8>),
+}
+
+impl Fragment {
+    pub const ID: u8 = 14;
+
+    fn from_buf <R:ReadBytesSac> (mut r: R) -> Result<Fragment> {
+        let head = r.u8()?;
+        let buf = {
+            let mut buf = Vec::new();
+            r.read_to_end(&mut buf)?;
+            buf
+        };
+        Ok(match head {
+            0x81 => {
+                Fragment::Tail(buf)
+            }
+            0x80 => {
+                Fragment::Middle(buf)
+            }
+            _ => {
+                if head & 0x80 == 0 {
+                    Fragment::Head(head, buf)
+                } else {
+                    return Err(format_err!("wrong framgent type {}", head));
+                }
+            }
+        })
+    }
+}
+
+#[derive(Debug)]
+pub struct AddWdg {
+    pub id: u16, //TODO enum WdgID(u16)
+    pub parent: u16, //TODO enum WdgID(u16)
+    pub pargs: Vec<List>,
+}
+
+impl AddWdg {
+    pub const ID: u8 = 15;
+
+    fn from_buf <R:ReadBytesSac> (mut r: R) -> Result<AddWdg> {
+        let id = r.u16()?;
+        let parent = r.u16()?;
+        let pargs = List::from_buf(&mut r)?;
+        Ok(AddWdg {
+            id: id,
+            parent: parent,
+            pargs: pargs,
+        })
+    }
 }
