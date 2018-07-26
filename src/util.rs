@@ -3,11 +3,9 @@ use Result;
 // TODO grid_to_png(..., Mapper::first())
 pub fn grid_to_png(login: &str, name: &str, timestamp: &str, x: i32, y: i32, t: &[u8], z: &[i16]) -> Result<()> {
 
-    use std::fs::File;
     use image::ImageBuffer;
     use image::Rgb;
     use image::ImageRgb8;
-    use image::PNG;
     use shift_to_unsigned::ShiftToUnsigned;
     use std::path::PathBuf;
     use std::fs::create_dir_all;
@@ -27,7 +25,6 @@ pub fn grid_to_png(login: &str, name: &str, timestamp: &str, x: i32, y: i32, t: 
 
     path.push(format!("{} {}.png", x, y));
 
-    let mut f = File::create(path)?;
     let mut img = ImageBuffer::new(100, 100);
     for y in 0..100 {
         for x in 0..100 {
@@ -115,5 +112,5 @@ pub fn grid_to_png(login: &str, name: &str, timestamp: &str, x: i32, y: i32, t: 
             img.put_pixel(x as u32, y as u32, Rgb([g, r, b /* t,h,l */]));
         }
     }
-    Ok(ImageRgb8(img).save(&mut f, PNG)?)
+    Ok(ImageRgb8(img).save(path)?)
 }

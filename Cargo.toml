@@ -16,7 +16,7 @@ fern = "*"
 pnet = "*"
 pcap = "*"
 piston_window = { version = "*", optional = true }
-piston2d-gfx_graphics = { version = "0.46.0", optional = true }
+piston2d-gfx_graphics = { version = "*", optional = true }
 chrono = "*"
 bincode = { version = "*", optional = true }
 gfx = { version = "*", optional = true }
@@ -24,7 +24,7 @@ gfx_window_glutin = { version = "*", optional = true }
 glutin = { version = "*", optional = true }
 cgmath = { version = "*", optional = true }
 imgui = { optional = true, path = "../imgui-rs" }
-imgui-gfx-renderer = { optional = true, path = "../imgui-rs/imgui-gfx-renderer" }
+imgui-gfx-renderer = { path = "../imgui-rs/imgui-gfx-renderer", optional = true }
 gfx_device_gl = { version = "*", optional = true }
 serde = { version = "*", optional = true }
 serde_derive = { version = "*", optional = true }

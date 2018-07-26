@@ -66,34 +66,26 @@ fn main() {
         if nom_parser {
             match dir {
                 MessageDirection::FromServer => match parse_server_message(udp.payload()) {
-                    IResult::Done(i, o) => {
+                    Ok((i, o)) => {
                         println!("SERVER: {:?}", o);
                         if i.len() > 0 {
                             println!("REMAINS: {} bytes", i.len());
                         }
                     }
-                    IResult::Error(e) => {
+                    Err(e) => {
                         println!("Error: {:?}", e);
-                        break;
-                    }
-                    IResult::Incomplete(n) => {
-                        println!("Incomplete: {:?}", n);
                         break;
                     }
                 },
                 MessageDirection::FromClient => match parse_client_message(udp.payload()) {
-                    IResult::Done(i, o) => {
+                    Ok((i, o)) => {
                         println!("CLIENT: {:?}", o);
                         if i.len() > 0 {
                             println!("REMAINS: {} bytes", i.len());
                         }
                     }
-                    IResult::Error(e) => {
+                    Err(e) => {
                         println!("Error: {:?}", e);
-                        break;
-                    }
-                    IResult::Incomplete(n) => {
-                        println!("Incomplete: {:?}", n);
                         break;
                     }
                 }
@@ -136,7 +128,7 @@ fn main() {
 }
 
 fn parse_ssess(i: &[u8]) -> IResult<&[u8], proto::sSess> {
-    nom::le_u8(i).map(|i|proto::sSess::new(i))
+    nom::le_u8(i).map(|(i,o)|(i,proto::sSess::new(o)))
 }
 
 named!(strz<&[u8], &str>,
@@ -166,9 +158,9 @@ fn test_strz() {
 //fn parse_csess(i: &[u8]) -> IResult<&[u8], proto::cSess>
 named!(parse_csess<&[u8], proto::cSess>,
     do_parse!(
-        unknown: le_u16 >>
-        proto: strz >>
-        version: le_u16 >>
+        _unknown: le_u16 >>
+        _proto: strz >>
+        _version: le_u16 >>
         login: strz >>
         cookie_len: le_u16 >>
         cookie: take!(cookie_len) >>
@@ -186,42 +178,42 @@ fn test_parse_csess() {
 
 fn parse_rel(i: &[u8]) -> IResult<&[u8], proto::Rels> {
     //TODO do parse
-    IResult::Done(i, proto::Rels::new(0))
+    Ok((i, proto::Rels::new(0)))
 }
 
 fn parse_ack(i: &[u8]) -> IResult<&[u8], proto::Ack> {
     //TODO do parse
-    IResult::Done(i, proto::Ack::new(0))
+    Ok((i, proto::Ack::new(0)))
 }
 
 fn parse_beat(i: &[u8]) -> IResult<&[u8], proto::Beat> {
     //TODO do parse
-    IResult::Done(i, proto::Beat)
+    Ok((i, proto::Beat))
 }
 
 fn parse_mapreq(i: &[u8]) -> IResult<&[u8], proto::MapReq> {
     //TODO do parse
-    IResult::Done(i, proto::MapReq::new(0, 0))
+    Ok((i, proto::MapReq::new(0, 0)))
 }
 
 fn parse_mapdata(i: &[u8]) -> IResult<&[u8], proto::MapData> {
     //TODO do parse
-    IResult::Done(i, proto::MapData::new(0, 0, 0, vec!()))
+    Ok((i, proto::MapData::new(0, 0, 0, vec!())))
 }
 
 fn parse_objdata(i: &[u8]) -> IResult<&[u8], proto::ObjData> {
     //TODO do parse
-    IResult::Done(i, proto::ObjData::new(vec!()))
+    Ok((i, proto::ObjData::new(vec!())))
 }
 
 fn parse_objack(i: &[u8]) -> IResult<&[u8], proto::ObjAck> {
     //TODO do parse
-    IResult::Done(i, proto::ObjAck::new(vec!()))
+    Ok((i, proto::ObjAck::new(vec!())))
 }
 
 fn parse_close(i: &[u8]) -> IResult<&[u8], proto::Close> {
     //TODO do parse
-    IResult::Done(i, proto::Close)
+    Ok((i, proto::Close))
 }
 
 named!(parse_server_message <&[u8], ServerMessage>,

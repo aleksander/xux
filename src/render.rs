@@ -49,7 +49,10 @@ pub fn new (ll_que_tx: Sender<driver::Event>, hl_que_rx: Receiver<state::Event>)
         let mut dumper = dumper::Dumper::init().expect("unable to create dumper");
         render_impl.init();
         'outer: loop {
-            if ! render_impl.update(&ll_que_tx) { break; }
+            if ! render_impl.update(&ll_que_tx) {
+                info!("unable to render_impl.update()");
+                break;
+            }
             loop {
                 match hl_que_rx.try_recv() {
                     Ok(event) => {
@@ -58,10 +61,14 @@ pub fn new (ll_que_tx: Sender<driver::Event>, hl_que_rx: Receiver<state::Event>)
                         render_impl.event(event);
                     }
                     Err(Empty) => { break; }
-                    Err(Disconnected) => { break 'outer; }
+                    Err(Disconnected) => {
+                        info!("render: disconnected from que");
+                        break 'outer;
+                    }
                 }
             }
         }
         render_impl.end();
+        info!("render: done");
     }).expect("unable to create render thread");
 }

@@ -8,9 +8,9 @@ use gfx::traits::FactoryExt;
 use gfx::{self, Device};
 use gfx::format::*;
 use glutin::{self, GlContext, MouseButton};
-use glutin::WindowEvent::{KeyboardInput, Closed, Resized, MouseWheel, MouseInput, CursorMoved};
+use glutin::WindowEvent::{KeyboardInput, CloseRequested, Resized, MouseWheel, MouseInput, CursorMoved};
 use cgmath::{Matrix2, Matrix3, Vector2, Vector3, SquareMatrix, Rad, Zero};
-use imgui::{ImGui, Ui, GlyphRange};
+use imgui::{ImGui, Ui};
 use imgui_gfx_renderer::{Renderer, Shaders};
 use image;
 use proto::{ObjXY,ObjID,ResID};
@@ -56,7 +56,7 @@ gfx_defines! {
         transform: gfx::Global<[[f32; 3]; 3]> = "transform",
         threshold: gfx::Global<i32> = "threshold",
         //out: gfx::RenderTarget<Rgba8> = "Target0",
-        out: gfx::BlendTarget<Rgba8> = ("Target0", gfx::state::MASK_ALL, gfx::preset::blend::ALPHA),
+        out: gfx::BlendTarget<Rgba8> = ("Target0", gfx::state::ColorMask::all(), gfx::preset::blend::ALPHA),
     }
 
     pipeline pipe_tex {
@@ -64,7 +64,7 @@ gfx_defines! {
         tex: gfx::TextureSampler<[f32; 4]> = "sampler",
         transform: gfx::Global<[[f32; 3]; 3]> = "transform",
         //out: gfx::RenderTarget<Rgba8> = "Target0",
-        out: gfx::BlendTarget<Rgba8> = ("Target0", gfx::state::MASK_ALL, gfx::preset::blend::ALPHA),
+        out: gfx::BlendTarget<Rgba8> = ("Target0", gfx::state::ColorMask::all(), gfx::preset::blend::ALPHA),
     }
 }
 
@@ -398,7 +398,8 @@ impl ObjTex {
             );
         let (width, height) = (100,100); //FIXME self.image.dimensions();
         let kind = gfx::texture::Kind::D2(width as u16, height as u16, gfx::texture::AaMode::Single);
-        let (_, view) = factory.create_texture_immutable_u8::<Rgba8>(kind, &[&self.image]).unwrap();
+        let mipmap = gfx::texture::Mipmap::Allocated;
+        let (_, view) = factory.create_texture_immutable_u8::<Rgba8>(kind, mipmap, &[&self.image]).unwrap();
         let data = pipe_tex::Data {
             vbuf: vertex_buffer,
             tex: (view, sampler),
@@ -516,7 +517,7 @@ fn ui_handle_event (imgui: &mut ImGui, mouse_state: &mut MouseState, event: &glu
                     _ => {}
                 }
             }
-            CursorMoved { position: (x, y), .. } => mouse_state.pos = (x as i32, y as i32),
+            CursorMoved { position: xy, .. } => mouse_state.pos = xy.into(),
             MouseInput { state, button, .. } => {
                 match button {
                     MouseButton::Left => mouse_state.pressed.0 = state == Pressed,
@@ -526,15 +527,15 @@ fn ui_handle_event (imgui: &mut ImGui, mouse_state: &mut MouseState, event: &glu
                 }
             }
             MouseWheel {
-                delta: MouseScrollDelta::LineDelta(_, y),
-                phase: TouchPhase::Moved,
-                ..
-            } |
-            MouseWheel {
-                delta: MouseScrollDelta::PixelDelta(_, y),
+                delta: MouseScrollDelta::LineDelta(_x, y),
                 phase: TouchPhase::Moved,
                 ..
             } => mouse_state.wheel = y,
+            MouseWheel {
+                delta: MouseScrollDelta::PixelDelta(glutin::dpi::LogicalPosition{x:_, y}),
+                phase: TouchPhase::Moved,
+                ..
+            } => mouse_state.wheel = y as f32,
             ReceivedCharacter(c) => imgui.add_input_character(c),
             _ => (),
         }
@@ -589,8 +590,8 @@ struct RenderImplState {
         imgui_renderer: Renderer<gfx_device_gl::Resources>,
         angle: f32, //TODO replace by camera.angle
         zoom: f32, //TODO replace by camera.zoom
-        w: u32,
-        h: u32,
+        w: f64,
+        h: f64,
         delta: delta::Delta,
         mouse_state: MouseState, //TODO move to struct Ui
         grids_tiles: Vec<BakedObjTex>,
@@ -680,6 +681,7 @@ impl RenderImplState {
     }
 
     pub fn update (&mut self, render_tx: &Sender<driver::Event>, event: &glutin::Event, should_stop: &mut bool) {
+        if *should_stop { return; }
         ui_handle_event(&mut self.imgui, &mut self.mouse_state, event);
         //TODO if ui.handle_event(event) == NOT_HANDLED {
         //         if app.handle_event(event) == NOT_HANDLED {
@@ -720,11 +722,11 @@ impl RenderImplState {
                             _ => {}
                         }
                     }
-                    Closed => {
+                    CloseRequested => {
                         render_tx.send(User(Quit)).expect("unable to send Render::Quit");
                         *should_stop = true;
                     }
-                    Resized(width, height) => {
+                    Resized(glutin::dpi::LogicalSize{width, height}) => {
                         //TODO app.resize()
                         //TODO ui.resize()
                         self.w = width;
@@ -750,7 +752,7 @@ impl RenderImplState {
                         }
                     }
                     MouseInput {state, button: MouseButton::Left, ..} => self.dragging = state == Pressed,
-                    CursorMoved {position: (x, y), ..} => {
+                    CursorMoved {position: glutin::dpi::LogicalPosition{x, y}, ..} => {
                         let x = if x < 0.0 { 0.0 } else if x > self.w as f64 { self.w as f64 } else { x };
                         let y = if y < 0.0 { 0.0 } else if y > self.h as f64 { self.h as f64 } else { y };
                         let delta_x = x - self.last_mouse_x;
@@ -784,13 +786,13 @@ impl RenderImpl {
         let context = glutin::ContextBuilder::new();
         let builder = glutin::WindowBuilder::new()
             .with_title("gfx 2d test".to_string())
-            .with_dimensions(800, 600);
+            .with_dimensions(glutin::dpi::LogicalSize::new(800.0, 600.0));
 
         let (window, device, mut factory, main_color, main_depth) =
             gfx_window_glutin::init::<Rgba8, DepthStencil>(builder, context, &events_loop);
 
 
-        let (w, h) = window.get_inner_size().expect("get_inner_size failed");
+        let size = window.get_inner_size().expect("get_inner_size failed");
 
         let shaders = {
             let version = device.get_info().shading_language;
@@ -812,7 +814,7 @@ impl RenderImpl {
         };
 
         let mut imgui = ImGui::init();
-        imgui.set_font("DejaVuSansMono.ttf", 12.0, GlyphRange::Cyrillic).expect("Failed to imgui.set_font");
+        //imgui.set_font("DejaVuSansMono.ttf", 12.0, GlyphRange::Cyrillic).expect("Failed to imgui.set_font");
         RenderImpl {
             events_loop: events_loop,
             state: RenderImplState {
@@ -837,8 +839,8 @@ impl RenderImpl {
                 main_depth: main_depth,
                 angle: 0.0, //TODO replace by camera.angle
                 zoom: 1.0, //TODO replace by camera.zoom
-                w: w,
-                h: h,
+                w: size.width,
+                h: size.height,
                 delta: delta::Delta::new(),
                 mouse_state: MouseState::default(), //TODO move to struct Ui
                 grids_tiles: Vec::new(),
@@ -881,9 +883,11 @@ impl RenderImpl {
             let mut should_stop = false;
             let state = &mut self.state;
             self.events_loop.poll_events(|event| {
-                state.update(render_tx, &event, &mut should_stop)
+                state.update(render_tx, &event, &mut should_stop);
             });
-            if should_stop { return false; }
+            if should_stop {
+                return false;
+            }
         }
 
         // UPDATE
@@ -951,7 +955,7 @@ impl RenderImpl {
         }
 
         let inner_size = self.state.window.get_inner_size().expect("unable to get_inner_size");
-        let ui = self.state.imgui.frame(inner_size, inner_size, delta_s);
+        let ui = self.state.imgui.frame(inner_size.into(), inner_size.into(), delta_s);
 
         let fps = (1.0 / delta_s) as usize;
         //FIXME pass &mut RenderImplState instead

@@ -36,7 +36,7 @@ pub fn new(host: &str, port: u16) -> Result<Driver> {
 
     let receiver_tx = tx.clone();
     let sock_rx = sock.try_clone()?;
-    thread::spawn(move || {
+    thread::Builder::new().name("driver::receiver".to_string()).spawn(move || {
         let mut buf = vec![0; 65535];
         loop {
             // TODO send Error(e) through receiver_tx
@@ -44,7 +44,7 @@ pub fn new(host: &str, port: u16) -> Result<Driver> {
             // TODO zero-copy data processing
             receiver_tx.send(Event::Rx(buf[..len].to_vec())).expect("driver::send(event::rx)");
         }
-    });
+    }).expect("unable to spawn driver::receiver thread");
 
     Ok(Driver {
         sock: sock,
@@ -72,10 +72,10 @@ impl Driver {
 
         // info!("driver.timeout: {} {}ms", seq, ms);
         let tx = self.tx.clone();
-        thread::spawn(move || {
+        thread::Builder::new().name("driver::timeout".to_string()).spawn(move || {
             thread::sleep(Duration::from_millis(ms));
             tx.send(Event::Timeout(seq)).expect("driver::timeout.send");
-        });
+        }).expect("unable to spawn driver::timeout thread");
     }
 
     pub fn next_event(&mut self) -> Result<Event> {

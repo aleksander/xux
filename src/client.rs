@@ -5,7 +5,7 @@ use failure::err_msg;
 pub fn authorize(host: &str, port: u16, user: String, pass: String) -> Result<(String, Vec<u8>)> {
     use std::net;
     use std::str;
-    use openssl::hash::{hash2, MessageDigest};
+    use openssl::hash::{hash, MessageDigest};
     use openssl::ssl;
     use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
     use std::io::Cursor;
@@ -18,7 +18,7 @@ pub fn authorize(host: &str, port: u16, user: String, pass: String) -> Result<(S
     info!("authorize {} @ {}:{}", user, host, port);
     let stream = net::TcpStream::connect((host, port))?;
     let mut ctx = ssl::SslContext::builder(ssl::SslMethod::tls())?;
-    ctx.set_verify(ssl::SSL_VERIFY_NONE);
+    ctx.set_verify(ssl::SslVerifyMode::NONE);
     let ctx = ctx.build();
     let ssl = ssl::Ssl::new(&ctx)?;
     let mut stream = ssl.connect(stream)?;
@@ -68,7 +68,7 @@ pub fn authorize(host: &str, port: u16, user: String, pass: String) -> Result<(S
         buf.extend(b"pw\0");
         buf.extend(user.as_bytes());
         buf.push(0);
-        let hash = hash2(MessageDigest::sha256(), pass.as_bytes())?;
+        let hash = hash(MessageDigest::sha256(), pass.as_bytes())?;
         buf.extend(&*hash);
         let msg = command(&mut stream, buf)?;
         // FIXME use read_strz analog
