@@ -10,7 +10,7 @@ use gfx::format::*;
 use glutin::{self, GlContext, MouseButton};
 use glutin::WindowEvent::{KeyboardInput, CloseRequested, Resized, MouseWheel, MouseInput, CursorMoved};
 use cgmath::{Matrix2, Matrix3, Vector2, Vector3, SquareMatrix, Rad, Zero};
-use imgui::{ImGui, Ui};
+use imgui::{ImGui, Ui, FontGlyphRange, ImFontConfig};
 use imgui_gfx_renderer::{Renderer, Shaders};
 use image;
 use proto::{ObjXY,ObjID,ResID};
@@ -814,7 +814,11 @@ impl RenderImpl {
         };
 
         let mut imgui = ImGui::init();
-        //imgui.set_font("DejaVuSansMono.ttf", 12.0, GlyphRange::Cyrillic).expect("Failed to imgui.set_font");
+        imgui.set_ini_filename(None);
+        let config = ImFontConfig::new().oversample_h(1).pixel_snap_h(true).size_pixels(13.0);
+        config./*rasterizer_multiply(1.75).*/add_font(&mut imgui.fonts(), include_bytes!("../DejaVuSansMono.ttf"), &FontGlyphRange::cyrillic());
+        config.merge_mode(true).add_default_font(&mut imgui.fonts());
+
         RenderImpl {
             events_loop: events_loop,
             state: RenderImplState {
