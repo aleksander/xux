@@ -608,6 +608,8 @@ struct RenderImplState {
         show_owning: bool,
         v1: i32,
         //xui: Widgets,
+        imgui_want_capture_mouse: bool,
+        imgui_want_capture_keyboard: bool,
     //}
 }
 
@@ -690,6 +692,7 @@ impl RenderImplState {
         //             }
         //         }
         //}
+        if self.imgui_want_capture_mouse || self.imgui_want_capture_keyboard { return; }
         match *event {
             glutin::Event::WindowEvent { ref event, .. } => {
                 use glutin::ElementState::Pressed;
@@ -868,6 +871,8 @@ impl RenderImpl {
                 v1: 0,
                 widgets: BTreeMap::new(),
                 //xui: Widgets::new(),
+                imgui_want_capture_mouse: false,
+                imgui_want_capture_keyboard: false,
             }
         }
     }
@@ -960,6 +965,8 @@ impl RenderImpl {
 
         let inner_size = self.state.window.get_inner_size().expect("unable to get_inner_size");
         let ui = self.state.imgui.frame(inner_size.into(), inner_size.into(), delta_s);
+        self.state.imgui_want_capture_mouse = ui.want_capture_mouse();
+        self.state.imgui_want_capture_keyboard = ui.want_capture_keyboard();
 
         let fps = (1.0 / delta_s) as usize;
         //FIXME pass &mut RenderImplState instead
