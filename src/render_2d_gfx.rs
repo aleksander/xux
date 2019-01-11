@@ -550,15 +550,13 @@ fn update_mouse(imgui: &mut ImGui, mouse_state: &mut MouseState) {
         mouse_state.pos.0 as f32 / scale.0,
         mouse_state.pos.1 as f32 / scale.1,
         );
-    imgui.set_mouse_down(
-        &[
+    imgui.set_mouse_down([
         mouse_state.pressed.0,
         mouse_state.pressed.1,
         mouse_state.pressed.2,
         false,
-        false,
-        ],
-        );
+        false
+    ]);
     imgui.set_mouse_wheel(mouse_state.wheel / scale.1);
     mouse_state.wheel = 0.0;
 }
@@ -963,8 +961,8 @@ impl RenderImpl {
             self.state.encoder.draw(&obj.slice, &self.state.pso_col, &obj.data);
         }
 
-        let inner_size = self.state.window.get_inner_size().expect("unable to get_inner_size");
-        let ui = self.state.imgui.frame(inner_size.into(), inner_size.into(), delta_s);
+        let (width, height) = self.state.window.get_inner_size().expect("unable to get_inner_size").into();
+        let ui = self.state.imgui.frame(imgui::FrameSize::new(width, height, 1.0), delta_s);
         self.state.imgui_want_capture_mouse = ui.want_capture_mouse();
         self.state.imgui_want_capture_keyboard = ui.want_capture_keyboard();
 
