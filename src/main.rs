@@ -86,7 +86,7 @@ fn main () {
         match run() {
             Ok(()) => { 0 }
             Err(e) => {
-                println!("error \"{}\", cause \"{}\"", e, e.cause());
+                println!("error \"{}\", cause \"{}\"", e, e.as_fail());
                 println!("trace:");
                 println!("{}", e.backtrace());
                 -1

@@ -792,7 +792,7 @@ impl RenderImpl {
             .with_dimensions(glutin::dpi::LogicalSize::new(800.0, 600.0));
 
         let (window, device, mut factory, main_color, main_depth) =
-            gfx_window_glutin::init::<Rgba8, DepthStencil>(builder, context, &events_loop);
+            gfx_window_glutin::init::<Rgba8, DepthStencil>(builder, context, &events_loop).expect("gfx_window_glutin::init");
 
 
         let size = window.get_inner_size().expect("get_inner_size failed");
