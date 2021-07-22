@@ -23,8 +23,8 @@ gfx = { version = "*", optional = true }
 gfx_window_glutin = { version = "*", optional = true }
 glutin = { version = "*", optional = true }
 cgmath = { version = "*", optional = true }
-imgui = { optional = true, path = "../imgui-rs" }
-imgui-gfx-renderer = { path = "../imgui-rs/imgui-gfx-renderer", optional = true }
+imgui = { version = "*", optional = true }
+imgui-gfx-renderer = { version = "*", optional = true }
 gfx_device_gl = { version = "*", optional = true }
 serde = { version = "*", optional = true }
 serde_derive = { version = "*", optional = true }

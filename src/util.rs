@@ -5,7 +5,7 @@ pub fn grid_to_png(login: &str, name: &str, timestamp: &str, x: i32, y: i32, t: 
 
     use image::ImageBuffer;
     use image::Rgb;
-    use image::ImageRgb8;
+    use image::DynamicImage::ImageRgb8;
     use shift_to_unsigned::ShiftToUnsigned;
     use std::path::PathBuf;
     use std::fs::create_dir_all;

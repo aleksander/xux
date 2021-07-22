@@ -1,4 +1,3 @@
-#![feature(rust_2018_preview)]
 #![warn(unused_import_braces)]
 #![warn(unused_qualifications)]
 #![warn(unused_extern_crates)]

@@ -7,10 +7,41 @@ use gfx_window_glutin;
 use gfx::traits::FactoryExt;
 use gfx::{self, Device};
 use gfx::format::*;
-use glutin::{self, GlContext, MouseButton};
-use glutin::WindowEvent::{KeyboardInput, CloseRequested, Resized, MouseWheel, MouseInput, CursorMoved};
+use glutin::{
+    self,
+    event::{
+        Event as GEvent,
+        VirtualKeyCode,
+        MouseButton,
+        MouseScrollDelta,
+        TouchPhase,
+        WindowEvent::{
+            self,
+            //KeyboardInput,
+            CloseRequested,
+            Resized,
+            MouseWheel,
+            MouseInput,
+            CursorMoved,
+            ReceivedCharacter,
+        },
+        KeyboardInput,
+        ElementState::Pressed,
+    },
+    event_loop::EventLoop,
+    WindowedContext,
+    PossiblyCurrent,
+};
 use cgmath::{Matrix2, Matrix3, Vector2, Vector3, SquareMatrix, Rad, Zero};
-use imgui::{ImGui, Ui, FontGlyphRange, ImFontConfig};
+use imgui::{
+    Context,
+    Condition,
+    im_str,
+    FontGlyphRanges,
+    Ui,
+    FontConfig,
+    Window,
+};
 use imgui_gfx_renderer::{Renderer, Shaders};
 use image;
 use proto::{ObjXY,ObjID,ResID};
@@ -432,14 +463,13 @@ fn run_ui <'a> (ui: &Ui<'a>,
                 v1: &mut i32,
                 objects: &BTreeMap<ObjID,(ObjXY,ResID)>,
                 resources: &BTreeMap<ResID,String>) -> bool {
-    use imgui::*;
-    ui.window(im_str!("Клёцка"))
-        .size((300.0, 600.0), ImGuiCond::FirstUseEver)
-        .position((10.0, 10.0), ImGuiCond::FirstUseEver)
-        .build(|| {
+    Window::new(im_str!("Клёцка"))
+        .size([300.0, 600.0], Condition::FirstUseEver)
+        .position([10.0, 10.0], Condition::FirstUseEver)
+        .build(ui, || {
             ui.text(im_str!("Привет, Мир!!!"));
             ui.separator();
-            let (x,y) = ui.imgui().mouse_pos();
+            let [x,y] = ui.io().mouse_pos;
             ui.text(im_str!("Mouse Position: ({:.1},{:.1})", x, y));
             ui.text(im_str!("FPS: {}", fps));
             ui.text(im_str!("threshold: {}", threshold));
@@ -450,11 +480,11 @@ fn run_ui <'a> (ui: &Ui<'a>,
             /*TODO indent*/ ui.radio_button(im_str!("heatmap"), v1, 2);
             ui.checkbox(im_str!("owning"), show_owning);
         });
-    ui.window(im_str!("Объекты"))
+    Window::new(im_str!("Объекты"))
     //ui.window(im_str!("Объекты: {}", objects.len()))
-        .size((300.0, 600.0), ImGuiCond::FirstUseEver)
-        .position((300.0, 10.0), ImGuiCond::FirstUseEver)
-        .build(|| {
+        .size([300.0, 600.0], Condition::FirstUseEver)
+        .position([300.0, 10.0], Condition::FirstUseEver)
+        .build(ui, || {
             for ( &objid, &(ObjXY(_x,_y), ref resid) ) in objects.iter() {
                 let resname = match resources.get(resid) {
                     Some(ref name) => name,
@@ -474,46 +504,40 @@ struct MouseState {
     wheel: f32,
 }
 
-fn ui_handle_event (imgui: &mut ImGui, mouse_state: &mut MouseState, event: &glutin::Event) {
-    use glutin::WindowEvent::*;
-    use glutin::ElementState::Pressed;
-    use glutin::{Event, MouseButton, MouseScrollDelta, TouchPhase};
-
-    if let Event::WindowEvent { ref event, .. } = *event {
+fn ui_handle_event (imgui: &mut Context, mouse_state: &mut MouseState, event: &GEvent<()>) {
+    if let GEvent::WindowEvent { ref event, .. } = *event {
         match *event {
             //Resized(_, _) => {
             //gfx_window_glutin::update_views(&window, &mut main_color, &mut main_depth);
             //renderer.update_render_target(main_color.clone());
             //}
             //Closed => quit = true,
-            KeyboardInput { input, .. } => {
-                use glutin::VirtualKeyCode as Key;
-
+            WindowEvent::KeyboardInput { input, .. } => {
                 let pressed = input.state == Pressed;
                 match input.virtual_keycode {
-                    Some(Key::Tab) => imgui.set_key(0, pressed),
-                    Some(Key::Left) => imgui.set_key(1, pressed),
-                    Some(Key::Right) => imgui.set_key(2, pressed),
-                    Some(Key::Up) => imgui.set_key(3, pressed),
-                    Some(Key::Down) => imgui.set_key(4, pressed),
-                    Some(Key::PageUp) => imgui.set_key(5, pressed),
-                    Some(Key::PageDown) => imgui.set_key(6, pressed),
-                    Some(Key::Home) => imgui.set_key(7, pressed),
-                    Some(Key::End) => imgui.set_key(8, pressed),
-                    Some(Key::Delete) => imgui.set_key(9, pressed),
-                    Some(Key::Back) => imgui.set_key(10, pressed),
-                    Some(Key::Return) => imgui.set_key(11, pressed),
-                    Some(Key::Escape) => imgui.set_key(12, pressed),
-                    Some(Key::A) => imgui.set_key(13, pressed),
-                    Some(Key::C) => imgui.set_key(14, pressed),
-                    Some(Key::V) => imgui.set_key(15, pressed),
-                    Some(Key::X) => imgui.set_key(16, pressed),
-                    Some(Key::Y) => imgui.set_key(17, pressed),
-                    Some(Key::Z) => imgui.set_key(18, pressed),
-                    Some(Key::LControl) | Some(Key::RControl) => imgui.set_key_ctrl(pressed),
-                    Some(Key::LShift) | Some(Key::RShift) => imgui.set_key_shift(pressed),
-                    Some(Key::LAlt) | Some(Key::RAlt) => imgui.set_key_alt(pressed),
-                    Some(Key::LWin) | Some(Key::RWin) => imgui.set_key_super(pressed),
+                    Some(VirtualKeyCode::Tab) => imgui.io_mut().key_map[0] = pressed as u32, //FIXME investigate how this mapping is working now
+                    Some(VirtualKeyCode::Left) => imgui.io_mut().key_map[1] = pressed as u32, //FIXME investigate how this mapping is working now
+                    Some(VirtualKeyCode::Right) => imgui.io_mut().key_map[2] = pressed as u32, //FIXME investigate how this mapping is working now
+                    Some(VirtualKeyCode::Up) => imgui.io_mut().key_map[3] = pressed as u32, //FIXME investigate how this mapping is working now
+                    Some(VirtualKeyCode::Down) => imgui.io_mut().key_map[4] = pressed as u32, //FIXME investigate how this mapping is working now
+                    Some(VirtualKeyCode::PageUp) => imgui.io_mut().key_map[5] = pressed as u32, //FIXME investigate how this mapping is working now
+                    Some(VirtualKeyCode::PageDown) => imgui.io_mut().key_map[6] = pressed as u32, //FIXME investigate how this mapping is working now
+                    Some(VirtualKeyCode::Home) => imgui.io_mut().key_map[7] = pressed as u32, //FIXME investigate how this mapping is working now
+                    Some(VirtualKeyCode::End) => imgui.io_mut().key_map[8] = pressed as u32, //FIXME investigate how this mapping is working now
+                    Some(VirtualKeyCode::Delete) => imgui.io_mut().key_map[9] = pressed as u32, //FIXME investigate how this mapping is working now
+                    Some(VirtualKeyCode::Back) => imgui.io_mut().key_map[1] = pressed as u32, //FIXME investigate how this mapping is working now
+                    Some(VirtualKeyCode::Return) => imgui.io_mut().key_map[1] = pressed as u32, //FIXME investigate how this mapping is working now
+                    Some(VirtualKeyCode::Escape) => imgui.io_mut().key_map[1] = pressed as u32, //FIXME investigate how this mapping is working now
+                    Some(VirtualKeyCode::A) => imgui.io_mut().key_map[1] = pressed as u32, //FIXME investigate how this mapping is working now
+                    Some(VirtualKeyCode::C) => imgui.io_mut().key_map[1] = pressed as u32, //FIXME investigate how this mapping is working now
+                    Some(VirtualKeyCode::V) => imgui.io_mut().key_map[1] = pressed as u32, //FIXME investigate how this mapping is working now
+                    Some(VirtualKeyCode::X) => imgui.io_mut().key_map[1] = pressed as u32, //FIXME investigate how this mapping is working now
+                    Some(VirtualKeyCode::Y) => imgui.io_mut().key_map[1] = pressed as u32, //FIXME investigate how this mapping is working now
+                    Some(VirtualKeyCode::Z) => imgui.io_mut().key_map[1] = pressed as u32, //FIXME investigate how this mapping is working now
+                    Some(VirtualKeyCode::LControl) | Some(VirtualKeyCode::RControl) => imgui.io_mut().key_ctrl = pressed,
+                    Some(VirtualKeyCode::LShift) | Some(VirtualKeyCode::RShift) => imgui.io_mut().key_shift = pressed,
+                    Some(VirtualKeyCode::LAlt) | Some(VirtualKeyCode::RAlt) => imgui.io_mut().key_alt = pressed,
+                    Some(VirtualKeyCode::LWin) | Some(VirtualKeyCode::RWin) => imgui.io_mut().key_super = pressed,
                     _ => {}
                 }
             }
@@ -532,11 +556,11 @@ fn ui_handle_event (imgui: &mut ImGui, mouse_state: &mut MouseState, event: &glu
                 ..
             } => mouse_state.wheel = y,
             MouseWheel {
-                delta: MouseScrollDelta::PixelDelta(glutin::dpi::LogicalPosition{x:_, y}),
+                delta: MouseScrollDelta::PixelDelta(glutin::dpi::PhysicalPosition{x:_, y}),
                 phase: TouchPhase::Moved,
                 ..
             } => mouse_state.wheel = y as f32,
-            ReceivedCharacter(c) => imgui.add_input_character(c),
+            ReceivedCharacter(c) => imgui.io_mut().add_input_character(c),
             _ => (),
         }
     }
@@ -544,22 +568,24 @@ fn ui_handle_event (imgui: &mut ImGui, mouse_state: &mut MouseState, event: &glu
     update_mouse(imgui, mouse_state);
 }
 
-fn update_mouse(imgui: &mut ImGui, mouse_state: &mut MouseState) {
-    let scale = imgui.display_framebuffer_scale();
-    imgui.set_mouse_pos(
-        mouse_state.pos.0 as f32 / scale.0,
-        mouse_state.pos.1 as f32 / scale.1,
-        );
-    imgui.set_mouse_down([
+fn update_mouse(imgui: &mut Context, mouse_state: &mut MouseState) {
+    let scale = imgui.io().display_framebuffer_scale;
+    imgui.io_mut().mouse_pos = [
+        mouse_state.pos.0 as f32 / scale[0],
+        mouse_state.pos.1 as f32 / scale[1],
+    ];
+    imgui.io_mut().mouse_down = [
         mouse_state.pressed.0,
         mouse_state.pressed.1,
         mouse_state.pressed.2,
         false,
         false
-    ]);
-    imgui.set_mouse_wheel(mouse_state.wheel / scale.1);
+    ];
+    imgui.io_mut().mouse_wheel = mouse_state.wheel / scale[1];
     mouse_state.wheel = 0.0;
 }
+
+use gfx::format::{BlendFormat, RenderFormat, Formatted};
 
 struct RenderImplState {
     #[warn(TODO)]
@@ -576,7 +602,7 @@ struct RenderImplState {
     //struct RenderState {
         tile_colors: HashMap<String,[u8;4]>,
         palette: [[u8; 4]; 256],
-        window: glutin::GlWindow,
+        window: WindowedContext<PossiblyCurrent>,
         device: gfx_device_gl::Device,
         factory: gfx_device_gl::Factory,
         main_color: gfx::handle::RenderTargetView<gfx_device_gl::Resources, Rgba8>,
@@ -584,8 +610,8 @@ struct RenderImplState {
         encoder: gfx::Encoder<gfx_device_gl::Resources, gfx_device_gl::CommandBuffer>,
         pso_col: gfx::PipelineState<gfx_device_gl::Resources, pipe_col::Meta>,
         pso_tex: gfx::PipelineState<gfx_device_gl::Resources, pipe_tex::Meta>,
-        imgui: ImGui,
-        imgui_renderer: Renderer<gfx_device_gl::Resources>,
+        imgui: Context,
+        imgui_renderer: Renderer<gfx::format::Rgba8, gfx_device_gl::Resources>,
         angle: f32, //TODO replace by camera.angle
         zoom: f32, //TODO replace by camera.zoom
         w: f64,
@@ -680,7 +706,7 @@ impl RenderImplState {
         }
     }
 
-    pub fn update (&mut self, render_tx: &Sender<driver::Event>, event: &glutin::Event, should_stop: &mut bool) {
+    pub fn update (&mut self, render_tx: &Sender<driver::Event>, event: &GEvent<()>, should_stop: &mut bool) {
         if *should_stop { return; }
         ui_handle_event(&mut self.imgui, &mut self.mouse_state, event);
         //TODO if ui.handle_event(event) == NOT_HANDLED {
@@ -692,32 +718,31 @@ impl RenderImplState {
         //}
         if self.imgui_want_capture_mouse || self.imgui_want_capture_keyboard { return; }
         match *event {
-            glutin::Event::WindowEvent { ref event, .. } => {
-                use glutin::ElementState::Pressed;
+            GEvent::WindowEvent { ref event, .. } => {
+                //use glutin::ElementState::Pressed;
                 use driver::Event::User;
                 use driver::UserInput::*;
                 match *event {
-                    KeyboardInput { input, .. } => {
-                        use glutin::VirtualKeyCode as Key;
+                    WindowEvent::KeyboardInput { input, .. } => {
                         let pressed = input.state == Pressed;
                         match input.virtual_keycode {
-                            Some(Key::Escape) => {
+                            Some(VirtualKeyCode::Escape) => {
                                 render_tx.send(User(Quit)).expect("unable to send Render::Quit");
                                 *should_stop = true;
                             }
-                            Some(Key::LControl) | Some(Key::RControl) => {
+                            Some(VirtualKeyCode::LControl) | Some(VirtualKeyCode::RControl) => {
                                 self.ctrl_pressed = pressed; //TODO use some kind of keys_state { ... }
                             }
-                            Some(Key::Up) => {
+                            Some(VirtualKeyCode::Up) => {
                                 render_tx.send(User(Up)).expect("unable to send Render::Up");
                             }
-                            Some(Key::Down) => {
+                            Some(VirtualKeyCode::Down) => {
                                 render_tx.send(User(Down)).expect("unable to send Render::Down");
                             }
-                            Some(Key::Left) => {
+                            Some(VirtualKeyCode::Left) => {
                                 render_tx.send(User(Left)).expect("unable to send Render::Left");
                             }
-                            Some(Key::Right) => {
+                            Some(VirtualKeyCode::Right) => {
                                 render_tx.send(User(Right)).expect("unable to send Render::Right");
                             }
                             _ => {}
@@ -727,11 +752,11 @@ impl RenderImplState {
                         render_tx.send(User(Quit)).expect("unable to send Render::Quit");
                         *should_stop = true;
                     }
-                    Resized(glutin::dpi::LogicalSize{width, height}) => {
+                    WindowEvent::Resized(glutin::dpi::PhysicalSize{width, height}) => {
                         //TODO app.resize()
                         //TODO ui.resize()
-                        self.w = width;
-                        self.h = height;
+                        self.w = width as f64;
+                        self.h = height as f64;
                         gfx_window_glutin::update_views(&self.window, &mut self.main_color, &mut self.main_depth);
                         self.imgui_renderer.update_render_target(self.main_color.clone());
                         //TODO app.update_render_target(main_color.clone())
@@ -745,7 +770,7 @@ impl RenderImplState {
                             t.data.out = self.main_color.clone();
                         }
                     }
-                    MouseWheel { delta: glutin::MouseScrollDelta::LineDelta(_, y), .. } => {
+                    MouseWheel { delta: MouseScrollDelta::LineDelta(_, y), .. } => {
                         if self.ctrl_pressed {
                             if y < 0.0 { self.threshold += 1; } else { if self.threshold > 0 { self.threshold -= 1; } }
                         } else {
@@ -753,7 +778,7 @@ impl RenderImplState {
                         }
                     }
                     MouseInput {state, button: MouseButton::Left, ..} => self.dragging = state == Pressed,
-                    CursorMoved {position: glutin::dpi::LogicalPosition{x, y}, ..} => {
+                    CursorMoved {position: glutin::dpi::PhysicalPosition{x, y}, ..} => {
                         let x = if x < 0.0 { 0.0 } else if x > self.w as f64 { self.w as f64 } else { x };
                         let y = if y < 0.0 { 0.0 } else if y > self.h as f64 { self.h as f64 } else { y };
                         let delta_x = x - self.last_mouse_x;
@@ -776,21 +801,21 @@ impl RenderImplState {
 }
 
 pub struct RenderImpl {
-    events_loop: glutin::EventsLoop,
+    event_loop: EventLoop<()>,
     state: RenderImplState,
 }
 
 impl RenderImpl {
     pub fn new () -> RenderImpl {
 
-        let events_loop = glutin::EventsLoop::new();
-        let context = glutin::ContextBuilder::new();
-        let builder = glutin::WindowBuilder::new()
+        let event_loop = EventLoop::new();
+        let window_builder = glutin::window::WindowBuilder::new()
             .with_title("gfx 2d test".to_string())
             .with_dimensions(glutin::dpi::LogicalSize::new(800.0, 600.0));
+        let context_builder = glutin::ContextBuilder::new();
 
         let (window, device, mut factory, main_color, main_depth) =
-            gfx_window_glutin::init::<Rgba8, DepthStencil>(builder, context, &events_loop).expect("gfx_window_glutin::init");
+            gfx_window_glutin::init::<Rgba8, DepthStencil>(window_builder, context_builder, &event_loop).expect("gfx_window_glutin::init");
 
 
         let size = window.get_inner_size().expect("get_inner_size failed");
@@ -814,14 +839,14 @@ impl RenderImpl {
             }
         };
 
-        let mut imgui = ImGui::init();
+        let mut imgui = Context::create();
         imgui.set_ini_filename(None);
-        let config = ImFontConfig::new().oversample_h(1).pixel_snap_h(true).size_pixels(13.0);
-        config./*rasterizer_multiply(1.75).*/add_font(&mut imgui.fonts(), include_bytes!("../DejaVuSansMono.ttf"), &FontGlyphRange::cyrillic());
+        let config = FontConfig::new().oversample_h(1).pixel_snap_h(true).size_pixels(13.0);
+        config./*rasterizer_multiply(1.75).*/add_font(&mut imgui.fonts(), include_bytes!("../DejaVuSansMono.ttf"), &FontGlyphRanges::cyrillic());
         config.merge_mode(true).add_default_font(&mut imgui.fonts());
 
         RenderImpl {
-            events_loop: events_loop,
+            event_loop: event_loop,
             state: RenderImplState {
                 tile_colors: {
                     use ron::de::from_reader;
@@ -962,7 +987,7 @@ impl RenderImpl {
         }
 
         let (width, height) = self.state.window.get_inner_size().expect("unable to get_inner_size").into();
-        let ui = self.state.imgui.frame(imgui::FrameSize::new(width, height, 1.0), delta_s);
+        let ui = self.state.imgui.frame();
         self.state.imgui_want_capture_mouse = ui.want_capture_mouse();
         self.state.imgui_want_capture_keyboard = ui.want_capture_keyboard();
 
