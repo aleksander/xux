@@ -1,4 +1,4 @@
-use render::Event;
+use state::Event;
 use driver;
 use std::sync::mpsc::Sender;
 

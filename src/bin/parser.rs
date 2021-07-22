@@ -7,8 +7,8 @@ extern crate pnet;
 use std::env;
 use std::io::Cursor;
 
-use nom::IResult;
-use nom::{le_u8, le_u16};
+use nom::{IResult, Err, Needed};
+use nom::number::complete::{le_u8, le_u16};
 
 use xux::proto;
 use xux::proto::message::*;
@@ -128,7 +128,7 @@ fn main() {
 }
 
 fn parse_ssess(i: &[u8]) -> IResult<&[u8], proto::sSess> {
-    nom::le_u8(i).map(|(i,o)|(i,proto::sSess::new(o)))
+    le_u8(i).map(|(i,o)|(i,proto::sSess::new(o)))
 }
 
 named!(strz<&[u8], &str>,
@@ -143,15 +143,13 @@ named!(strz<&[u8], &str>,
 );
 
 #[cfg(test)]
-use nom::IResult::{Done, Incomplete};
-#[cfg(test)]
 use nom::Needed::Size;
 
 #[test]
 fn test_strz() {
-    assert_eq!( strz(b"aaa\0bbb"), Done(&b"bbb"[..], "aaa") );
-    assert_eq!( strz(b"\0aaa\0bbb"), Done(&b"aaa\0bbb"[..], "") );
-    assert_eq!( strz(b"aaabbb"), Incomplete(Size(7)) );
+    assert_eq!( strz(b"aaa\0bbb"), Ok((&b"bbb"[..], "aaa")) );
+    assert_eq!( strz(b"\0aaa\0bbb"), Ok((&b"aaa\0bbb"[..], "")) );
+    assert_eq!( strz(b"aaabbb"), Err(Err::Incomplete(Needed::new(7))) );
 }
 
 
@@ -172,7 +170,7 @@ named!(parse_csess<&[u8], proto::cSess>,
 fn test_parse_csess() {
     assert_eq!(
         parse_csess(b"\x00\x00Salem\0\x00\x00User\0\x20\x00cookiecookiecookiecookiecookie12"),
-        Done(&b""[..], proto::cSess::new("User".into(), "cookiecookiecookiecookiecookie12".into()))
+        Ok((&b""[..], proto::cSess::new("User".into(), "cookiecookiecookiecookiecookie12".into())))
     );
 }
 
