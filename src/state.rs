@@ -8,7 +8,7 @@ use crate::Result;
 use failure::{err_msg, format_err};
 use flate2::read::ZlibDecoder;
 use std::sync::mpsc;
-use log::{debug, info};
+use log::{debug, info, warn};
 use crate::driver::Driver;
 use serde::{Serialize, Deserialize};
 
@@ -647,7 +647,11 @@ impl State {
                 if self.map.complete(pktid) {
                     // TODO let map = self.mapdata.assemble(pktid).to_map();
                     let map_buf = self.map.assemble(pktid);
-                    let map = Surface::from_buf(&mut Cursor::new(map_buf))?;
+                    let map = Surface::from_buf(&mut Cursor::new(map_buf));
+                    if let Err(ref e) = map {
+                        warn!("UNABLE TO SURFACE::FROM_BUF!");
+                    }
+                    let map = map?;
                     assert!(map.tiles.len() == 10_000);
                     assert!(map.z.len() == 10_000);
                     info!("MAP COMPLETE ({},{}) name='{}' id={}", map.x, map.y, map.name, map.id);
@@ -809,9 +813,9 @@ impl State {
                     info!("      fragment {}", match fragment {
                         &Fragment::Head(_,_) => "head",
                         &Fragment::Middle(_) => "middle",
-                        &Fragment::Tail(_) => "head",
+                        &Fragment::Tail(_) => "tail",
                     });
-                    panic!("must handle fragments!");
+                    warn!("must handle fragments!");
                 }
                 Rel::ADDWDG(ref wdg) => {
                     info!("      {:?}", wdg);

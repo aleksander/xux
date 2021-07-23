@@ -10,6 +10,10 @@ use std::io::Cursor;
 use std::io::Read;
 use std::io::Write;
 use log::{debug, info};
+use std::sync::mpsc::channel;
+use crate::driver;
+use crate::render;
+use crate::ai;
 
 pub fn authorize(host: &str, port: u16, user: String, pass: String) -> Result<(String, Vec<u8>)> {
     #[allow(non_camel_case_types)]
@@ -86,11 +90,6 @@ pub fn authorize(host: &str, port: u16, user: String, pass: String) -> Result<(S
 }
 
 pub fn run(host: &str, port: u16, login: &str, cookie: &[u8]) -> Result<()> {
-    use std::sync::mpsc::channel;
-    use crate::driver;
-    use crate::render;
-    use crate::ai;
-
     let driver = driver::new(host, port)?;
 
     let (hl_que_tx_render, hl_que_rx) = channel();

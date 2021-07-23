@@ -81,7 +81,4 @@ impl Driver {
     pub fn next_event(&mut self) -> Result<Event> {
         Ok(self.rx.recv()?)
     }
-
-    // pub fn reply (&self, _: String) {
-    // }
 }

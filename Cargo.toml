@@ -1,5 +1,4 @@
 [package]
-
 name = "xux"
 version = "0.1.0"
 authors = ["Aleksander Usov <aleksander.usov@gmail.com>"]
@@ -32,6 +31,15 @@ serde_derive = { version = "*", optional = true }
 ron = { version = "*", optional = true }
 image = { version = "*", optional = true }
 failure = "*"
+macroquad = "0.3.7"
+egui = "0.13.1"
+egui-macroquad = "0.5.0"
+egui_winit_platform = { version = "0.9.0", optional = true }
+egui_wgpu_backend = { version = "0.10.0", optional = true }
+futures-lite = { version = "1.12.0", optional = true }
+winit = { version = "0.25.0", optional = true }
+epi = { version = "0.13.0", optional = true }
+wgpu = { version = "0.9.0", optional = true }
 
 [features]
 driver_std = []
@@ -40,12 +48,14 @@ ai_decl = []
 ai_lua = []
 hafen = []
 salem = []
-core = [] #TODO include core crates used in all configs
-render_none = [ "image", "serde", "serde_derive" ]
+core = [ "image", "serde", "serde_derive" ]
+render_none = []
 render_text = [ "ncurses" ]
 render_2d_piston = [ "piston_window", "piston2d-gfx_graphics" ]
 render_3d_glium = []
-render_2d_gfx = [ "gfx", "gfx_window_glutin", "glutin", "cgmath", "imgui", "imgui-gfx-renderer", "gfx_device_gl", "serde", "serde_derive", "bincode", "ron", "image"]
+render_2d_gfx = [ "gfx", "gfx_window_glutin", "glutin", "cgmath", "imgui", "imgui-gfx-renderer", "gfx_device_gl", "bincode", "ron"]
+render_2d_macroquad = []
+render_2d_wgpu = [ "egui_winit_platform", "egui_wgpu_backend", "futures-lite", "winit", "epi", "wgpu" ]
 dump_events = [ "bincode" ]
-default = [ "driver_std", "ai_decl", "hafen", "render_none" ]
+default = [ "core", "driver_std", "ai_decl", "hafen", "render_none" ]
 mio_lua = [ "driver_mio", "ai_lua" ]

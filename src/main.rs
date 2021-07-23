@@ -1,9 +1,3 @@
-#[macro_use]
-extern crate log;
-extern crate fern;
-extern crate xux;
-extern crate failure;
-
 use std::process;
 use xux::Result;
 use xux::client;

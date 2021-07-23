@@ -1,14 +1,10 @@
-#[macro_use]
-extern crate nom;
-extern crate pcap;
-extern crate xux;
-extern crate pnet;
-
 use std::env;
 use std::io::Cursor;
 
-use nom::{IResult};
-use nom::number::complete::{le_u8, le_u16};
+use nom::{
+    IResult, named, switch, do_parse, map_res, map, take, take_while, call,
+    number::complete::{le_u8, le_u16},
+};
 
 use xux::proto;
 use xux::proto::message::*;

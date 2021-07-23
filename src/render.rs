@@ -40,6 +40,8 @@ mod dumper {
 #[cfg_attr(feature = "render_2d_piston", path = "render_2d_piston.rs")]
 #[cfg_attr(feature = "render_3d_glium", path = "render_3d_glium.rs")]
 #[cfg_attr(feature = "render_2d_gfx", path = "render_2d_gfx.rs")]
+#[cfg_attr(feature = "render_2d_macroquad", path = "render_2d_macroquad.rs")]
+#[cfg_attr(feature = "render_2d_wgpu", path = "render_2d_wgpu.rs")]
 mod render_impl;
 
 pub fn new (ll_que_tx: Sender<driver::Event>, hl_que_rx: Receiver<state::Event>) {
