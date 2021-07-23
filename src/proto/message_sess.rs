@@ -79,8 +79,8 @@ impl cSess {
     pub fn new (login: String, cookie: Vec<u8>) -> cSess {
         cSess {
             unknown: 2,
-            proto: "Hafen".into(),
-            version: 17,
+            proto: "Hafen/default".into(),
+            version: 24,
             login: login,
             cookie: cookie,
         }
