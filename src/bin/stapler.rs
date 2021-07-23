@@ -71,7 +71,7 @@ fn main () {
                 if let Some(path) = tiles.get(&(x, y)) {
                     use image::GenericImage;
                     let tile = image::open(path).expect("image.open");
-                    buf.copy_from(&tile, ((x - minx) as u32) * TILE_SIZE, ((y - miny) as u32) * TILE_SIZE);
+                    buf.copy_from(&tile, ((x - minx) as u32) * TILE_SIZE, ((y - miny) as u32) * TILE_SIZE).expect("unable to copy_from");
                 }
             }
         }

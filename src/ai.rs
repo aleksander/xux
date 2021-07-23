@@ -1,9 +1,10 @@
 use std::sync::mpsc::{Sender, Receiver};
-use state;
-use driver;
-use widgets::Widgets;
-use proto::list::List;
-use Result;
+use log::info;
+use crate::state;
+use crate::driver;
+use crate::widgets::Widgets;
+use crate::proto::list::List;
+use crate::Result;
 
 #[derive(Debug)]
 enum AiState {
@@ -91,8 +92,8 @@ impl Ai {
                     if chars > 0 {
                         if let Some(&(_,ref args)) = charlist.messages.iter().filter(|&&(ref name,_)|name == "add").next() {
                             if let Some(&List::Str(ref name)) = args.get(0) {
-                                use driver::Event::User;
-                                use driver::UserInput::Message;
+                                use crate::driver::Event::User;
+                                use crate::driver::UserInput::Message;
                                 que.send(User(Message(charlist.id, "play".into(), [List::Str(name.clone())].to_vec())))?;
                                 self.change_state_to(WaitForWorld);
                             }
@@ -203,7 +204,7 @@ pub fn new (ll_que_tx: Sender<driver::Event>, hl_que_rx: Receiver<state::Event>)
             loop {
                 match hl_que_rx.try_recv() {
                     Ok(event) => {
-                        use state::Event::*;
+                        use crate::state::Event::*;
                         match event {
                             Tiles(_) => {}
                             Grid(_) => {}
@@ -212,7 +213,7 @@ pub fn new (ll_que_tx: Sender<driver::Event>, hl_que_rx: Receiver<state::Event>)
                             Res(_, _) => {}
                             Hero(_) => {}
                             Wdg(action) => {
-                                use state::Wdg::*;
+                                use crate::state::Wdg::*;
                                 match action {
                                     New(id, name, parent_id) => {
                                         state.widgets.add_widget(id, name, parent_id).expect("unable to add_widget");

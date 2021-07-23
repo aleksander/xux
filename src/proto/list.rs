@@ -1,7 +1,8 @@
-use proto::serialization::*;
-use proto::Color;
-use Result;
-use failure::err_msg;
+use crate::proto::serialization::*;
+use crate::proto::Color;
+use crate::Result;
+use failure::{err_msg, format_err};
+use serde::{Serialize, Deserialize};
 
 #[derive(Serialize,Deserialize,Debug,Clone)]
 pub enum List {

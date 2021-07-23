@@ -1,10 +1,10 @@
 use std;
 use std::thread;
 use std::sync::mpsc::{channel, Sender, Receiver};
-use Result;
+use crate::Result;
 use failure::err_msg;
-use proto::list::List;
-use state::WdgID;
+use crate::proto::list::List;
+use crate::state::WdgID;
 
 #[derive(Debug)]
 pub enum Event {

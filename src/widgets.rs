@@ -1,8 +1,9 @@
 use failure::err_msg;
 use std::slice::Iter;
 use std::iter::Iterator;
-use Result;
-use proto::list::List;
+use log::debug;
+use crate::Result;
+use crate::proto::list::List;
 
 pub struct Widget {
     pub id: u16,

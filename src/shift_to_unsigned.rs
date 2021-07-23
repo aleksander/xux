@@ -64,110 +64,90 @@ mod tests {
 
     impl MinMax for i8 {
         fn min() -> i8 {
-            use std::i8;
             i8::MIN
         }
         fn max() -> i8 {
-            use std::i8;
             i8::MAX
         }
     }
 
     impl MinMax for u8 {
         fn min() -> u8 {
-            use std::u8;
             u8::MIN
         }
         fn max() -> u8 {
-            use std::u8;
             u8::MAX
         }
     }
 
     impl MinMax for i16 {
         fn min() -> i16 {
-            use std::i16;
             i16::MIN
         }
         fn max() -> i16 {
-            use std::i16;
             i16::MAX
         }
     }
 
     impl MinMax for u16 {
         fn min() -> u16 {
-            use std::u16;
             u16::MIN
         }
         fn max() -> u16 {
-            use std::u16;
             u16::MAX
         }
     }
 
     impl MinMax for i32 {
         fn min() -> i32 {
-            use std::i32;
             i32::MIN
         }
         fn max() -> i32 {
-            use std::i32;
             i32::MAX
         }
     }
 
     impl MinMax for u32 {
         fn min() -> u32 {
-            use std::u32;
             u32::MIN
         }
         fn max() -> u32 {
-            use std::u32;
             u32::MAX
         }
     }
 
     impl MinMax for i64 {
         fn min() -> i64 {
-            use std::i64;
             i64::MIN
         }
         fn max() -> i64 {
-            use std::i64;
             i64::MAX
         }
     }
 
     impl MinMax for u64 {
         fn min() -> u64 {
-            use std::u64;
             u64::MIN
         }
         fn max() -> u64 {
-            use std::u64;
             u64::MAX
         }
     }
 
     impl MinMax for isize {
         fn min() -> isize {
-            use std::isize;
             isize::MIN
         }
         fn max() -> isize {
-            use std::isize;
             isize::MAX
         }
     }
 
     impl MinMax for usize {
         fn min() -> usize {
-            use std::usize;
             usize::MIN
         }
         fn max() -> usize {
-            use std::usize;
             usize::MAX
         }
     }

@@ -1,5 +1,5 @@
-use proto::serialization::*;
-use Result;
+use crate::proto::serialization::*;
+use crate::Result;
 
 #[derive(Debug)]
 pub struct MapReq {

@@ -1,17 +1,17 @@
-use state::State;
-use Result;
-use failure::err_msg;
+use crate::state::State;
+use crate::Result;
+use failure::{err_msg, format_err};
+use std::net;
+use std::str;
+use openssl::hash::{hash, MessageDigest};
+use openssl::ssl;
+use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
+use std::io::Cursor;
+use std::io::Read;
+use std::io::Write;
+use log::{debug, info};
 
 pub fn authorize(host: &str, port: u16, user: String, pass: String) -> Result<(String, Vec<u8>)> {
-    use std::net;
-    use std::str;
-    use openssl::hash::{hash, MessageDigest};
-    use openssl::ssl;
-    use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-    use std::io::Cursor;
-    use std::io::Read;
-    use std::io::Write;
-
     #[allow(non_camel_case_types)]
     type be = BigEndian;
 
@@ -87,9 +87,9 @@ pub fn authorize(host: &str, port: u16, user: String, pass: String) -> Result<(S
 
 pub fn run(host: &str, port: u16, login: &str, cookie: &[u8]) -> Result<()> {
     use std::sync::mpsc::channel;
-    use driver;
-    use render;
-    use ai;
+    use crate::driver;
+    use crate::render;
+    use crate::ai;
 
     let driver = driver::new(host, port)?;
 

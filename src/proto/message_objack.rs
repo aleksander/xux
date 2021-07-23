@@ -1,6 +1,6 @@
-use proto::message_objdata::ObjData;
-use proto::serialization::*;
-use Result;
+use crate::proto::message_objdata::ObjData;
+use crate::proto::serialization::*;
+use crate::Result;
 
 #[derive(Debug)]
 pub struct ObjAck {

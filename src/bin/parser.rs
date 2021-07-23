@@ -7,7 +7,7 @@ extern crate pnet;
 use std::env;
 use std::io::Cursor;
 
-use nom::{IResult, Err, Needed};
+use nom::{IResult};
 use nom::number::complete::{le_u8, le_u16};
 
 use xux::proto;
@@ -143,7 +143,11 @@ named!(strz<&[u8], &str>,
 );
 
 #[cfg(test)]
-use nom::Needed::Size;
+
+#[cfg(test)]
+use nom::Err;
+#[cfg(test)]
+use nom::Needed;
 
 #[test]
 fn test_strz() {

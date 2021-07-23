@@ -1,3 +1,18 @@
+use serde::{Serialize, Deserialize};
+
+pub use crate::proto::list::*;
+pub use crate::proto::serialization::*;
+pub use crate::proto::message::*;
+pub use crate::proto::message_sess::*;
+pub use crate::proto::message_rel::*;
+pub use crate::proto::message_ack::*;
+pub use crate::proto::message_beat::*;
+pub use crate::proto::message_mapreq::*;
+pub use crate::proto::message_mapdata::*;
+pub use crate::proto::message_objdata::*;
+pub use crate::proto::message_objack::*;
+pub use crate::proto::message_close::*;
+
 pub mod list;
 pub mod serialization;
 pub mod message;
@@ -10,19 +25,6 @@ pub mod message_mapdata;
 pub mod message_objdata;
 pub mod message_objack;
 pub mod message_close;
-
-pub use proto::list::*;
-pub use proto::serialization::*;
-pub use proto::message::*;
-pub use proto::message_sess::*;
-pub use proto::message_rel::*;
-pub use proto::message_ack::*;
-pub use proto::message_beat::*;
-pub use proto::message_mapreq::*;
-pub use proto::message_mapdata::*;
-pub use proto::message_objdata::*;
-pub use proto::message_objack::*;
-pub use proto::message_close::*;
 
 #[cfg(feature = "salem")]
 #[derive(Serialize,Deserialize,Debug,Clone,Copy)]

@@ -1,9 +1,9 @@
 use std::sync::mpsc::{Sender, Receiver};
 use std::thread;
-use driver;
-use state::Wdg;
 use std::sync::mpsc::TryRecvError::*;
-use state;
+use log::info;
+use crate::driver;
+use crate::state;
 
 #[cfg(feature = "dump_events")]
 mod dumper {

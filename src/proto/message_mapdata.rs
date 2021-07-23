@@ -1,6 +1,6 @@
 use std::fmt;
-use proto::serialization::*;
-use Result;
+use crate::proto::serialization::*;
+use crate::Result;
 
 pub struct MapData {
     pub pktid: i32,

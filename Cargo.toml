@@ -4,6 +4,7 @@ name = "xux"
 version = "0.1.0"
 authors = ["Aleksander Usov <aleksander.usov@gmail.com>"]
 description = "Salem and Hafen alternative client"
+edition = "2018"
 
 [dependencies]
 byteorder = "*"
@@ -26,7 +27,7 @@ cgmath = { version = "*", optional = true }
 imgui = { version = "*", optional = true }
 imgui-gfx-renderer = { version = "*", optional = true }
 gfx_device_gl = { version = "*", optional = true }
-serde = { version = "*", optional = true }
+serde = { version = "*", optional = true, features = ["derive"] }
 serde_derive = { version = "*", optional = true }
 ron = { version = "*", optional = true }
 image = { version = "*", optional = true }

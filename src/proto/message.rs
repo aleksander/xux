@@ -1,14 +1,15 @@
-use proto::message_sess::*;
-use proto::message_rel::*;
-use proto::message_ack::*;
-use proto::message_beat::*;
-use proto::message_mapreq::*;
-use proto::message_mapdata::*;
-use proto::message_objdata::*;
-use proto::message_objack::*;
-use proto::message_close::*;
-use proto::serialization::*;
-use Result;
+use crate::proto::message_sess::*;
+use crate::proto::message_rel::*;
+use crate::proto::message_ack::*;
+use crate::proto::message_beat::*;
+use crate::proto::message_mapreq::*;
+use crate::proto::message_mapdata::*;
+use crate::proto::message_objdata::*;
+use crate::proto::message_objack::*;
+use crate::proto::message_close::*;
+use crate::proto::serialization::*;
+use crate::Result;
+use failure::format_err;
 
 #[derive(Debug)]
 pub enum ClientMessage {

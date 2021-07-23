@@ -1,9 +1,10 @@
 use std::fmt;
-use proto::list::List;
-use proto::serialization::*;
+use crate::proto::list::List;
+use crate::proto::serialization::*;
 use std::io::Write;
-use Result;
-use failure::err_msg;
+use crate::Result;
+use failure::{err_msg, format_err};
+use serde::{Serialize, Deserialize};
 
 pub struct Rels {
     pub seq: u16,

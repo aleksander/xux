@@ -1,15 +1,14 @@
-use Result;
+use crate::Result;
+use image::ImageBuffer;
+use image::Rgb;
+use image::DynamicImage::ImageRgb8;
+use crate::shift_to_unsigned::ShiftToUnsigned;
+use std::path::PathBuf;
+use std::fs::create_dir_all;
+use failure::format_err;
 
 // TODO grid_to_png(..., Mapper::first())
 pub fn grid_to_png(login: &str, name: &str, timestamp: &str, x: i32, y: i32, t: &[u8], z: &[i16]) -> Result<()> {
-
-    use image::ImageBuffer;
-    use image::Rgb;
-    use image::DynamicImage::ImageRgb8;
-    use shift_to_unsigned::ShiftToUnsigned;
-    use std::path::PathBuf;
-    use std::fs::create_dir_all;
-
     let mut path = PathBuf::new();
     path.push(login);
     path.push(name);

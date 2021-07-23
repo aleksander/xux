@@ -3,12 +3,14 @@ use std::vec::Vec;
 use std::io::Cursor;
 use std::io::Read;
 use std::u16;
-use proto::*;
-use Result;
-use failure::err_msg;
+use crate::proto::*;
+use crate::Result;
+use failure::{err_msg, format_err};
 use flate2::read::ZlibDecoder;
 use std::sync::mpsc;
-use driver::Driver;
+use log::{debug, info};
+use crate::driver::Driver;
+use serde::{Serialize, Deserialize};
 
 struct ObjProp {
     frame: i32,
@@ -470,8 +472,6 @@ pub struct State {
 
 impl State {
     pub fn new(events_tx1: mpsc::Sender<Event>, events_tx2: mpsc::Sender<Event>, driver: Driver) -> State {
-        use chrono;
-
         let mut widgets = HashMap::new();
         widgets.insert(0,
             Widget {
@@ -656,7 +656,7 @@ impl State {
                     match self.map.grids.get(&(map.x, map.y)) {
                         Some(_) => info!("MAP DUPLICATE"),
                         None => {
-                            use util::grid_to_png;
+                            use crate::util::grid_to_png;
                             self.map.grids.insert((map.x, map.y));
                             let name = if let Some(ref name) = self.hero.name { name } else { "none" };
                             grid_to_png(&self.login, name, &self.timestamp, map.x, map.y, &map.tiles, &map.z)?;
@@ -1028,7 +1028,6 @@ impl State {
     }
 
     pub fn go(&mut self, xy: ObjXY) -> Result<()> {
-        use failure::err_msg;
         info!("GO ({}, {})", xy.0, xy.1);
         let id = self.widget_id("mapview", None).ok_or(err_msg("try to go with no mapview widget"))?;
         let name = "click".to_string();
@@ -1058,8 +1057,7 @@ impl State {
     }
 
     fn dispatch_single_event(&mut self) -> Result<()> {
-        use driver;
-        use proto::ObjXY;
+        use crate::driver;
 
         let event = self.driver.next_event()?;
         match event {
@@ -1092,7 +1090,7 @@ impl State {
             }
             #[cfg(feature = "hafen")]
             driver::Event::User(u) => {
-                use driver::UserInput::*;
+                use crate::driver::UserInput::*;
                 //info!("event: {:?}", u);
                 match u {
                     Up    => if let Some(ObjXY(x,y)) = self.hero_xy() {

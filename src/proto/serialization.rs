@@ -1,7 +1,7 @@
 use std::io::BufRead;
 use byteorder::LittleEndian as LE;
 use byteorder::{ReadBytesExt, WriteBytesExt};
-use Result;
+use crate::Result;
 use failure::err_msg;
 
 pub trait ReadBytesSac : ReadBytesExt + BufRead {
