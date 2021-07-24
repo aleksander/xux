@@ -2,6 +2,7 @@ use std::process;
 use xux::Result;
 use xux::client;
 use failure::err_msg;
+use log::{trace, debug, info, warn, error};
 
 // TODO fn run_std_lua() { run::<Std,Lua>() }
 // TODO fn run<D,A>(ip: IpAddr, username: String, password: String) where D:Driver,A:Ai {

@@ -1,6 +1,7 @@
 #![warn(unused_import_braces)]
 #![warn(unused_qualifications)]
 #![warn(unused_extern_crates)]
+#![feature(buf_read_has_data_left)]
 
 pub mod proto;
 mod state;

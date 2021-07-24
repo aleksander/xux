@@ -1,6 +1,6 @@
 use std::collections::{HashMap, LinkedList, BTreeSet};
 use std::vec::Vec;
-use std::io::Cursor;
+use std::io::{Cursor, BufRead};
 use std::io::Read;
 use std::u16;
 use crate::proto::*;
@@ -227,8 +227,9 @@ pub struct MapPieces {
 pub struct Surface {
     pub x: i32,
     pub y: i32,
-    pub name: String,
     pub id: i64,
+    #[cfg(feature = "salem")]
+    pub name: String,
     #[cfg(feature = "hafen")]
     pub tileres: Vec<Tile>,
     pub tiles: Vec<u8>,
@@ -237,10 +238,9 @@ pub struct Surface {
 }
 
 impl Surface {
-    fn from_buf <R:ReadBytesSac> (r: &mut R) -> Result<Surface> {
-        //let mut r = Cursor::new(buf);
-        let (x,y) = r.coord()?;
-        let mmname = r.strz()?;
+    #[cfg(feature = "hafen")]
+    fn v0_from_buf <R:ReadBytesSac> (r: &mut R, x: i32, y: i32) -> Result<Surface> {
+        debug!("Surface version 0");
         let mut pfl = vec![0; 256];
         loop {
             let pidx = r.u8()?;
@@ -253,9 +253,145 @@ impl Surface {
         let mut unzipped = Vec::new();
         let _unzipped_len = decoder.read_to_end(&mut unzipped)?;
         // TODO check unzipped_len
-        let mut r = Cursor::new(unzipped);
+        let mut r = unzipped.as_slice();
 
-        Self::surface(&mut r, &pfl, x, y, mmname)
+        Self::surface(&mut r, &pfl, x, y)
+    }
+
+    #[cfg(feature = "hafen")]
+    fn v1_from_buf <R:ReadBytesSac> (r: &mut R, x: i32, y: i32) -> Result<Surface> {
+        debug!("Surface version 1");
+        loop {
+            if ! r.has_data_left().unwrap() { break; }
+            let lnm = r.strz()?;
+            let len = {
+                let len = r.u8()?;
+                if len & 0x80 != 0 {
+                    r.i32()? as isize
+                } else {
+                    len as isize
+                }
+            };
+            debug!("\"{}\" part of {} bytes", lnm, len);
+            let r = r.buf(len as usize)?;
+            let mut r = r.as_slice();
+            match lnm.as_str() {
+                "z" => {
+                    let mut decoder = ZlibDecoder::new(&mut r);
+                    let mut unzipped = Vec::new();
+                    let unzipped_len = decoder.read_to_end(&mut unzipped)?;
+                    // TODO check unzipped_len
+                    debug!("\"z\" part uncompressed to {} bytes", unzipped_len);
+                    let mut r = unzipped.as_slice();
+                    let _surface = Self::v1_from_buf(&mut r, 666, 666)?;
+                }
+                "m" => {
+                    let id = r.i64()?;
+                }
+                "t" => {
+                    let mut tileres = Vec::new();
+                    loop {
+                        let tileid = r.u8()?;
+                        if tileid == 255 { break; }
+                        let resname = r.strz()?;
+                        let resver = r.u16()?;
+                        tileres.push(Tile { id: tileid, name: resname, ver: resver });
+                    }
+                    let tiles = (0..100*100).map(|_|r.u8()).collect::<Result<Vec<u8>>>()?;
+                }
+                "h" => {
+                    let fmt = r.u8()?;
+                    debug!("heights format {}", fmt);
+                    let mut z = Vec::with_capacity(100*100);
+                    match fmt {
+                        0 => {
+                            let zvalue = r.f32()? * 11.0;
+                            for _ in 0..100*100 {
+                                z.push(zvalue);
+                            }
+                        }
+                        1 => {
+                            let min = r.f32()? * 11.0;
+                            let q = r.f32()? * 11.0;
+                            for _ in 0..100*100 {
+                                z.push(min + r.u8()? as f32 * q);
+                            }
+                        }
+                        2 => {
+                            let min = r.f32()? * 11.0;
+                            let q = r.f32()? * 11.0;
+                            for _ in 0..100*100 {
+                                z.push(min + r.u16()? as f32 * q);
+                            }
+                        }
+                        3 => {
+                            for _ in 0..100*100 {
+                                z.push(r.f32()?);
+                            }
+                        }
+                        _ => return Err(format_err!("unknown heights format: {}", fmt))
+                    }
+                }
+                "pi" => {
+                    loop {
+                        if ! r.has_data_left().unwrap() { break; }
+                        let pidx = r.u8()?;
+                        if pidx == 255 { break; }
+                        let resid = r.u16()?;
+                        //TODO use this somehow
+                    }
+                }
+                "p" => {
+                    loop {
+                        if ! r.has_data_left().unwrap() { break; }
+                        let pidx = r.u8()?;
+                        if pidx == 255 { break; }
+                        let fl = r.u8()?;
+                        let c1 = (r.u8()?, r.u8()?); //TODO use Coord<u8> or Vec2D<u8>
+                        let c2 = (r.u8()?, r.u8()?); //TODO use Coord<u8> or Vec2D<u8>
+                        if fl & 1 != 0 {
+                            let mask_len = (c2.0 - c1.0) as usize * (c2.1 - c1.1) as usize;
+                            let mask_len_in_bytes = mask_len / 8 + if mask_len % 8 != 0 { 1 } else { 0 };
+                            let mut mask = Vec::with_capacity(mask_len_in_bytes);
+                            for _ in 0..mask_len_in_bytes {
+                                mask.push(r.u8()?);
+                            }
+                            //TODO fill the mask
+                        } else {
+                            //TODO fill the mask
+                        }
+                        //TODO use the mask somehow
+                    }
+                }
+                _ => return Err(format_err!("Unknown lnm: {}", lnm))
+            }
+        }
+        //FIXME return an empty Surface for now
+        Ok(Surface {
+            x: x,
+            y: y,
+            id: 0,
+            tileres: Vec::new(),
+            tiles: vec!(0; 100*100),
+            z: vec!(0; 100*100),
+            ol: vec!(0; 100*100),
+        })
+    }
+
+    #[cfg(feature = "hafen")]
+    fn from_buf <R:ReadBytesSac> (r: &mut R) -> Result<Surface> {
+        let (x, y) = r.coord()?;
+        let ver = r.u8()?;
+        match ver {
+            0 => Self::v0_from_buf(r, x, y),
+            1 => Self::v1_from_buf(r, x, y),
+            _ => return Err(format_err!("Unknown map data version: {}", ver)),
+        }
+    }
+
+    #[cfg(feature = "salem")]
+    fn from_buf <R:ReadBytesSac> (r: &mut R) -> Result<Surface> {
+        unimplemented!()
     }
 
     #[cfg(feature = "salem")]
@@ -298,7 +434,7 @@ impl Surface {
     }
 
     #[cfg(feature = "hafen")]
-    fn surface <R:ReadBytesSac> (r: &mut R, pfl: &[u8], x: i32, y: i32, name: String) -> Result<Surface> {
+    fn surface <R:ReadBytesSac> (r: &mut R, pfl: &[u8], x: i32, y: i32) -> Result<Surface> {
         let id = r.i64()?;
 
         let mut tileres = Vec::new();
@@ -343,7 +479,6 @@ impl Surface {
         Ok(Surface {
             x: x,
             y: y,
-            name: name,
             id: id,
             tileres: tileres,
             tiles: tiles,
@@ -654,7 +789,7 @@ impl State {
                     let map = map?;
                     assert!(map.tiles.len() == 10_000);
                     assert!(map.z.len() == 10_000);
-                    info!("MAP COMPLETE ({},{}) name='{}' id={}", map.x, map.y, map.name, map.id);
+                    info!("MAP COMPLETE ({},{}) id={}", map.x, map.y, map.id);
                     self.remove_from_que(MessageHint::MAPREQ(map.x, map.y))?;
                     // FIXME TODO update grid only if new grid id != cached grid id
                     match self.map.grids.get(&(map.x, map.y)) {

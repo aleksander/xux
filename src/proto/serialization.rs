@@ -1,4 +1,4 @@
-use std::io::BufRead;
+use std::io::{BufRead, Read};
 use byteorder::LittleEndian as LE;
 use byteorder::{ReadBytesExt, WriteBytesExt};
 use crate::Result;
@@ -49,6 +49,11 @@ pub trait ReadBytesSac : ReadBytesExt + BufRead {
     //FIXME return struct Color
     fn color(&mut self) -> Result<(u8,u8,u8,u8)> {
         Ok((self.u8()?, self.u8()?, self.u8()?, self.u8()?))
+    }
+    fn buf(&mut self, len: usize) -> Result<Vec<u8>> {
+        let mut buf = vec!(0; len);
+        self.read_exact(buf.as_mut_slice())?;
+        Ok(buf)
     }
 }
 
