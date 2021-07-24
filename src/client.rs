@@ -101,3 +101,21 @@ pub fn run(host: &str, port: u16, login: &str, cookie: &[u8]) -> Result<()> {
     let mut state = State::new(hl_que_tx_render, hl_que_tx_ai, driver);
     state.run(login, cookie)
 }
+
+use std::sync::mpsc::{Sender, Receiver};
+use crate::state;
+
+pub fn run_threaded (host: &str, port: u16, login: String, cookie: Vec<u8>) -> Result<(Sender<driver::Event>, Receiver<state::Event>)> {
+    let driver = driver::new(host, port)?;
+
+    let (hl_que_tx_render, hl_que_rx_render) = channel();
+    let render_ques = (driver.sender(), hl_que_rx_render);
+
+    let (hl_que_tx_ai, hl_que_rx_ai) = channel();
+    ai::new(driver.sender(), hl_que_rx_ai);
+
+    let mut state = State::new(hl_que_tx_render, hl_que_tx_ai, driver);
+    state.run_threaded(login, cookie);
+
+    Ok(render_ques)
+}

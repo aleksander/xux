@@ -71,6 +71,6 @@ pub fn new (ll_que_tx: Sender<driver::Event>, hl_que_rx: Receiver<state::Event>)
             }
         }
         render_impl.end();
-        info!("render: done");
+        info!("render thread: done");
     }).expect("unable to create render thread");
 }

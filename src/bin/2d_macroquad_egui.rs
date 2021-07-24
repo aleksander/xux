@@ -48,9 +48,11 @@ async fn main () -> Result<()> {
     let auth_port = 1871;
     let game_port = 1870;
 
+    //TODO take all authorisation information from the GUI (maybe cache values in .config after the user first time enters them)
+
     let (login, cookie) = client::authorize(host, auth_port, username, password)?;
 
-    client::run(host, game_port, &login, &cookie)?;
+    let (ll_event_tx, hl_event_rx) = client::run_threaded(host, game_port, login, cookie)?;
 
     loop {
         clear_background(BLACK);

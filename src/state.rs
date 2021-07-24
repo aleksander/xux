@@ -1,13 +1,16 @@
-use std::collections::{HashMap, LinkedList, BTreeSet};
-use std::vec::Vec;
-use std::io::{Cursor, BufRead};
-use std::io::Read;
-use std::u16;
+use std::{
+    collections::{HashMap, LinkedList, BTreeSet},
+    vec::Vec,
+    io::{Cursor, BufRead},
+    io::Read,
+    u16,
+    thread,
+    sync::mpsc,
+};
 use crate::proto::*;
 use crate::Result;
 use failure::{err_msg, format_err};
 use flate2::read::ZlibDecoder;
-use std::sync::mpsc;
 use log::{debug, info, warn};
 use crate::driver::Driver;
 use serde::{Serialize, Deserialize};
@@ -1278,5 +1281,12 @@ impl State {
         loop {
             self.dispatch_single_event()?;
         }
+    }
+
+    pub fn run_threaded (mut self, login: String, cookie: Vec<u8>) {
+        thread::Builder::new().name("state".to_string()).spawn(move || {
+            self.run(login.as_str(), cookie.as_slice()).expect("state::run_threaded");
+            info!("state thread: done");
+        }).expect("unable to create state thread");
     }
 }
