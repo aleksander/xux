@@ -103,6 +103,7 @@ struct RenderContext {
     objects: BTreeMap<ObjID, (ObjXY, ResID)>,
     hero_x: f32,
     hero_y: f32,
+    hero_isnt_set_yet: bool,
     hf_x: f32,
     hf_y:f32,
     //}
@@ -140,6 +141,7 @@ impl RenderContext {
             objects: BTreeMap::new(),
             hero_x: 0.0,
             hero_y: 0.0,
+            hero_isnt_set_yet: true,
             hf_x: 0.0,
             hf_y: 0.0,
             tile_colors: {
@@ -225,7 +227,10 @@ impl RenderContext {
                 //TODO ??? add to objects
                 self.hero_x = x as f32;
                 self.hero_y = y as f32;
-                self.target = vec2(self.hero_x, self.hero_y);
+                if self.hero_isnt_set_yet {
+                    self.target = vec2(self.hero_x, self.hero_y);
+                    self.hero_isnt_set_yet = false;
+                }
             }
             state::Event::Res(id, name) => {
                 debug!("RENDER: res {} {}", id, name);
@@ -270,7 +275,9 @@ impl RenderContext {
         self.camera.zoom *= self.zoom;
 
         if is_mouse_button_pressed(MouseButton::Left) {
-            self.marks.push(self.camera.screen_to_world(mouse))
+            let mark = self.camera.screen_to_world(mouse);
+            self.marks.push(mark);
+            self.event_tx.send(driver::Event::User(driver::UserInput::Go(mark[0], mark[1]))).expect("unable to send User::Quit");
         }
 
         loop {

@@ -1298,6 +1298,7 @@ impl State {
                     Right => if let Some(ObjXY(x,y)) = self.hero_xy() {
                         self.go(ObjXY(x+100,y))?;
                     },
+                    Go(x, y) => self.go(ObjXY(x, y))?,
                     Quit  => self.close()?,
                 }
             }
@@ -1318,6 +1319,7 @@ impl State {
                     Right => if let Some(ObjXY(x,y)) = self.hero_xy() {
                         self.go(ObjXY(x+100.0,y))?;
                     },
+                    Go(x, y) => self.go(ObjXY(x.into(), y.into()))?,
                     Quit  => {
                         self.close()?;
                     }

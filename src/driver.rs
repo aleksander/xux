@@ -19,6 +19,7 @@ pub enum UserInput {
     Down,
     Left,
     Right,
+    Go(f32, f32),
     Quit,
     Message(WdgID,String,Vec<List>),
 }
