@@ -120,7 +120,8 @@ struct RenderContext {
     // }
     should_exit: bool,
     target: Vec2,
-    zoom: Vec2,
+    zoom: f32,
+    mouse: Vec2,
 }
 
 impl RenderContext {
@@ -150,7 +151,8 @@ impl RenderContext {
             show_owning: true,
             should_exit: false,
             target: vec2(0.0, 0.0),
-            zoom: vec2(1.0, 1.0),
+            zoom: 1.0,
+            mouse: vec2(0.0, 0.0),
         }
     }
 
@@ -248,28 +250,15 @@ impl RenderContext {
     }
 
     fn update (&mut self) {
-        // HANDLE EVENTS
-        //TODO app.handle(...)
-        #[cfg(OLD)]{
-            let mut should_stop = false;
-            let state = &mut self.state;
-            self.events_loop.poll_events(|event| {
-                state.update(render_tx, &event, &mut should_stop);
-            });
-            if should_stop {
-                return false;
-            }
-        }
-
-        // UPDATE
-        #[cfg(OLD)]
-        let delta_s = self.state.delta.tick();
-
-        //TODO app.update(delta_s);
-        //TODO camera.rotate(angle);
-        //self.angle += delta_s * 0.1;
-
         self.zoom *= 1.0 + mouse_wheel().1 / 10.0;
+
+        let mouse = Vec2::from(mouse_position());
+        let delta = self.mouse - mouse;
+        self.mouse = mouse;
+
+        if is_mouse_button_down(MouseButton::Right) {
+            self.target += delta / self.zoom;
+        }
 
         loop {
             match self.event_rx.try_recv() {
@@ -300,48 +289,17 @@ impl RenderContext {
     }
 
     fn draw (&self) {
-        // RENDER
-        //TODO app.render(...)
-        //FIXME recalc matrices only if something changed (w,h,angle,zoom)
-        //TODO let transform = transform(w,h,camera)
-        #[cfg(OLD)]let translate = Matrix3::new(
-            1.0,           0.0,           0.0,
-            0.0,           1.0,           0.0,
-            self.state.shift[0], self.state.shift[1], 1.0,
-        );
-        #[cfg(OLD)]let rotate = Matrix3::from_angle_z(Rad(self.state.angle));
-        #[cfg(OLD)]let scale = Matrix3::from_diagonal(Vector3::new(self.state.zoom / self.state.w as f32, self.state.zoom / self.state.h as f32, 1.0));
-        #[cfg(OLD)]let transform = (scale * rotate * translate).into();
-
-        #[cfg(OLD)]if self.state.show_tiles {
-            for t in self.state.grids_tiles.iter_mut() {
-                t.data.transform = transform;
-            }
-        }
-        #[cfg(OLD)]if self.state.show_owning {
-            for t in self.state.grids_owning.iter_mut() {
-                t.data.transform = transform;
-            }
-        }
-        #[cfg(OLD)]if self.state.show_heights {
-            for t in self.state.grids_heights.iter_mut() {
-                t.data.transform = transform;
-                t.data.threshold = self.state.threshold as i32;
-            }
-        }
-
         let mut camera = Camera2D::from_display_rect(Rect::new(0.0, 0.0, screen_width(), screen_height()));
         camera.target += self.target;
         camera.target -= vec2(screen_width() / 2.0, screen_height() / 2.0);
         camera.zoom *= self.zoom;
         set_camera(&camera);
-
         self.draw_tiles();
         self.draw_owning();
         self.draw_heights();
         self.draw_objects();
         self.draw_hero();
-        set_default_camera();
+        //set_default_camera();
         self.draw_gui();
     }
 
@@ -398,19 +356,6 @@ impl RenderContext {
     }
 
     fn draw_gui (&self) {
-        /*
-        let (width, height) = self.state.window.get_inner_size().expect("unable to get_inner_size").into();
-        let ui = self.state.imgui.frame();
-        self.state.imgui_want_capture_mouse = ui.want_capture_mouse();
-        self.state.imgui_want_capture_keyboard = ui.want_capture_keyboard();
-
-        let fps = (1.0 / delta_s) as usize;
-        //FIXME pass &mut RenderImplState instead
-        if !run_ui(&ui, fps, self.state.threshold, &mut self.state.show_tiles, &mut self.state.show_heights, &mut self.state.show_owning, &mut self.state.v1, &self.state.objects, &self.state.resources) {
-            return false;
-        }
-        self.state.imgui_renderer.render(ui, &mut self.state.factory, &mut self.state.encoder).expect("IMGUI Rendering failed");
-         */
         egui_macroquad::draw();
     }
 }
