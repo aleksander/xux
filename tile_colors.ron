@@ -6,7 +6,7 @@
     "gfx/tiles/field"             : ( 169, 223, 191, 255 ),
     "gfx/tiles/flowermeadow"      : ( 88,  214, 141, 255 ),
     "gfx/tiles/grass"             : ( 40,  180, 99,  255 ),
-    "gfx/tiles/highground"        : ( 10, 10, 10, 255),
+    "gfx/tiles/highground"        : ( 0x93, 0x66, 0x39, 0xff),
     "gfx/tiles/mountain"          : ( 90,  82,  58,  255 ),
     "gfx/tiles/paving/ballbrick"  : ( 10, 10, 10, 255),
     "gfx/tiles/paving/basalt"     : ( 10, 10, 10, 255),
@@ -24,4 +24,6 @@
     "gfx/tiles/sombrebramble"     : ( 231, 76,  60,  255 ),
     "gfx/tiles/wald"              : ( 25,  111, 61,  255 ),
     "gfx/tiles/water"             : ( 33,  97,  140, 255 ),
+    "gfx/tiles/lichenwold"        : ( 0x65, 0x6d, 0x4a, 0xff ),
+    "gfx/tiles/scrubveld"         : ( 0xf9, 0x84, 0x4a, 0xff ),
 }

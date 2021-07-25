@@ -4,8 +4,12 @@ use std::{
     collections::BTreeMap,
     sync::mpsc::{
         Sender,
+        Receiver,
         TryRecvError::*,
-    }
+    },
+    io::BufReader,
+    fs::File,
+    default::Default,
 };
 use macroquad::prelude::*;
 use xux::{
@@ -18,8 +22,6 @@ use xux::{
 use failure::{err_msg, format_err};
 use log::trace;
 use ron::de::from_reader;
-use std::io::BufReader;
-use std::fs::File;
 
 #[macroquad::main("2d-macroquad-egui")]
 async fn main () -> Result<()> {
@@ -71,46 +73,20 @@ async fn main () -> Result<()> {
 
     let (ll_event_tx, hl_event_rx) = client::run_threaded(host, game_port, login, cookie)?;
 
-    //#[cfg(feature = "dump_events")]
-    //let mut dumper = dumper::Dumper::init().expect("unable to create dumper");
+    let mut render_ctx = RenderContext::new(ll_event_tx, hl_event_rx);
 
-    let mut render_ctx = RenderContext::new(ll_event_tx);
-
-    'outer: loop {
+    loop {
         clear_background(BLACK);
 
         // Process keys, mouse etc.
         render_ctx.update();
 
-        loop {
-            match hl_event_rx.try_recv() {
-                Ok(event) => {
-                    //#[cfg(feature = "dump_events")]
-                    //dumper.dump(&event).expect("unable to dump event");
-                    render_ctx.event(event);
-                }
-                Err(Empty) => { break; }
-                Err(Disconnected) => {
-                    info!("render: disconnected from que");
-                    break 'outer;
-                }
-            }
-        }
+        //TODO correct network session termination on window closing
+        //TODO signal handling
 
-        egui_macroquad::ui(|egui_ctx| {
-            egui::Window::new("Окно №1")
-                .show(egui_ctx, |ui| {
-                    ui.label("Test");
-                });
-        });
+        if render_ctx.should_exit { break; }
 
-        // Draw things before egui
         render_ctx.draw();
-
-        egui_macroquad::draw();
-
-        // Draw things after egui
-
         next_frame().await
     }
     info!("render thread: done");
@@ -119,6 +95,7 @@ async fn main () -> Result<()> {
 
 struct RenderContext {
     event_tx: Sender<driver::Event>,
+    event_rx: Receiver<state::Event>,
     #[warn(TODO)]
     //struct State {
     widgets: BTreeMap<u16, (String, u16)>, //TODO add Vec<messages> to every widget
@@ -133,7 +110,6 @@ struct RenderContext {
     //struct RenderState {
     tile_colors: BTreeMap<String,[u8;4]>,
     palette: [[u8; 4]; 256],
-    shift: [f32; 2], //TODO replace by camera.{x,y}
     grids_tiles: Vec<(i32, i32, macroquad::texture::Texture2D)>,
     // }
     #[warn(TODO)]
@@ -142,12 +118,19 @@ struct RenderContext {
     show_heights: bool,
     show_owning: bool,
     // }
+    should_exit: bool,
+    camera: Camera2D,
 }
 
 impl RenderContext {
-    fn new (event_tx: Sender<driver::Event>) -> RenderContext {
+    fn new (event_tx: Sender<driver::Event>, event_rx: Receiver<state::Event>) -> RenderContext {
+
+        //#[cfg(feature = "dump_events")]
+        //let mut dumper = dumper::Dumper::init().expect("unable to create dumper");
+
         RenderContext {
             event_tx: event_tx,
+            event_rx: event_rx,
             widgets: BTreeMap::new(),
             resources: BTreeMap::new(),
             objects: BTreeMap::new(),
@@ -160,11 +143,16 @@ impl RenderContext {
                 from_reader(BufReader::new(f)).expect("unable to deserialize")
             },
             palette: [[0,0,250,255]; 256],
-            shift: [0.0, 0.0],
             grids_tiles: Vec::new(),
             show_tiles: true,
             show_heights: true,
             show_owning: true,
+            should_exit: false,
+            camera: {
+                let mut camera = Camera2D::from_display_rect(Rect::new(0.0, 0.0, screen_width(), screen_height()));
+                camera.target -= vec2(screen_width() / 2.0, screen_height() / 2.0);
+                camera
+            },
         }
     }
 
@@ -181,6 +169,8 @@ impl RenderContext {
                         debug!("RENDER: tile {} {}", tile.id, tile.name);
                         if let Some(color) = self.tile_colors.get(&tile.name) {
                             self.palette[tile.id as usize] = *color;
+                        } else {
+                            warn!("RENDER: tile '{}' not found in 'tile_colors.ron'", tile.name);
                         }
                     }
                 }
@@ -198,6 +188,7 @@ impl RenderContext {
                         texture_data.push(pixel[3]);
                     }
                     let texture = macroquad::texture::Texture2D::from_rgba8(100, 100, texture_data.as_slice());
+                    texture.set_filter(FilterMode::Nearest);
                     // ObjTex::plane_from_tiles(1100.0, x, y, tiles.as_ref(), &self.palette).bake(self.main_color.clone(), &mut self.factory);
                     self.grids_tiles.push((surface.x(), surface.y(), texture));
                 }
@@ -219,7 +210,7 @@ impl RenderContext {
                 //TODO ??? separate static objects like trees and
                 //dynamic objects like rabbits to two
                 //different caches
-                self.objects.insert(id, (xy,resid));
+                self.objects.insert(id, (xy, resid));
             }
             state::Event::ObjRemove(ref id) => {
                 debug!("RENDER: obj remove {}", id);
@@ -230,9 +221,7 @@ impl RenderContext {
                 //TODO ??? add to objects
                 self.hero_x = x as f32;
                 self.hero_y = y as f32;
-                //FIXME self.shift += Vector(-hero_x,-hero_y);
-                self.shift[0] = -self.hero_x;
-                self.shift[1] = -self.hero_y;
+                self.camera.target += vec2(self.hero_x, self.hero_y);
             }
             state::Event::Res(id, name) => {
                 debug!("RENDER: res {} {}", id, name);
@@ -281,6 +270,35 @@ impl RenderContext {
         //TODO app.update(delta_s);
         //TODO camera.rotate(angle);
         //self.angle += delta_s * 0.1;
+
+        self.camera.zoom *= 1.0 + mouse_wheel().1 / 10.0;
+
+        loop {
+            match self.event_rx.try_recv() {
+                Ok(event) => {
+                    //#[cfg(feature = "dump_events")]
+                    //dumper.dump(&event).expect("unable to dump event");
+                    self.event(event);
+                }
+                Err(Empty) => { break; }
+                Err(Disconnected) => {
+                    info!("render: disconnected from que");
+                    self.should_exit = true;
+                    break;
+                }
+            }
+        }
+
+        egui_macroquad::ui(|egui_ctx| {
+            egui::Window::new("Окно №1").show(egui_ctx, |ui| {
+                ui.vertical(|ui| {
+                    if ui.button("exit").clicked() {
+                        self.event_tx.send(driver::Event::User(driver::UserInput::Quit)).expect("unable to send User::Quit");
+                    }
+                    ui.label("Test");
+                });
+            });
+        });
     }
 
     fn draw (&self) {
@@ -314,12 +332,13 @@ impl RenderContext {
             }
         }
 
-        #[cfg(OLD)]self.state.encoder.clear(&self.state.main_color, BLACK);
-
+        set_camera(&self.camera);
         self.draw_tiles();
         self.draw_owning();
         self.draw_heights();
         self.draw_objects();
+        self.draw_hero();
+        set_default_camera();
         self.draw_gui();
     }
 
@@ -327,10 +346,14 @@ impl RenderContext {
         //TODO self.config.show_tiles: RenderConfig
         if self.show_tiles {
             for &(x, y, texture) in self.grids_tiles.iter() {
-                let x = x as f32 * 100.0 + self.shift[0] / 10.0 + screen_width() / 2.0;
-                let y = y as f32 * 100.0 + self.shift[1] / 10.0 + screen_height() / 2.0;
-                debug!("RENDER: draw texture at ({}, {})", x, y);
-                macroquad::texture::draw_texture(texture, x, y, WHITE);
+                let x = x as f32 * 1100.0;
+                let y = y as f32 * 1100.0;
+                //debug!("RENDER: draw texture at ({}, {})", x, y);
+                let params = DrawTextureParams {
+                    dest_size: Some(Vec2::new(1100.0, 1100.0)),
+                    .. Default::default()
+                };
+                macroquad::texture::draw_texture_ex(texture, x, y, WHITE, params);
             }
         }
     }
@@ -352,12 +375,23 @@ impl RenderContext {
     }
 
     fn draw_objects (&self) {
-        /*
-        let mut obj = ObjCol::from_objects(&self.state.objects, self.state.hero_x, self.state.hero_y, self.state.hf_x, self.state.hf_y).bake(self.state.main_color.clone(), &mut self.state.factory, self.state.threshold);
-        obj.data.transform = transform;
-        obj.data.threshold = 0;
-        self.state.encoder.draw(&obj.slice, &self.state.pso_col, &obj.data);
-         */
+        for (ObjXY(x,y),_) in self.objects.values() {
+            const OBJ_SIZE: f64 = 4.0;
+            let x = (x + - OBJ_SIZE / 2.0) as f32;
+            let y = (y + - OBJ_SIZE / 2.0) as f32;
+            let w = OBJ_SIZE as f32;
+            let h = OBJ_SIZE as f32;
+            macroquad::shapes::draw_rectangle(x, y, w, h, WHITE);
+        }
+    }
+
+    fn draw_hero (&self) {
+        const OBJ_SIZE: f32 = 4.0;
+        let x = self.hero_x - OBJ_SIZE / 2.0;
+        let y = self.hero_y - OBJ_SIZE / 2.0;
+        let w = OBJ_SIZE;
+        let h = OBJ_SIZE;
+        macroquad::shapes::draw_rectangle(x, y, w, h, BLUE);
     }
 
     fn draw_gui (&self) {
@@ -374,5 +408,6 @@ impl RenderContext {
         }
         self.state.imgui_renderer.render(ui, &mut self.state.factory, &mut self.state.encoder).expect("IMGUI Rendering failed");
          */
+        egui_macroquad::draw();
     }
 }
