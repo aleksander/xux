@@ -414,7 +414,7 @@ impl Music {
 }
 
 pub struct Tiles {
-    pub tiles: Vec<Tile>,
+    pub tiles: Vec<TileRes>,
 }
 
 impl Tiles {
@@ -429,7 +429,7 @@ impl Tiles {
             };
             let name = r.strz()?;
             let ver = r.u16()?;
-            tiles.push(Tile {
+            tiles.push(TileRes {
                 id: id,
                 name: name,
                 ver: ver,
@@ -450,7 +450,7 @@ impl fmt::Debug for Tiles {
 }
 
 #[derive(Serialize,Deserialize,Clone,Debug)]
-pub struct Tile {
+pub struct TileRes {
     pub id: u8,
     pub name: String,
     pub ver: u16,

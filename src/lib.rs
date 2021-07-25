@@ -4,12 +4,9 @@
 #![feature(buf_read_has_data_left)]
 
 pub mod proto;
-mod state;
-
-mod driver;
-
+pub mod state;
+pub mod driver;
 mod ai;
-
 pub mod client;
 mod render;
 mod util;

@@ -224,25 +224,62 @@ pub struct MapPieces {
     pieces: HashMap<u16, Vec<u8>>,
 }
 
+#[derive(Clone)]
+pub enum Surface {
+    V0(SurfaceV0),
+    V1(SurfaceV1),
+}
+
 //TODO rename to Grid
 //TODO rename to Map
 #[derive(Clone)]
-pub struct Surface {
+pub struct SurfaceV0 {
     pub x: i32,
     pub y: i32,
     pub id: i64,
     #[cfg(feature = "salem")]
     pub name: String,
     #[cfg(feature = "hafen")]
-    pub tileres: Vec<Tile>,
+    pub tileres: Vec<TileRes>,
     pub tiles: Vec<u8>,
     pub z: Vec<i16>,
     pub ol: Vec<u8>,
 }
 
+#[derive(Clone)]
+pub struct SurfaceV1 {
+    x: i32,
+    y: i32,
+    id: Option<i64>,
+    tiles: Option<SurfaceV1Tiles>,
+    heights: Option<Vec<f32>>
+}
+
+#[derive(Clone)]
+struct SurfaceV1Tiles {
+    res: Vec<TileRes>,
+    data: Vec<u8>,
+}
+
 impl Surface {
     #[cfg(feature = "hafen")]
-    fn v0_from_buf <R:ReadBytesSac> (r: &mut R, x: i32, y: i32) -> Result<Surface> {
+    fn from_buf <R:ReadBytesSac> (r: &mut R) -> Result<Surface> {
+        let (x, y) = r.coord()?;
+        let ver = r.u8()?;
+        match ver {
+            0 => Ok(Surface::V0(Self::v0_from_buf(r, x, y)?)),
+            1 => Ok(Surface::V1(Self::v1_from_buf(r, x, y)?)),
+            _ => Err(format_err!("Unknown map data version: {}", ver)),
+        }
+    }
+
+    #[cfg(feature = "salem")]
+    fn from_buf <R:ReadBytesSac> (r: &mut R) -> Result<Surface> {
+        unimplemented!()
+    }
+
+    #[cfg(feature = "hafen")]
+    fn v0_from_buf <R:ReadBytesSac> (r: &mut R, x: i32, y: i32) -> Result<SurfaceV0> {
         debug!("Surface version 0");
         let mut pfl = vec![0; 256];
         loop {
@@ -258,12 +295,13 @@ impl Surface {
         // TODO check unzipped_len
         let mut r = unzipped.as_slice();
 
-        Self::surface(&mut r, &pfl, x, y)
+        Self::surface_v0(&mut r, &pfl, x, y)
     }
 
     #[cfg(feature = "hafen")]
-    fn v1_from_buf <R:ReadBytesSac> (r: &mut R, x: i32, y: i32) -> Result<Surface> {
+    fn v1_from_buf <R:ReadBytesSac> (r: &mut R, x: i32, y: i32) -> Result<SurfaceV1> {
         debug!("Surface version 1");
+        let mut surface = SurfaceV1 {x: x, y: y, id: None, tiles: None, heights: None};
         loop {
             if ! r.has_data_left().unwrap() { break; }
             let lnm = r.strz()?;
@@ -286,21 +324,25 @@ impl Surface {
                     // TODO check unzipped_len
                     debug!("\"z\" part uncompressed to {} bytes", unzipped_len);
                     let mut r = unzipped.as_slice();
-                    let _surface = Self::v1_from_buf(&mut r, 666, 666)?;
+                    let nested_surface = Self::v1_from_buf(&mut r, 666, 666)?;
+                    if nested_surface.id.is_some() { surface.id = nested_surface.id; }
+                    if nested_surface.tiles.is_some() { surface.tiles = nested_surface.tiles; }
+                    if nested_surface.heights.is_some() { surface.heights = nested_surface.heights; }
                 }
                 "m" => {
-                    let id = r.i64()?;
+                    surface.id = Some(r.i64()?);
                 }
                 "t" => {
-                    let mut tileres = Vec::new();
+                    let mut tile_res = Vec::new();
                     loop {
                         let tileid = r.u8()?;
                         if tileid == 255 { break; }
                         let resname = r.strz()?;
                         let resver = r.u16()?;
-                        tileres.push(Tile { id: tileid, name: resname, ver: resver });
+                        tile_res.push(TileRes { id: tileid, name: resname, ver: resver });
                     }
-                    let tiles = (0..100*100).map(|_|r.u8()).collect::<Result<Vec<u8>>>()?;
+                    let tile_data = (0..100*100).map(|_|r.u8()).collect::<Result<Vec<u8>>>()?;
+                    surface.tiles = Some(SurfaceV1Tiles{res: tile_res, data: tile_data})
                 }
                 "h" => {
                     let fmt = r.u8()?;
@@ -334,6 +376,7 @@ impl Surface {
                         }
                         _ => return Err(format_err!("unknown heights format: {}", fmt))
                     }
+                    surface.heights = Some(z);
                 }
                 "pi" => {
                     loop {
@@ -341,6 +384,7 @@ impl Surface {
                         let pidx = r.u8()?;
                         if pidx == 255 { break; }
                         let resid = r.u16()?;
+                        debug!("surface: pidx {} ResID({})", pidx, resid);
                         //TODO use this somehow
                     }
                 }
@@ -369,32 +413,7 @@ impl Surface {
                 _ => return Err(format_err!("Unknown lnm: {}", lnm))
             }
         }
-        //FIXME return an empty Surface for now
-        Ok(Surface {
-            x: x,
-            y: y,
-            id: 0,
-            tileres: Vec::new(),
-            tiles: vec!(0; 100*100),
-            z: vec!(0; 100*100),
-            ol: vec!(0; 100*100),
-        })
-    }
-
-    #[cfg(feature = "hafen")]
-    fn from_buf <R:ReadBytesSac> (r: &mut R) -> Result<Surface> {
-        let (x, y) = r.coord()?;
-        let ver = r.u8()?;
-        match ver {
-            0 => Self::v0_from_buf(r, x, y),
-            1 => Self::v1_from_buf(r, x, y),
-            _ => return Err(format_err!("Unknown map data version: {}", ver)),
-        }
-    }
-
-    #[cfg(feature = "salem")]
-    fn from_buf <R:ReadBytesSac> (r: &mut R) -> Result<Surface> {
-        unimplemented!()
+        Ok(surface)
     }
 
     #[cfg(feature = "salem")]
@@ -437,7 +456,7 @@ impl Surface {
     }
 
     #[cfg(feature = "hafen")]
-    fn surface <R:ReadBytesSac> (r: &mut R, pfl: &[u8], x: i32, y: i32) -> Result<Surface> {
+    fn surface_v0 <R:ReadBytesSac> (r: &mut R, pfl: &[u8], x: i32, y: i32) -> Result<SurfaceV0> {
         let id = r.i64()?;
 
         let mut tileres = Vec::new();
@@ -448,7 +467,7 @@ impl Surface {
             }
             let resname = r.strz()?;
             let resver = r.u16()?;
-            tileres.push(Tile{id:tileid,name:resname,ver:resver});
+            tileres.push(TileRes{id: tileid, name: resname, ver: resver});
         }
         for tile in tileres.iter() {
             debug!("tileres {:5} {} {}", tile.id, tile.name, tile.ver);
@@ -479,7 +498,7 @@ impl Surface {
             }
         }
 
-        Ok(Surface {
+        Ok(SurfaceV0 {
             x: x,
             y: y,
             id: id,
@@ -488,6 +507,65 @@ impl Surface {
             z: z,
             ol: ol
         })
+    }
+
+    pub fn x (&self) -> i32 {
+        match self {
+            Surface::V0(v0) => v0.x,
+            Surface::V1(v1) => v1.x,
+        }
+    }
+
+    pub fn y (&self) -> i32 {
+        match self {
+            Surface::V0(v0) => v0.y,
+            Surface::V1(v1) => v1.y,
+        }
+    }
+
+    pub fn id (&self) -> i64 {
+        match self {
+            Surface::V0(v0) => v0.id,
+            Surface::V1(v1) => if let Some(id) = v1.id { id } else { 0 },
+        }
+    }
+
+    pub fn tileres (&self) -> Option<&[TileRes]> {
+        match self {
+            Surface::V0(s) => Some(s.tileres.as_slice()),
+            Surface::V1(s) => match s.tiles {
+                Some(ref tiles) => Some(tiles.res.as_slice()),
+                None => None,
+            }
+        }
+    }
+
+    pub fn tiles (&self) -> Option<&[u8]> {
+        match self {
+            Surface::V0(s) => Some(s.tiles.as_slice()),
+            Surface::V1(s) => match s.tiles {
+                Some(ref tiles) => Some(tiles.data.as_slice()),
+                None => None,
+            }
+        }
+    }
+
+    pub fn version (&self) -> usize {
+        match self {
+            Surface::V0(_) => 0,
+            Surface::V1(_) => 1,
+        }
+    }
+
+    pub fn save_to_png (&self, login: &str, name: &str, timestamp: &str) -> Result<()> {
+        use crate::util::grid_to_png;
+        match self {
+            Surface::V0(s) => grid_to_png(login, name, timestamp, s.x, s.y, &s.tiles /* TODO &s.z */),
+            Surface::V1(s) => match (s.tiles.as_ref(), s.heights.as_ref()) {
+                (Some(tiles), Some(ref heights)) => grid_to_png(login, name, timestamp, s.x, s.y, &tiles.data /* TODO &heights */),
+                _ => Ok(())
+            }
+        }
     }
 }
 
@@ -565,8 +643,8 @@ pub enum Wdg {
 
 #[derive(Clone)]
 pub enum Event {
-    Tiles(Vec<Tile>),
-    Grid(Surface),
+    //Tiles(Vec<TileRes>),
+    Surface(Surface),
     Obj(ObjID, ObjXY, ResID),
     ObjRemove(ObjID),
     Res(ResID, String),
@@ -727,9 +805,8 @@ impl State {
         }
     }
 
-    pub fn dispatch_message(&mut self, buf: &[u8]) -> Result<()> {
-        let mut r = Cursor::new(buf);
-        let (msg, remains) = match ServerMessage::from_buf(&mut r) {
+    pub fn dispatch_message(&mut self, mut buf: &[u8]) -> Result<()> {
+        let (msg, remains) = match ServerMessage::from_buf(&mut buf) {
             Ok((msg, remains)) => (msg, remains),
             Err(err) => {
                 info!("message parse error: {:?}", err);
@@ -785,29 +862,22 @@ impl State {
                 if self.map.complete(pktid) {
                     // TODO let map = self.mapdata.assemble(pktid).to_map();
                     let map_buf = self.map.assemble(pktid);
-                    let map = Surface::from_buf(&mut Cursor::new(map_buf));
-                    if let Err(ref e) = map {
-                        warn!("UNABLE TO SURFACE::FROM_BUF!");
-                    }
-                    let map = map?;
-                    assert!(map.tiles.len() == 10_000);
-                    assert!(map.z.len() == 10_000);
-                    info!("MAP COMPLETE ({},{}) id={}", map.x, map.y, map.id);
-                    self.remove_from_que(MessageHint::MAPREQ(map.x, map.y))?;
+                    let map = Surface::from_buf(&mut map_buf.as_slice())?;
+                    info!("MAP COMPLETE ({},{}) id={}", map.x(), map.y(), map.id());
+                    self.remove_from_que(MessageHint::MAPREQ(map.x(), map.y()))?;
                     // FIXME TODO update grid only if new grid id != cached grid id
-                    match self.map.grids.get(&(map.x, map.y)) {
+                    match self.map.grids.get(&(map.x(), map.y())) {
                         Some(_) => info!("MAP DUPLICATE"),
                         None => {
-                            use crate::util::grid_to_png;
-                            self.map.grids.insert((map.x, map.y));
+                            self.map.grids.insert((map.x(), map.y()));
                             let name = if let Some(ref name) = self.hero.name { name } else { "none" };
-                            grid_to_png(&self.login, name, &self.timestamp, map.x, map.y, &map.tiles, &map.z)?;
+                            map.save_to_png(&self.login, name, &self.timestamp)?;
                             #[cfg(feature = "salem")]
-                            self.sender.send_event(Event::Grid((map.x, map.y)))?;
+                            self.sender.send_event(Event::Grid((map.x(), map.y())))?;
+                            //#[cfg(feature = "hafen")]
+                            //self.sender.send_event(Event::Tiles(map.tileres.clone()))?;
                             #[cfg(feature = "hafen")]
-                            self.sender.send_event(Event::Tiles(map.tileres.clone()))?;
-                            #[cfg(feature = "hafen")]
-                            self.sender.send_event(Event::Grid(map))?;
+                            self.sender.send_event(Event::Surface(map))?;
                         }
                     }
                 }
@@ -943,7 +1013,8 @@ impl State {
                 Rel::CATTR(_) => {}
                 Rel::MUSIC(_) => {}
                 Rel::TILES(ref tiles) => {
-                    self.sender.send_event(Event::Tiles(tiles.tiles.clone()))?;
+                    //self.sender.send_event(Event::Tiles(tiles.tiles.clone()))?;
+                    warn!("TILES RECEIVED! we expect tileres will be in MAPDATA message")
                 }
                 Rel::BUFF(_) => {}
                 Rel::SESSKEY(_) => {}

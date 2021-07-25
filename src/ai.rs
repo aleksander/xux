@@ -1,10 +1,19 @@
-use std::sync::mpsc::{Sender, Receiver};
+use std::{
+    sync::mpsc::{
+        Sender,
+        Receiver,
+        TryRecvError::*
+    },
+    thread,
+};
 use log::info;
-use crate::state;
-use crate::driver;
-use crate::widgets::Widgets;
-use crate::proto::list::List;
-use crate::Result;
+use crate::{
+    state,
+    driver,
+    widgets::Widgets,
+    proto::list::List,
+    Result,
+};
 
 #[derive(Debug)]
 enum AiState {
@@ -194,9 +203,6 @@ impl State {
 }
 
 pub fn new (ll_que_tx: Sender<driver::Event>, hl_que_rx: Receiver<state::Event>) {
-    use std::thread;
-    use std::sync::mpsc::TryRecvError::*;
-
     thread::Builder::new().name("ai".to_string()).spawn(move || {
         let mut ai = Ai::new();
         let mut state = State::new();
@@ -206,8 +212,8 @@ pub fn new (ll_que_tx: Sender<driver::Event>, hl_que_rx: Receiver<state::Event>)
                     Ok(event) => {
                         use crate::state::Event::*;
                         match event {
-                            Tiles(_) => {}
-                            Grid(_) => {}
+                            //Tiles(_) => {}
+                            Surface(_) => {}
                             Obj(_, _, _) => {}
                             ObjRemove(_) => {}
                             Res(_, _) => {}
