@@ -119,7 +119,8 @@ struct RenderContext {
     show_owning: bool,
     // }
     should_exit: bool,
-    camera: Camera2D,
+    target: Vec2,
+    zoom: Vec2,
 }
 
 impl RenderContext {
@@ -148,11 +149,8 @@ impl RenderContext {
             show_heights: true,
             show_owning: true,
             should_exit: false,
-            camera: {
-                let mut camera = Camera2D::from_display_rect(Rect::new(0.0, 0.0, screen_width(), screen_height()));
-                camera.target -= vec2(screen_width() / 2.0, screen_height() / 2.0);
-                camera
-            },
+            target: vec2(0.0, 0.0),
+            zoom: vec2(1.0, 1.0),
         }
     }
 
@@ -221,7 +219,7 @@ impl RenderContext {
                 //TODO ??? add to objects
                 self.hero_x = x as f32;
                 self.hero_y = y as f32;
-                self.camera.target += vec2(self.hero_x, self.hero_y);
+                self.target = vec2(self.hero_x, self.hero_y);
             }
             state::Event::Res(id, name) => {
                 debug!("RENDER: res {} {}", id, name);
@@ -271,7 +269,7 @@ impl RenderContext {
         //TODO camera.rotate(angle);
         //self.angle += delta_s * 0.1;
 
-        self.camera.zoom *= 1.0 + mouse_wheel().1 / 10.0;
+        self.zoom *= 1.0 + mouse_wheel().1 / 10.0;
 
         loop {
             match self.event_rx.try_recv() {
@@ -332,7 +330,12 @@ impl RenderContext {
             }
         }
 
-        set_camera(&self.camera);
+        let mut camera = Camera2D::from_display_rect(Rect::new(0.0, 0.0, screen_width(), screen_height()));
+        camera.target += self.target;
+        camera.target -= vec2(screen_width() / 2.0, screen_height() / 2.0);
+        camera.zoom *= self.zoom;
+        set_camera(&camera);
+
         self.draw_tiles();
         self.draw_owning();
         self.draw_heights();
