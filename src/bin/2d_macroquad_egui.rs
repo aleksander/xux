@@ -122,6 +122,8 @@ struct RenderContext {
     target: Vec2,
     zoom: f32,
     mouse: Vec2,
+    camera: Camera2D,
+    marks: Vec<Vec2>,
 }
 
 impl RenderContext {
@@ -153,6 +155,8 @@ impl RenderContext {
             target: vec2(0.0, 0.0),
             zoom: 1.0,
             mouse: vec2(0.0, 0.0),
+            camera: Camera2D::default(),
+            marks: Vec::new(),
         }
     }
 
@@ -260,6 +264,15 @@ impl RenderContext {
             self.target += delta / self.zoom;
         }
 
+        self.camera = Camera2D::from_display_rect(Rect::new(0.0, 0.0, screen_width(), screen_height()));
+        self.camera.target += self.target;
+        self.camera.target -= vec2(screen_width() / 2.0, screen_height() / 2.0);
+        self.camera.zoom *= self.zoom;
+
+        if is_mouse_button_pressed(MouseButton::Left) {
+            self.marks.push(self.camera.screen_to_world(mouse))
+        }
+
         loop {
             match self.event_rx.try_recv() {
                 Ok(event) => {
@@ -289,15 +302,12 @@ impl RenderContext {
     }
 
     fn draw (&self) {
-        let mut camera = Camera2D::from_display_rect(Rect::new(0.0, 0.0, screen_width(), screen_height()));
-        camera.target += self.target;
-        camera.target -= vec2(screen_width() / 2.0, screen_height() / 2.0);
-        camera.zoom *= self.zoom;
-        set_camera(&camera);
+        set_camera(&self.camera);
         self.draw_tiles();
         self.draw_owning();
         self.draw_heights();
         self.draw_objects();
+        self.draw_marks();
         self.draw_hero();
         //set_default_camera();
         self.draw_gui();
@@ -343,6 +353,18 @@ impl RenderContext {
             let w = OBJ_SIZE as f32;
             let h = OBJ_SIZE as f32;
             macroquad::shapes::draw_rectangle(x, y, w, h, WHITE);
+        }
+    }
+
+    fn draw_marks (&self) {
+        use macroquad::prelude::*;
+        for mark in &self.marks {
+            const OBJ_SIZE: f32 = 2.0;
+            let x = mark[0] + - OBJ_SIZE / 2.0;
+            let y = mark[1] + - OBJ_SIZE / 2.0;
+            let w = OBJ_SIZE;
+            let h = OBJ_SIZE;
+            draw_rectangle(x, y, w, h, RED);
         }
     }
 
