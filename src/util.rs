@@ -2,7 +2,6 @@ use crate::Result;
 use image::ImageBuffer;
 use image::Rgb;
 use image::DynamicImage::ImageRgb8;
-use crate::shift_to_unsigned::ShiftToUnsigned;
 use std::path::PathBuf;
 use std::fs::create_dir_all;
 use failure::format_err;
@@ -29,9 +28,9 @@ pub fn grid_to_png(login: &str, name: &str, timestamp: &str, x: i32, y: i32, t: 
         for x in 0..100 {
             let t = t[y * 100 + x];
             //TODO get RGB from palette 'tile_colors.ron'
-            let mut r = t;
-            let mut g = 0;
-            let mut b = 0;
+            let r = t;
+            let g = 0;
+            let b = 0;
             img.put_pixel(x as u32, y as u32, Rgb([g, r, b]));
         }
     }

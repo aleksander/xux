@@ -562,7 +562,7 @@ impl Surface {
         match self {
             Surface::V0(s) => grid_to_png(login, name, timestamp, s.x, s.y, &s.tiles /* TODO &s.z */),
             Surface::V1(s) => match (s.tiles.as_ref(), s.heights.as_ref()) {
-                (Some(tiles), Some(ref heights)) => grid_to_png(login, name, timestamp, s.x, s.y, &tiles.data /* TODO &heights */),
+                (Some(ref tiles), Some(ref _heights)) => grid_to_png(login, name, timestamp, s.x, s.y, &tiles.data /* TODO &heights */),
                 _ => Ok(())
             }
         }
@@ -1012,7 +1012,7 @@ impl State {
                 Rel::SFX(_) => {}
                 Rel::CATTR(_) => {}
                 Rel::MUSIC(_) => {}
-                Rel::TILES(ref tiles) => {
+                Rel::TILES(ref _tiles) => {
                     //self.sender.send_event(Event::Tiles(tiles.tiles.clone()))?;
                     warn!("TILES RECEIVED! we expect tileres will be in MAPDATA message")
                 }

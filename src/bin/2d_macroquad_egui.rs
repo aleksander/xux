@@ -19,7 +19,7 @@ use xux::{
     state,
     proto::{ResID, ObjID, ObjXY},
 };
-use failure::{err_msg, format_err};
+use failure::err_msg;
 use log::trace;
 use ron::de::from_reader;
 
@@ -27,8 +27,8 @@ use ron::de::from_reader;
 async fn main () -> Result<()> {
     #[cfg(feature = "salem")]
     let log_file_name = "xux.salem.log";
-    #[cfg(feature = "hafen")]
-    let log_file_name = "xux.hafen.log";
+    //#[cfg(feature = "hafen")]
+    //let log_file_name = "xux.hafen.log";
 
     fern::Dispatch::new()
         .level(log::LevelFilter::Debug)
@@ -96,7 +96,7 @@ async fn main () -> Result<()> {
 struct RenderContext {
     event_tx: Sender<driver::Event>,
     event_rx: Receiver<state::Event>,
-    #[warn(TODO)]
+    //TODO
     //struct State {
     widgets: BTreeMap<u16, (String, u16)>, //TODO add Vec<messages> to every widget
     resources: BTreeMap<ResID, String>,
@@ -107,13 +107,13 @@ struct RenderContext {
     hf_x: f32,
     hf_y:f32,
     //}
-    #[warn(TODO)]
+    //TODO
     //struct RenderState {
     tile_colors: BTreeMap<String,[u8;4]>,
     palette: [[u8; 4]; 256],
     grids_tiles: Vec<(i32, i32, macroquad::texture::Texture2D)>,
     // }
-    #[warn(TODO)]
+    //TODO
     //struct RenderConfig {
     show_tiles: bool,
     show_heights: bool,
