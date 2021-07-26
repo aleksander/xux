@@ -219,7 +219,7 @@ pub struct Hero {
     //pub start_xy: Option<ObjXY>,
 }
 
-pub struct MapPieces {
+pub struct SurfacePieces {
     total_len: u16,
     pieces: HashMap<u16, Vec<u8>>,
 }
@@ -230,8 +230,6 @@ pub enum Surface {
     V1(SurfaceV1),
 }
 
-//TODO rename to Grid
-//TODO rename to Map
 #[derive(Clone)]
 pub struct SurfaceV0 {
     pub x: i32,
@@ -571,15 +569,14 @@ impl Surface {
 
 pub type PacketId = i32;
 
-//TODO rename to PartialMap
-pub struct Map {
-    pub partial: HashMap<PacketId, MapPieces>, // TODO somehow clean up from old pieces (periodically maybe)
+pub struct PartialSurface {
+    pub pieces: HashMap<PacketId, SurfacePieces>, // TODO somehow clean up from old pieces (periodically maybe)
     pub grids: BTreeSet<GridXY>,
 }
 
-impl Map {
+impl PartialSurface {
     fn append(&mut self, mapdata: MapData) {
-        let map = self.partial.entry(mapdata.pktid).or_insert(MapPieces {
+        let map = self.pieces.entry(mapdata.pktid).or_insert(SurfacePieces {
             total_len: mapdata.len,
             pieces: HashMap::new(),
         });
@@ -587,7 +584,7 @@ impl Map {
     }
 
     fn complete(&self, pktid: i32) -> bool {
-        let map = match self.partial.get(&pktid) {
+        let map = match self.pieces.get(&pktid) {
             Some(m) => m,
             None => {
                 return false;
@@ -610,7 +607,7 @@ impl Map {
     }
 
     fn assemble(&mut self, pktid: i32) -> Vec<u8> /*TODO return Result*/ {
-        let map = match self.partial.remove(&pktid) {
+        let map = match self.pieces.remove(&pktid) {
             Some(map) => map,
             None => {
                 return Vec::new();
@@ -678,7 +675,7 @@ pub struct State {
     pub enqueue_seq: usize,
     pub rel_cache: HashMap<u16, Rels>, //TODO unify with rx_rel_seq to have more consistent entity (struct Rel { ... })
     pub hero: Hero,
-    pub map: Map,
+    pub map: PartialSurface,
     sender: Sender,
     requested_grids: BTreeSet<(i32, i32)>,
     timestamp: String,
@@ -718,8 +715,8 @@ impl State {
                 inventory: HashMap::new(),
                 equipment: HashMap::new(),
             },
-            map: Map {
-                partial: HashMap::new(),
+            map: PartialSurface {
+                pieces: HashMap::new(),
                 grids: BTreeSet::new(),
             },
             sender: Sender {
