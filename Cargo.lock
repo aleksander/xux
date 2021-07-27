@@ -942,8 +942,6 @@ dependencies = [
 [[package]]
 name = "egui-macroquad"
 version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c4419da8b0e8f52063f96173c3e8cbf96794964da9cfdcd07a974c80b1fb0a2f"
 dependencies = [
  "egui",
  "egui-miniquad",
@@ -1990,8 +1988,6 @@ dependencies = [
 [[package]]
 name = "macroquad"
 version = "0.3.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "16bd13dedc8e6ce55bf78e1fa261529bea1bed5387f838e763d66b0d6a8b9485"
 dependencies = [
  "audir-sles",
  "audrey",
@@ -2008,8 +2004,6 @@ dependencies = [
 [[package]]
 name = "macroquad_macro"
 version = "0.1.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6ecb8935bc6a74b8374439c0bd8d2857ae1499fde9fbba76bb00722f7213b42d"
 
 [[package]]
 name = "malloc_buf"

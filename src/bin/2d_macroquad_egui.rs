@@ -75,6 +75,8 @@ async fn main () -> Result<()> {
 
     let mut render_ctx = RenderContext::new(ll_event_tx, hl_event_rx);
 
+    prevent_quit();
+
     loop {
         clear_background(BLACK);
 
@@ -278,6 +280,10 @@ impl RenderContext {
             let mark = self.camera.screen_to_world(mouse);
             self.marks.push(mark);
             self.event_tx.send(driver::Event::User(driver::UserInput::Go(mark[0], mark[1]))).expect("unable to send User::Quit");
+        }
+
+        if is_quit_requested() {
+            self.event_tx.send(driver::Event::User(driver::UserInput::Quit)).expect("unable to send User::Quit");
         }
 
         loop {
