@@ -1,19 +1,20 @@
-use crate::state::State;
-use crate::Result;
 use failure::{err_msg, format_err};
-use std::net;
-use std::str;
-use openssl::hash::{hash, MessageDigest};
-use openssl::ssl;
+use std::{
+    net,
+    str,
+    sync::mpsc::{Sender, Receiver, channel},
+    io::{Cursor, Read, Write},
+};
+use openssl::{hash::{hash, MessageDigest}, ssl};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use std::io::Cursor;
-use std::io::Read;
-use std::io::Write;
 use log::{debug, info};
-use std::sync::mpsc::channel;
-use crate::driver;
-use crate::render;
-use crate::ai;
+use crate::{
+    driver,
+    render,
+    ai,
+    state::{self, State},
+    Result,
+};
 
 pub fn authorize(host: &str, port: u16, user: String, pass: String) -> Result<(String, Vec<u8>)> {
     #[allow(non_camel_case_types)]
@@ -101,9 +102,6 @@ pub fn run(host: &str, port: u16, login: &str, cookie: &[u8]) -> Result<()> {
     let mut state = State::new(hl_que_tx_render, hl_que_tx_ai, driver);
     state.run(login, cookie)
 }
-
-use std::sync::mpsc::{Sender, Receiver};
-use crate::state;
 
 pub fn run_threaded (host: &str, port: u16, login: String, cookie: Vec<u8>) -> Result<(Sender<driver::Event>, Receiver<state::Event>)> {
     let driver = driver::new(host, port)?;
