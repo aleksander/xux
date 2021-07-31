@@ -1,10 +1,9 @@
-extern crate image;
+use std::collections::BTreeMap;
 
 //TODO background color for absent tiles #rrggbbaa
 //TODO save as palette PNG (not rgba) because it's much smaller
 
 fn main () {
-    use std::collections::BTreeMap;
     let input =  &std::env::args().nth(1).unwrap_or("./".into());
     let output = &std::env::args().nth(2).unwrap_or("out.png".into());
     //TODO read_dir()
