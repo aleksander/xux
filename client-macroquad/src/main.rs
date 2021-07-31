@@ -22,6 +22,7 @@ use xux::{
 use failure::err_msg;
 use log::trace;
 use ron::de::from_reader;
+use xux::state::Surface;
 
 #[macroquad::main("2d-macroquad-egui")]
 async fn main () -> Result<()> {
@@ -102,6 +103,9 @@ struct RenderContext {
     hero_isnt_set_yet: bool,
     hf_x: f32,
     hf_y:f32,
+    login: String,
+    name: String,
+    timestamp: String,
     //}
     //TODO
     //struct RenderState {
@@ -140,6 +144,9 @@ impl RenderContext {
             hero_isnt_set_yet: true,
             hf_x: 0.0,
             hf_y: 0.0,
+            login: "nobody".into(), //FIXME set to login on login
+            name: "noone".into(), //FIXME set to hero name on hero choise
+            timestamp: chrono::Local::now().format("%Y-%m-%d %H-%M-%S").to_string(),
             tile_colors: {
                 let f = File::open("tile_colors.ron").expect("unable to open tile_colors.ron");
                 from_reader(BufReader::new(f)).expect("unable to deserialize")
@@ -158,14 +165,29 @@ impl RenderContext {
         }
     }
 
+    fn tiles_to_png (&self, surface: &Surface) -> Result<()> {
+        match surface.tiles() {
+            Some(ref tiles) => {
+                //FIXME remove expect(), propagate error up
+                util::tiles_to_png(&self.login, &self.name, &self.timestamp, surface.x(), surface.y(), tiles /* TODO &s.z */).expect("Unable to save tiles");
+                Ok(())
+            },
+            None => {
+                warn!("surface is tileless");
+                Ok(())
+            },
+        }
+    }
+
     fn event (&mut self, event: state::Event) {
         /* TODO app.event(event) */
         match event {
             /*state::Event::Tiles(tiles) => {
                 debug!("RENDER: tiles");
             }*/
-            state::Event::Surface(surface) => {
+            state::Event::Surface(ref surface) => {
                 debug!("RENDER: surface v{} ({}, {})", surface.version(), surface.x(), surface.y());
+                self.tiles_to_png(surface).expect("Unable to save tiles");
                 if let Some(tileres) = surface.tileres() {
                     for tile in tileres {
                         debug!("RENDER: tile {} {}", tile.id, tile.name);

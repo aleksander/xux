@@ -5,6 +5,7 @@ edition = "2018"
 
 [dependencies]
 xux = { path = "../xux" }
+util = { path = "../util" }
 macroquad = { version = "0.3.7", path = "../../macroquad" }
 egui = "0.13.1"
 egui-macroquad = { version = "0.5.0", path = "../../egui-macroquad" }
@@ -12,3 +13,4 @@ failure = "0.1.8"
 ron = "0.6.4"
 log = "0.4.14"
 fern = "0.6.0"
+chrono = "0.4.19"

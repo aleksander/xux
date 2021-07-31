@@ -112,6 +112,7 @@ impl Widgets {
         Some(widget)
     }
 
+    /*
     fn widgets_iter (&self) -> UiWidgetIter {
         let mut stack = Vec::new();
         stack.push(self.root.children.iter());
@@ -119,6 +120,7 @@ impl Widgets {
             stack: stack
         }
     }
+    */
 }
 
 //TODO FIXME replace by something like in Message List

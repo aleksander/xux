@@ -15,7 +15,6 @@ log = "0.4.14"
 # fern = "*"
 # piston_window = { version = "*", optional = true }
 # piston2d-gfx_graphics = { version = "*", optional = true }
-chrono = "0.4.19"
 # bincode = { version = "*", optional = true }
 # gfx = { version = "*", optional = true }
 # gfx_window_glutin = { version = "*", optional = true }
@@ -26,7 +25,6 @@ chrono = "0.4.19"
 # gfx_device_gl = { version = "*", optional = true }
 serde = { version = "1.0.126", optional = true, features = ["derive"] }
 serde_derive = { version = "1.0.126", optional = true }
-image = { version = "0.23.14", optional = true }
 failure = "0.1.8"
 # egui_winit_platform = { version = "0.9.0", optional = true }
 # egui_wgpu_backend = { version = "0.10.0", optional = true }
@@ -41,7 +39,7 @@ failure = "0.1.8"
 # driver_mio = []
 # ai_decl = []
 # ai_lua = []
-core = [ "image", "serde", "serde_derive" ]
+core = [ "serde", "serde_derive" ]
 # render_none = []
 # render_text = [ "ncurses" ]
 # render_2d_piston = [ "piston_window", "piston2d-gfx_graphics" ]

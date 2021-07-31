@@ -119,6 +119,7 @@ pub struct Movement {
     pub step: i32,
 }
 
+/*
 impl Movement {
     fn new(from: ObjXY, to: ObjXY, steps: i32, step: i32) -> Movement {
         Movement {
@@ -129,6 +130,7 @@ impl Movement {
         }
     }
 }
+*/
 
 #[derive(Clone)]
 pub struct Timeout {
@@ -456,17 +458,6 @@ impl Surface {
             Surface::V1(_) => 1,
         }
     }
-
-    pub fn save_to_png (&self, login: &str, name: &str, timestamp: &str) -> Result<()> {
-        use crate::util::grid_to_png;
-        match self {
-            Surface::V0(s) => grid_to_png(login, name, timestamp, s.x, s.y, &s.tiles /* TODO &s.z */),
-            Surface::V1(s) => match (s.tiles.as_ref(), s.heights.as_ref()) {
-                (Some(ref tiles), Some(ref _heights)) => grid_to_png(login, name, timestamp, s.x, s.y, &tiles.data /* TODO &heights */),
-                _ => Ok(())
-            }
-        }
-    }
 }
 
 pub type PacketId = i32;
@@ -580,7 +571,6 @@ pub struct State {
     pub map: PartialSurface,
     sender: Sender,
     requested_grids: BTreeSet<(i32, i32)>,
-    timestamp: String,
     pub login: String,
     driver: Driver,
 }
@@ -626,7 +616,6 @@ impl State {
                 events_tx2: events_tx2,
             },
             requested_grids: BTreeSet::new(),
-            timestamp: chrono::Local::now().format("%Y-%m-%d %H-%M-%S").to_string(),
             login: "".into(),
             driver: driver,
         }
@@ -769,8 +758,9 @@ impl State {
                         Some(_) => info!("MAP DUPLICATE"),
                         None => {
                             self.map.grids.insert((map.x(), map.y()));
-                            let name = if let Some(ref name) = self.hero.name { name } else { "none" };
-                            map.save_to_png(&self.login, name, &self.timestamp)?;
+                            //FIXME do this in client
+                            //let name = if let Some(ref name) = self.hero.name { name } else { "none" };
+                            //map.save_to_png(&self.login, name, &self.timestamp)?;
                             self.sender.send_event(Event::Surface(map))?;
                         }
                     }

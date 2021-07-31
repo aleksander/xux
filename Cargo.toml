@@ -9,6 +9,8 @@ members = [
     "client-macroquad",
     "client-piston",
     "client-wgpu",
+    "client-text",
+    "util",
     "fuzz",
     "fuzzer",
     "parser",
