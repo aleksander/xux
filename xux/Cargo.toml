@@ -9,9 +9,10 @@ edition = "2018"
 byteorder = "1.4.3"
 openssl = "0.10.35"
 flate2 = "1.0.20"
+log = "0.4.14"
+failure = "0.1.8"
 # nom = "*"
 # ncurses = { version = "*", optional = true }
-log = "0.4.14"
 # fern = "*"
 # piston_window = { version = "*", optional = true }
 # piston2d-gfx_graphics = { version = "*", optional = true }
@@ -23,9 +24,6 @@ log = "0.4.14"
 # imgui = { version = "*", optional = true }
 # imgui-gfx-renderer = { version = "*", optional = true }
 # gfx_device_gl = { version = "*", optional = true }
-serde = { version = "1.0.126", optional = true, features = ["derive"] }
-serde_derive = { version = "1.0.126", optional = true }
-failure = "0.1.8"
 # egui_winit_platform = { version = "0.9.0", optional = true }
 # egui_wgpu_backend = { version = "0.10.0", optional = true }
 # futures-lite = { version = "1.12.0", optional = true }
@@ -39,7 +37,7 @@ failure = "0.1.8"
 # driver_mio = []
 # ai_decl = []
 # ai_lua = []
-core = [ "serde", "serde_derive" ]
+core = []
 # render_none = []
 # render_text = [ "ncurses" ]
 # render_2d_piston = [ "piston_window", "piston2d-gfx_graphics" ]

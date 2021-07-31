@@ -1,3 +1,6 @@
+use failure::{err_msg, format_err};
+use flate2::read::ZlibDecoder;
+use log::{debug, info, warn};
 use std::{
     collections::{HashMap, LinkedList, BTreeSet},
     vec::Vec,
@@ -12,10 +15,6 @@ use crate::{
     Result,
     driver::Driver,
 };
-use failure::{err_msg, format_err};
-use flate2::read::ZlibDecoder;
-use log::{debug, info, warn};
-use serde::{Serialize, Deserialize};
 
 struct ObjProp {
     frame: i32,
@@ -524,7 +523,7 @@ impl PartialSurface {
 
 pub type WdgID = u16;
 
-#[derive(Serialize,Deserialize,Debug,Clone)]
+#[derive(Debug,Clone)]
 pub enum Wdg {
     New(WdgID,String,WdgID),
     Msg(WdgID,String,Vec<List>),

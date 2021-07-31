@@ -2,9 +2,8 @@ use crate::proto::serialization::*;
 use crate::proto::Color;
 use crate::Result;
 use failure::{err_msg, format_err};
-use serde::{Serialize, Deserialize};
 
-#[derive(Serialize,Deserialize,Debug,Clone)]
+#[derive(Debug,Clone)]
 pub enum List {
     Int(i32),
     Str(String),

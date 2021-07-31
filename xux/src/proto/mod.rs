@@ -1,5 +1,3 @@
-use serde::{Serialize, Deserialize};
-
 pub use crate::proto::list::*;
 pub use crate::proto::serialization::*;
 pub use crate::proto::message::*;
@@ -26,7 +24,7 @@ pub mod message_objdata;
 pub mod message_objack;
 pub mod message_close;
 
-#[derive(Serialize,Deserialize,Debug,Clone,Copy)]
+#[derive(Debug,Clone,Copy)]
 pub struct ObjXY(pub f64, pub f64);
 
 impl ObjXY {

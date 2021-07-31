@@ -4,7 +4,6 @@ use crate::proto::serialization::*;
 use std::io::Write;
 use crate::Result;
 use failure::{err_msg, format_err};
-use serde::{Serialize, Deserialize};
 
 pub struct Rels {
     pub seq: u16,
@@ -364,7 +363,7 @@ impl fmt::Debug for Tiles {
     }
 }
 
-#[derive(Serialize,Deserialize,Clone,Debug)]
+#[derive(Clone,Debug)]
 pub struct TileRes {
     pub id: u8,
     pub name: String,
