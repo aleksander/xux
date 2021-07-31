@@ -10,7 +10,6 @@ use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use log::{debug, info};
 use crate::{
     driver,
-    render,
     ai,
     state::{self, State},
     Result,
@@ -90,6 +89,7 @@ pub fn authorize(host: &str, port: u16, user: String, pass: String) -> Result<(S
     Ok((login, cookie))
 }
 
+/*
 pub fn run(host: &str, port: u16, login: &str, cookie: &[u8]) -> Result<()> {
     let driver = driver::new(host, port)?;
 
@@ -102,6 +102,7 @@ pub fn run(host: &str, port: u16, login: &str, cookie: &[u8]) -> Result<()> {
     let mut state = State::new(hl_que_tx_render, hl_que_tx_ai, driver);
     state.run(login, cookie)
 }
+*/
 
 pub fn run_threaded (host: &str, port: u16, login: String, cookie: Vec<u8>) -> Result<(Sender<driver::Event>, Receiver<state::Event>)> {
     let driver = driver::new(host, port)?;

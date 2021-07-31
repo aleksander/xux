@@ -1,4 +1,3 @@
-
 [package]
 name = "xux-fuzz"
 version = "0.0.1"
@@ -8,14 +7,9 @@ publish = false
 [package.metadata]
 cargo-fuzz = true
 
-[dependencies.xux]
-path = ".."
-[dependencies.libfuzzer-sys]
-git = "https://github.com/rust-fuzz/libfuzzer-sys.git"
-
-# Prevent this from interfering with workspaces
-[workspace]
-members = ["."]
+[dependencies]
+xux = { path = "../xux" }
+libfuzzer-sys = { git = "https://github.com/rust-fuzz/libfuzzer-sys.git" }
 
 [[bin]]
 name = "fuzzer_script_1"

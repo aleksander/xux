@@ -1,0 +1,11 @@
+[package]
+name = "parser"
+version = "0.1.0"
+authors = ["Aleksander Usov <aleksander.usov@gmail.com>"]
+description = "Hafen protocol parser"
+edition = "2018"
+
+[dependencies]
+xux = { path = "../xux" }
+pnet = "0.28.0"
+pcap = "0.8.1"

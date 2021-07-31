@@ -8,10 +8,6 @@ use log::{trace, debug, info, warn, error};
 // TODO fn run<D,A>(ip: IpAddr, username: String, password: String) where D:Driver,A:Ai {
 fn run() -> Result<()> {
 
-    //TODO get "<crate name>.log" file name automatically from cargo (macro?)
-    #[cfg(feature = "salem")]
-    let log_file_name = "xux.salem.log";
-    #[cfg(feature = "hafen")]
     let log_file_name = "xux.hafen.log";
 
     //TODO prefix logs with timestamp(absolute/relative), file name, line number, function name
@@ -63,9 +59,6 @@ fn run() -> Result<()> {
     let username = args[1].clone();
     let password = args[2].clone();
 
-    #[cfg(feature = "salem")]
-    let host = "game.salemthegame.com";
-    #[cfg(feature = "hafen")]
     let host = "game.havenandhearth.com";
 
     let auth_port = 1871;

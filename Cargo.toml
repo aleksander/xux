@@ -1,61 +1,17 @@
-[package]
-name = "xux"
-version = "0.1.0"
-authors = ["Aleksander Usov <aleksander.usov@gmail.com>"]
-description = "Salem and Hafen alternative client"
-edition = "2018"
+[workspace]
 
-[dependencies]
-byteorder = "*"
-openssl = "*"
-flate2 = "*"
-nom = "*"
-ncurses = { version = "*", optional = true }
-log = "*"
-fern = "*"
-pnet = "*"
-pcap = "*"
-piston_window = { version = "*", optional = true }
-piston2d-gfx_graphics = { version = "*", optional = true }
-chrono = "*"
-bincode = { version = "*", optional = true }
-gfx = { version = "*", optional = true }
-gfx_window_glutin = { version = "*", optional = true }
-glutin = { version = "*", optional = true }
-cgmath = { version = "*", optional = true }
-imgui = { version = "*", optional = true }
-imgui-gfx-renderer = { version = "*", optional = true }
-gfx_device_gl = { version = "*", optional = true }
-serde = { version = "*", optional = true, features = ["derive"] }
-serde_derive = { version = "*", optional = true }
-image = { version = "*", optional = true }
-failure = "*"
-macroquad = { version = "0.3.7", path = "../macroquad" }
-egui = "0.13.1"
-egui-macroquad = { version = "0.5.0", path = "../egui-macroquad" }
-egui_winit_platform = { version = "0.9.0", optional = true }
-egui_wgpu_backend = { version = "0.10.0", optional = true }
-futures-lite = { version = "1.12.0", optional = true }
-winit = { version = "0.25.0", optional = true }
-epi = { version = "0.13.0", optional = true }
-wgpu = { version = "0.9.0", optional = true }
-ron = "0.6.4"
+members = [
+    "xux",
+    "client-2d-gfx",
+    "client-3d-glium",
+    "client-bevy",
+    "client-headless",
+    "client-macroquad",
+    "client-piston",
+    "client-wgpu",
+    "fuzz",
+    "fuzzer",
+    "parser",
+    "stapler",
+]
 
-[features]
-driver_std = []
-driver_mio = []
-ai_decl = []
-ai_lua = []
-hafen = []
-salem = []
-core = [ "image", "serde", "serde_derive" ]
-render_none = []
-render_text = [ "ncurses" ]
-render_2d_piston = [ "piston_window", "piston2d-gfx_graphics" ]
-render_3d_glium = []
-render_2d_gfx = [ "gfx", "gfx_window_glutin", "glutin", "cgmath", "imgui", "imgui-gfx-renderer", "gfx_device_gl", "bincode"]
-render_2d_macroquad = []
-render_2d_wgpu = [ "egui_winit_platform", "egui_wgpu_backend", "futures-lite", "winit", "epi", "wgpu" ]
-dump_events = [ "bincode" ]
-default = [ "core", "driver_std", "ai_decl", "hafen", "render_none" ]
-mio_lua = [ "driver_mio", "ai_lua" ]

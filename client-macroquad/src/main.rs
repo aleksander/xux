@@ -25,9 +25,6 @@ use ron::de::from_reader;
 
 #[macroquad::main("2d-macroquad-egui")]
 async fn main () -> Result<()> {
-    #[cfg(feature = "salem")]
-    let log_file_name = "xux.salem.log";
-    //#[cfg(feature = "hafen")]
     //let log_file_name = "xux.hafen.log";
 
     fern::Dispatch::new()
@@ -59,9 +56,6 @@ async fn main () -> Result<()> {
     let username = args[1].clone();
     let password = args[2].clone();
 
-    #[cfg(feature = "salem")]
-    let host = "game.salemthegame.com";
-    #[cfg(feature = "hafen")]
     let host = "game.havenandhearth.com";
 
     let auth_port = 1871;

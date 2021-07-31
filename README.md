@@ -1,28 +1,28 @@
-# Salem and Hafen alternative client and tools #
+# Haven and Hearth MMORPG alternative client and tools #
 
 This repo contains:
 
-* Two-in-one client for:
-    * Hafen (havenandhearth.com) MMOG
-    * Salem (salemthegame.com) MMOG
+* several clients for Haven and Hearth (havenandhearth.com) MMORPG
+* hafen protocol parser
 * stapler tool to staple map tiles to one big picture
 
 ## Prerequisites ##
 
 * Rust compiler
 * Cargo package manager
+* Registered account at havenandhearth.com
 
 ## Building and running ##
 
-To build and run Salem flavored version of client do:
+To build and run a client do:
 ```
-cargo run --release --features salem --bin xux -- [USERNAME] [PASSWORD]
+cargo run --release -p client-macroquad -- <USERNAME> <PASSWORD>
 ```
-To build and run Hafen flavored version of client do:
+To build and run parser tool do:
 ```
-cargo run --release --features hafen --bin xux -- [USERNAME] [PASSWORD]
+cargo run --release -p parser -- <PCAP>
 ```
 To build and run stapler tool do:
 ```
-cargo run --release --bin stapler
+cargo run --release -p stapler
 ```

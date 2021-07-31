@@ -213,10 +213,6 @@ impl RenderImpl {
 
                             for &(ObjXY(x,y),_resid) in self.objects.values() {
                                 let (cx, cy) = (x as f64, y as f64);
-                                #[cfg(feature = "salem")]
-                                //FIXME check res_name=="*claim" but not ID==2951
-                                let color = if resid == 2951 {[1.0, 0.0, 0.0, 1.0]} else {[1.0, 1.0, 1.0, 1.0]};
-                                #[cfg(feature = "hafen")]
                                 let color = [1.0, 1.0, 1.0, 1.0];
                                 pw::rectangle(color, [cx as f64 - 2.0, cy as f64 - 2.0, 4.0, 4.0], t, g);
                             }
@@ -296,13 +292,6 @@ impl RenderImpl {
                 }
                 pw::Event::Input(pw::Input::Button(pw::ButtonArgs{state: pw::ButtonState::Press, button: pw::Button::Mouse(pw::MouseButton::Left), ..})) => self.dragging = true,
                 pw::Event::Input(pw::Input::Button(pw::ButtonArgs{state: pw::ButtonState::Release, button: pw::Button::Mouse(pw::MouseButton::Left), ..})) => self.dragging = false,
-                #[cfg(feature = "salem")]
-                pw::Event::Input(pw::Input::Move(pw::Motion::MouseRelative(x,y))) => if self.dragging {
-                    if let Some(ObjXY(ox,oy)) = self.origin {
-                        self.origin = Some(ObjXY(ox - (x / zoom) as i32, oy - (y / zoom) as i32));
-                    }
-                },
-                #[cfg(feature = "hafen")]
                 pw::Event::Input(pw::Input::Move(pw::Motion::MouseRelative(x,y))) => if self.dragging {
                     if let Some(ObjXY(ox,oy)) = self.origin {
                         self.origin = Some(ObjXY(ox - (x / self.zoom), oy - (y / self.zoom)));

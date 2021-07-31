@@ -64,18 +64,6 @@ pub struct cSess {
 impl cSess {
     pub const ID: u8 = 0;
 
-    #[cfg(feature = "salem")]
-    pub fn new (login: String, cookie: Vec<u8>) -> cSess {
-        cSess {
-            unknown: 2,
-            proto: "Salem".into(),
-            version: 36,
-            login: login,
-            cookie: cookie,
-        }
-    }
-
-    #[cfg(feature = "hafen")]
     pub fn new (login: String, cookie: Vec<u8>) -> cSess {
         cSess {
             unknown: 2,

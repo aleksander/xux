@@ -7,12 +7,14 @@ use std::{
     thread,
     sync::mpsc,
 };
-use crate::proto::*;
-use crate::Result;
+use crate::{
+    proto::*,
+    Result,
+    driver::Driver,
+};
 use failure::{err_msg, format_err};
 use flate2::read::ZlibDecoder;
 use log::{debug, info, warn};
-use crate::driver::Driver;
 use serde::{Serialize, Deserialize};
 
 struct ObjProp {
@@ -83,54 +85,6 @@ impl Obj {
         }
     }
 
-    #[cfg(feature = "salem")]
-    fn update(&mut self, prop: &ObjProp) -> bool {
-
-        // FIXME consider o.frame overflow !!!
-        if let Some(frame) = self.frame {
-            if frame >= prop.frame {
-                return false;
-            }
-        }
-
-        self.frame = Some(prop.frame);
-
-        if let Some(resid) = prop.resid {
-            self.resid = Some(resid);
-        }
-
-        if let Some(xy) = prop.xy {
-            self.xy = Some(xy);
-        }
-
-        if let Some(Linbeg{from, to, steps}) = prop.line {
-            self.movement = Some(Movement::new(from, to, steps, 0));
-        }
-
-        if let Some(Linstep{ step }) = prop.step {
-            let movement = match self.movement {
-                Some(ref m) => {
-                    if (step > 0) && (step < m.steps) {
-                        if step <= m.step {
-                            warn!("odLINSTEP step <= m.step");
-                        }
-                        Some(Movement::new(m.from, m.to, m.steps, step))
-                    } else {
-                        None
-                    }
-                }
-                None => {
-                    warn!("odLINSTEP({}) while movement == None", step);
-                    None
-                }
-            };
-            self.movement = movement;
-        }
-
-        true
-    }
-
-    #[cfg(feature = "hafen")]
     fn update(&mut self, prop: &ObjProp) -> bool {
 
         // FIXME consider o.frame overflow !!!
@@ -166,7 +120,6 @@ pub struct Movement {
 }
 
 impl Movement {
-    #[cfg(feature = "salem")]
     fn new(from: ObjXY, to: ObjXY, steps: i32, step: i32) -> Movement {
         Movement {
             from: from,
@@ -235,9 +188,6 @@ pub struct SurfaceV0 {
     pub x: i32,
     pub y: i32,
     pub id: i64,
-    #[cfg(feature = "salem")]
-    pub name: String,
-    #[cfg(feature = "hafen")]
     pub tileres: Vec<TileRes>,
     pub tiles: Vec<u8>,
     pub z: Vec<i16>,
@@ -260,7 +210,6 @@ struct SurfaceV1Tiles {
 }
 
 impl Surface {
-    #[cfg(feature = "hafen")]
     fn from_buf <R:ReadBytesSac> (r: &mut R) -> Result<Surface> {
         let (x, y) = r.coord()?;
         let ver = r.u8()?;
@@ -271,12 +220,6 @@ impl Surface {
         }
     }
 
-    #[cfg(feature = "salem")]
-    fn from_buf <R:ReadBytesSac> (r: &mut R) -> Result<Surface> {
-        unimplemented!()
-    }
-
-    #[cfg(feature = "hafen")]
     fn v0_from_buf <R:ReadBytesSac> (r: &mut R, x: i32, y: i32) -> Result<SurfaceV0> {
         debug!("Surface version 0");
         let mut pfl = vec![0; 256];
@@ -296,7 +239,6 @@ impl Surface {
         Self::surface_v0(&mut r, &pfl, x, y)
     }
 
-    #[cfg(feature = "hafen")]
     fn v1_from_buf <R:ReadBytesSac> (r: &mut R, x: i32, y: i32) -> Result<SurfaceV1> {
         debug!("Surface version 1");
         let mut surface = SurfaceV1 {x: x, y: y, id: None, tiles: None, heights: None};
@@ -414,46 +356,6 @@ impl Surface {
         Ok(surface)
     }
 
-    #[cfg(feature = "salem")]
-    fn surface <R:ReadBytesSac> (r: &mut R, pfl: &[u8], x: i32, y: i32, name: String) -> Result<Surface> {
-        let id = r.i64()?;
-        let tiles = (0..100*100).map(|_|r.u8()).collect::<Result<Vec<u8>>>()?;
-        let z = (0..100*100).map(|_|r.i16()).collect::<Result<Vec<i16>>>()?;
-
-        let mut ol = vec![0; 100*100];
-        loop {
-            let pidx = r.u8()?;
-            if pidx == 255 { break; }
-            let fl = pfl[pidx as usize];
-            let typ = r.u8()?;
-            let (x1,y1) = (r.u8()? as usize, r.u8()? as usize);
-            let (x2,y2) = (r.u8()? as usize, r.u8()? as usize);
-            //info!("#### {} ({},{}) - ({},{})", typ, x1, y1, x2, y2);
-            let oli = match typ {
-                0 => if (fl & 1) == 1 { 2 } else { 1 },
-                1 => if (fl & 1) == 1 { 8 } else { 4 },
-                2 => 16,
-                _ => { return Err(format!("ERROR: unknown plot type {}", typ).into()); }
-            };
-            for y in y1..y2+1 {
-                for x in x1..x2+1 {
-                    ol[y*100+x] |= oli;
-                }
-            }
-        }
-
-        Ok(Surface {
-            x: x,
-            y: y,
-            name: name,
-            id: id,
-            tiles: tiles,
-            z: z,
-            ol: ol
-        })
-    }
-
-    #[cfg(feature = "hafen")]
     fn surface_v0 <R:ReadBytesSac> (r: &mut R, pfl: &[u8], x: i32, y: i32) -> Result<SurfaceV0> {
         let id = r.i64()?;
 
@@ -869,11 +771,6 @@ impl State {
                             self.map.grids.insert((map.x(), map.y()));
                             let name = if let Some(ref name) = self.hero.name { name } else { "none" };
                             map.save_to_png(&self.login, name, &self.timestamp)?;
-                            #[cfg(feature = "salem")]
-                            self.sender.send_event(Event::Grid((map.x(), map.y())))?;
-                            //#[cfg(feature = "hafen")]
-                            //self.sender.send_event(Event::Tiles(map.tileres.clone()))?;
-                            #[cfg(feature = "hafen")]
                             self.sender.send_event(Event::Surface(map))?;
                         }
                     }
@@ -1279,27 +1176,6 @@ impl State {
                 // info!("event::timeout: {} seq", seq);
                 self.timeout(seq)?;
             }
-            #[cfg(feature = "salem")]
-            driver::Event::User(u) => {
-                use driver::UserInput::*;
-                match u {
-                    Up    => if let Some(ObjXY(x,y)) = self.hero_xy() {
-                        self.go(ObjXY(x,y+100))?;
-                    },
-                    Down  => if let Some(ObjXY(x,y)) = self.hero_xy() {
-                        self.go(ObjXY(x,y-100))?;
-                    },
-                    Left  => if let Some(ObjXY(x,y)) = self.hero_xy() {
-                        self.go(ObjXY(x-100,y))?;
-                    },
-                    Right => if let Some(ObjXY(x,y)) = self.hero_xy() {
-                        self.go(ObjXY(x+100,y))?;
-                    },
-                    Go(x, y) => self.go(ObjXY(x, y))?,
-                    Quit  => self.close()?,
-                }
-            }
-            #[cfg(feature = "hafen")]
             driver::Event::User(u) => {
                 use crate::driver::UserInput::*;
                 //info!("event: {:?}", u);

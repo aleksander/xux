@@ -4,8 +4,6 @@ use failure::format_err;
 use crate::proto::serialization::*;
 use crate::proto::ObjXY;
 use crate::Result;
-
-#[cfg(feature = "hafen")]
 use std::f64::consts::PI;
 
 pub struct ObjData {
@@ -77,18 +75,13 @@ impl ObjDataElem {
 #[derive(Debug)]
 pub enum ObjDataElemProp {
     Rem,
-    #[cfg(feature = "salem")]
-    Move(ObjXY, u16), //TODO Move(ObjXY, Rotation)
-    #[cfg(feature = "hafen")]
+    //TODO Move(ObjXY, Rotation)
     Move(ObjXY, f64),
     Res(u16),
     Linbeg(Linbeg),
     Linstep(Linstep),
     Speech(u16, String),
     Compose(u16),
-    #[cfg(feature = "salem")]
-    Drawoff(Drawoff),
-    #[cfg(feature = "hafen")]
     Zoff(Zoff),
     Lumin((i32, i32), u16, u8),
     Avatar(Vec<u16>),
@@ -102,7 +95,6 @@ pub enum ObjDataElemProp {
     Cmpmod(Option<Vec<Vec<u16>>>),
     Cmpequ(Option<Vec<(u8, String, u16, Option<(u16, u16, u16)>)>>),
     Icon(Icon),
-    #[cfg(feature = "hafen")]
     Resattr(u16,Option<Vec<u8>>)
 }
 
@@ -110,29 +102,17 @@ pub enum ObjDataElemProp {
 pub struct Linbeg {
     pub from: ObjXY,
     pub to: ObjXY,
-    #[cfg(feature = "salem")]
-    pub steps: i32,
 }
 
 impl Linbeg {
-    //#[cfg(feature = "salem")]
     pub fn from_buf <R:ReadBytesSac> (r: &mut R) -> Result<Linbeg> {
         Ok(Linbeg{
             from: (r.i32()?, r.i32()?).into(),
             to: (r.i32()?, r.i32()?).into(),
-            #[cfg(feature = "salem")]
-            steps: r.i32()?
         })
     }
 }
 
-#[cfg(feature = "salem")]
-#[derive(Clone,Copy,Debug)]
-pub struct Linstep {
-    pub step: i32
-}
-
-#[cfg(feature = "hafen")]
 #[derive(Clone,Copy,Debug)]
 pub struct Linstep {
     pub t: f64,
@@ -140,12 +120,6 @@ pub struct Linstep {
 }
 
 impl Linstep {
-    #[cfg(feature = "salem")]
-    pub fn from_buf <R:ReadBytesSac> (r: &mut R) -> Result<Linstep> {
-        Ok(Linstep{ step: r.i32()? })
-    }
-
-    #[cfg(feature = "hafen")]
     pub fn from_buf <R:ReadBytesSac> (r: &mut R) -> Result<Linstep> {
         let w = r.u32()?;
         let hex_1p_10 = 0.0009765625; // hexfloat!(0x1p-10)
@@ -162,26 +136,11 @@ impl Linstep {
     }
 }
 
-#[cfg(feature = "salem")]
-#[derive(Clone,Copy,Debug)]
-pub struct Drawoff {
-    off: ObjXY,
-}
-
-#[cfg(feature = "salem")]
-impl Drawoff {
-    pub fn from_buf <R:ReadBytesSac> (r: &mut R) -> Result<Drawoff> {
-        Ok(Drawoff{ off: (r.i32()?, r.i32()?).into() })
-    }
-}
-
-#[cfg(feature = "hafen")]
 #[derive(Clone,Copy,Debug)]
 pub struct Zoff {
     zoff: i16,
 }
 
-#[cfg(feature = "hafen")]
 impl Zoff {
     pub fn from_buf <R:ReadBytesSac> (r: &mut R) -> Result<Zoff> {
         Ok(Zoff{ zoff: r.i16()? })
@@ -220,9 +179,6 @@ const OD_LINBEG: u8 = 3;
 const OD_LINSTEP: u8 = 4;
 const OD_SPEECH: u8 = 5;
 const OD_COMPOSE: u8 = 6;
-#[cfg(feature = "salem")]
-const OD_DRAWOFF: u8 = 7;
-#[cfg(feature = "hafen")]
 const OD_ZOFF: u8 = 7;
 const OD_LUMIN: u8 = 8;
 const OD_AVATAR: u8 = 9;
@@ -236,7 +192,6 @@ const OD_CMPPOSE: u8 = 16;
 const OD_CMPMOD: u8 = 17;
 const OD_CMPEQU: u8 = 18;
 const OD_ICON: u8 = 19;
-#[cfg(feature = "hafen")]
 const OD_RESATTR: u8 = 20;
 const OD_END: u8 = 255;
 
@@ -245,13 +200,6 @@ impl ObjDataElemProp {
         let t = r.u8()?;
         match t {
             OD_REM => Ok(Some(ObjDataElemProp::Rem)),
-            #[cfg(feature = "salem")]
-            OD_MOVE => {
-                let xy = (r.i32()?, r.i32()?);
-                let ia = r.u16()?;
-                Ok(Some(ObjDataElemProp::Move(xy.into(), ia))) //TODO Rotation.into()
-            }
-            #[cfg(feature = "hafen")]
             OD_MOVE => {
                 let xy = (r.i32()?, r.i32()?);
                 let ia = (r.u16()? as f64 / 65536.0) * PI * 2.0;
@@ -281,9 +229,6 @@ impl ObjDataElemProp {
                 let resid = r.u16()?;
                 Ok(Some(ObjDataElemProp::Compose(resid)))
             }
-            #[cfg(feature = "salem")]
-            OD_DRAWOFF => Ok(Some(ObjDataElemProp::Drawoff(Drawoff::from_buf(r)?))),
-            #[cfg(feature = "hafen")]
             OD_ZOFF => Ok(Some(ObjDataElemProp::Zoff(Zoff::from_buf(r)?))),
             OD_LUMIN => {
                 let off = (r.i32()?, r.i32()?);
@@ -489,7 +434,6 @@ impl ObjDataElemProp {
                     Ok(Some(ObjDataElemProp::Icon(Icon::Set(resid))))
                 }
             }
-            #[cfg(feature = "hafen")]
             OD_RESATTR => {
                 let resid = r.u16()?;
                 let len = r.u8()?;
