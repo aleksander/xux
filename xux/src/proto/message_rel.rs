@@ -85,15 +85,14 @@ pub enum Rel {
 
 impl Rel {
     //TODO impl FromBuf for RelElem
-    pub fn from_buf(kind: u8, r: &[u8]) -> Result<Rel> {
-        let mut r = ::std::io::Cursor::new(r);
-        // XXX RemoteUI.java +53
+    pub fn from_buf(kind: u8, mut r: &[u8]) -> Result<Rel> {
+        let r = &mut r;
         match kind {
             NewWdg::ID => Ok(Rel::NEWWDG(NewWdg::from_buf(r)?)),
             WdgMsg::ID => Ok(Rel::WDGMSG(WdgMsg::from_buf(r)?)),
             DstWdg::ID => Ok(Rel::DSTWDG(DstWdg::from_buf(r)?)),
             MapIv::ID => Ok(Rel::MAPIV(MapIv)),
-            Globs::ID => Ok(Rel::GLOBLOB(Globs::from_buf(&mut r)?)),
+            Globs::ID => Ok(Rel::GLOBLOB(Globs::from_buf(r)?)),
             Paginae::ID => Ok(Rel::PAGINAE(Paginae)),
             ResId::ID => Ok(Rel::RESID(ResId::from_buf(r)?)),
             Party::ID => Ok(Rel::PARTY(Party)),

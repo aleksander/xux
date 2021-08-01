@@ -566,6 +566,7 @@ pub struct State {
     pub que: LinkedList<EnqueuedBuffer>,
     pub enqueue_seq: usize,
     pub rel_cache: HashMap<u16, Rels>, //TODO unify with rx_rel_seq to have more consistent entity (struct Rel { ... })
+    pub fragment: Option<(u8, Vec<u8>)>,
     pub hero: Hero,
     pub map: PartialSurface,
     sender: Sender,
@@ -596,6 +597,7 @@ impl State {
             que: LinkedList::new(),
             enqueue_seq: 0,
             rel_cache: HashMap::new(),
+            fragment: None,
             hero: Hero {
                 name: None,
                 id: None,
@@ -844,13 +846,13 @@ impl State {
         // XXX FIXME do we handle seq right in the case of overflow ???
         //           to do refactor this code and replace add with wrapping_add
         let mut next_rel_seq = rel.seq + ((rel.rels.len() as u16) - 1);
-        self.dispatch_rel(rel)?;
+        self.dispatch_rels(rel)?;
         loop {
             let next_rel = self.rel_cache.remove(&(next_rel_seq + 1));
             match next_rel {
                 Some(rel) => {
                     next_rel_seq = rel.seq + ((rel.rels.len() as u16) - 1);
-                    self.dispatch_rel(&rel)?;
+                    self.dispatch_rels(&rel)?;
                 }
                 None => {
                     break;
@@ -863,55 +865,82 @@ impl State {
     }
 
     //TODO add struct Rel { ... } and move this to self.rel.dispatch(rel)
-    fn dispatch_rel(&mut self, rel: &Rels) -> Result<()> {
+    fn dispatch_rels(&mut self, rel: &Rels) -> Result<()> {
         info!("dispatch REL {}-{}", rel.seq, rel.seq + ((rel.rels.len() as u16) - 1));
         // info!("RX: {:?}", rel);
         for r in &rel.rels {
-            match *r {
-                Rel::NEWWDG(ref wdg) => {
-                    // info!("      {:?}", wdg);
-                    self.dispatch_newwdg(wdg)?;
-                    self.sender.send_event(Event::Wdg(Wdg::New(wdg.id, wdg.name.clone(), wdg.parent)))?;
+            self.dispatch_rel(r)?;
+        }
+        Ok(())
+    }
+
+    //TODO add struct Rel { ... } and move this to self.rel.dispatch(rel)
+    fn dispatch_rel(&mut self, rel: &Rel) -> Result<()> {
+        match rel {
+            Rel::NEWWDG(ref wdg) => {
+                // info!("      {:?}", wdg);
+                self.dispatch_newwdg(wdg)?;
+                self.sender.send_event(Event::Wdg(Wdg::New(wdg.id, wdg.name.clone(), wdg.parent)))?;
+            }
+            Rel::WDGMSG(ref msg) => {
+                // info!("      {:?}", msg);
+                self.dispatch_wdgmsg(msg)?;
+                self.sender.send_event(Event::Wdg(Wdg::Msg(msg.id, msg.name.clone(), msg.args.clone())))?;
+            }
+            Rel::DSTWDG(ref wdg) => {
+                // info!("      {:?}", wdg);
+                self.widgets.remove(&wdg.id);
+                self.sender.send_event(Event::Wdg(Wdg::Del(wdg.id)))?;
+            }
+            Rel::MAPIV(_) => {}
+            Rel::GLOBLOB(_) => {}
+            Rel::PAGINAE(_) => {}
+            Rel::RESID(ref res) => {
+                // info!("      {:?}", res);
+                self.resources.insert(res.id, res.name.clone());
+                self.sender.send_event(Event::Res(res.id, res.name.clone()))?;
+            }
+            Rel::PARTY(_) => {}
+            Rel::SFX(_) => {}
+            Rel::CATTR(_) => {}
+            Rel::MUSIC(_) => {}
+            Rel::TILES(ref _tiles) => {
+                //self.sender.send_event(Event::Tiles(tiles.tiles.clone()))?;
+                warn!("TILES RECEIVED! we expect tileres will be in MAPDATA message")
+            }
+            Rel::BUFF(_) => {}
+            Rel::SESSKEY(_) => {}
+            Rel::FRAGMENT(ref fragment) => {
+                match fragment {
+                    &Fragment::Head(t, ref buf) => {
+                        if self.fragment.is_some() {
+                            warn!("fragment head while still fragmenting");
+                        }
+                        self.fragment = Some((t, buf.clone()));
+                    }
+                    &Fragment::Middle(ref buf) => {
+                        if let Some((t, ref mut fragment)) = self.fragment {
+                            fragment.extend(buf.iter());
+                        } else {
+                            warn!("fragment middle while not fragmenting");
+                        }
+                    }
+                    &Fragment::Tail(ref buf) => {
+                        if let Some((t, ref mut fragment)) = self.fragment {
+                            fragment.extend(buf.iter());
+                            info!("dispatching Rel from fragment");
+                            let rel = Rel::from_buf(t, fragment)?;
+                            info!("REL: {:?}", rel);
+                            self.dispatch_rel(&rel)?;
+                        } else {
+                            warn!("fragment tail while not fragmenting");
+                        }
+                        self.fragment = None;
+                    }
                 }
-                Rel::WDGMSG(ref msg) => {
-                    // info!("      {:?}", msg);
-                    self.dispatch_wdgmsg(msg)?;
-                    self.sender.send_event(Event::Wdg(Wdg::Msg(msg.id, msg.name.clone(), msg.args.clone())))?;
-                }
-                Rel::DSTWDG(ref wdg) => {
-                    // info!("      {:?}", wdg);
-                    self.widgets.remove(&wdg.id);
-                    self.sender.send_event(Event::Wdg(Wdg::Del(wdg.id)))?;
-                }
-                Rel::MAPIV(_) => {}
-                Rel::GLOBLOB(_) => {}
-                Rel::PAGINAE(_) => {}
-                Rel::RESID(ref res) => {
-                    // info!("      {:?}", res);
-                    self.resources.insert(res.id, res.name.clone());
-                    self.sender.send_event(Event::Res(res.id, res.name.clone()))?;
-                }
-                Rel::PARTY(_) => {}
-                Rel::SFX(_) => {}
-                Rel::CATTR(_) => {}
-                Rel::MUSIC(_) => {}
-                Rel::TILES(ref _tiles) => {
-                    //self.sender.send_event(Event::Tiles(tiles.tiles.clone()))?;
-                    warn!("TILES RECEIVED! we expect tileres will be in MAPDATA message")
-                }
-                Rel::BUFF(_) => {}
-                Rel::SESSKEY(_) => {}
-                Rel::FRAGMENT(ref fragment) => {
-                    info!("      fragment {}", match fragment {
-                        &Fragment::Head(_,_) => "head",
-                        &Fragment::Middle(_) => "middle",
-                        &Fragment::Tail(_) => "tail",
-                    });
-                    warn!("must handle fragments!");
-                }
-                Rel::ADDWDG(ref wdg) => {
-                    info!("      {:?}", wdg);
-                }
+            }
+            Rel::ADDWDG(ref wdg) => {
+                info!("      {:?}", wdg);
             }
         }
         Ok(())
