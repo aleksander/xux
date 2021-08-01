@@ -2,9 +2,9 @@ use std;
 use std::thread;
 use std::sync::mpsc::{channel, Sender, Receiver};
 use crate::Result;
-use failure::err_msg;
 use crate::proto::list::List;
 use crate::state::WdgID;
+use anyhow::anyhow;
 
 #[derive(Debug)]
 pub enum Event {
@@ -63,7 +63,7 @@ impl Driver {
         // info!("driver.tx: {} bytes", buf.len());
         let len = self.sock.send(buf)?;
         if len != buf.len() {
-            return Err(err_msg("sent len != buf len"));
+            return Err(anyhow!("sent len != buf len"));
         }
         Ok(())
     }

@@ -8,9 +8,6 @@ pub mod state;
 pub mod driver;
 mod ai;
 pub mod client;
-//mod render;
-//mod util;
-//mod shift_to_unsigned;
 mod widgets;
 
-pub type Result<T> = std::result::Result<T, failure::Error>;
+pub type Result<T> = anyhow::Result<T>;

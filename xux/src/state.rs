@@ -1,4 +1,3 @@
-use failure::{err_msg, format_err};
 use flate2::read::ZlibDecoder;
 use log::{debug, info, warn};
 use std::{
@@ -15,6 +14,7 @@ use crate::{
     Result,
     driver::Driver,
 };
+use anyhow::anyhow;
 
 struct ObjProp {
     frame: i32,
@@ -217,7 +217,7 @@ impl Surface {
         match ver {
             0 => Ok(Surface::V0(Self::v0_from_buf(r, x, y)?)),
             1 => Ok(Surface::V1(Self::v1_from_buf(r, x, y)?)),
-            _ => Err(format_err!("Unknown map data version: {}", ver)),
+            _ => Err(anyhow!("Unknown map data version: {}", ver)),
         }
     }
 
@@ -315,7 +315,7 @@ impl Surface {
                                 z.push(r.f32()?);
                             }
                         }
-                        _ => return Err(format_err!("unknown heights format: {}", fmt))
+                        _ => return Err(anyhow!("unknown heights format: {}", fmt))
                     }
                     surface.heights = Some(z);
                 }
@@ -351,7 +351,7 @@ impl Surface {
                         //TODO use the mask somehow
                     }
                 }
-                _ => return Err(format_err!("Unknown lnm: {}", lnm))
+                _ => return Err(anyhow!("Unknown lnm: {}", lnm))
             }
         }
         Ok(surface)
@@ -390,7 +390,7 @@ impl Surface {
                 0 => if (fl & 1) == 1 { 2 } else { 1 },
                 1 => if (fl & 1) == 1 { 8 } else { 4 },
                 2 => if (fl & 1) == 1 { 32 } else { 16 },
-                _ => { return Err(format_err!("ERROR: unknown plot type {}", typ)); }
+                _ => { return Err(anyhow!("ERROR: unknown plot type {}", typ)); }
             };
             for y in y1..y2+1 {
                 for x in x1..x2+1 {
@@ -713,7 +713,7 @@ impl State {
                 match sess.err {
                     SessError::OK => {}
                     _ => {
-                        return Err(err_msg("session error"));
+                        return Err(anyhow!("session error"));
                         // XXX ??? should we send CLOSE too ???
                         // ??? or can we re-send our SESS requests in case of BUSY err ?
                     }
@@ -793,7 +793,7 @@ impl State {
                                         if let Some(xy) = obj.xy {
                                             self.sender.send_event(Event::Hero(xy))?;
                                         } else {
-                                            return Err(err_msg("hero without coordinates"));
+                                            return Err(anyhow!("hero without coordinates"));
                                         }
                                     } else {
                                         unreachable!();
@@ -825,7 +825,7 @@ impl State {
             ServerMessage::CLOSE(_) => {
                 // info!("RX: CLOSE");
                 // TODO return Status::EndOfSession instead of Error
-                return Err(err_msg("session closed"));
+                return Err(anyhow!("session closed"));
             }
         }
 
@@ -1125,7 +1125,7 @@ impl State {
 
     pub fn go(&mut self, xy: ObjXY) -> Result<()> {
         info!("GO ({}, {})", xy.0, xy.1);
-        let id = self.widget_id("mapview", None).ok_or(err_msg("try to go with no mapview widget"))?;
+        let id = self.widget_id("mapview", None).ok_or(anyhow!("try to go with no mapview widget"))?;
         let name = "click".to_string();
         let mut args: Vec<List> = Vec::new();
         args.push(List::Coord((907, 755))); //TODO set some random coords in the center of screen
@@ -1200,7 +1200,7 @@ impl State {
         let mut r = Cursor::new(buf.buf.as_slice());
         match ClientMessage::from_buf(&mut r) {
             Ok((msg, _)) => info!("TX: {:?}", msg),
-            Err(e) => return Err(format_err!("ERROR: malformed TX message: {:?}", e)),
+            Err(e) => return Err(anyhow!("ERROR: malformed TX message: {:?}", e)),
         }
         self.driver.transmit(&buf.buf)?;
         if let Some(timeout) = buf.timeout {

@@ -9,7 +9,7 @@ use crate::proto::message_objack::*;
 use crate::proto::message_close::*;
 use crate::proto::serialization::*;
 use crate::Result;
-use failure::format_err;
+use anyhow::anyhow;
 
 #[derive(Debug)]
 pub enum ClientMessage {
@@ -43,7 +43,7 @@ impl ClientMessage {
             MapReq::ID => ClientMessage::MAPREQ(MapReq::from_buf(r)?),
             ObjAck::ID => ClientMessage::OBJACK(ObjAck::from_buf(r)?),
             Close::ID => ClientMessage::CLOSE(Close),
-            id => { return Err(format_err!("cmsg.from wrong message type: {}", id)); }
+            id => { return Err(anyhow!("cmsg.from wrong message type: {}", id)); }
         };
 
         let mut tmp = Vec::new();
@@ -109,7 +109,7 @@ impl ServerMessage {
             MapData::ID => ServerMessage::MAPDATA(MapData::from_buf(r)?),
             ObjData::ID => ServerMessage::OBJDATA(ObjData::from_buf(r)?),
             Close::ID => ServerMessage::CLOSE(Close),
-            id => { return Err(format_err!("smsg.from wrong message type: {}", id)); }
+            id => { return Err(anyhow!("smsg.from wrong message type: {}", id)); }
         };
 
         let mut tmp = Vec::new();

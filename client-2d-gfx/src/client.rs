@@ -1,7 +1,7 @@
 use std::process;
 use xux::Result;
 use xux::client;
-use failure::err_msg;
+use anyhow::anyhow;
 use log::{trace, debug, info, warn, error};
 
 // TODO fn run_std_lua() { run::<Std,Lua>() }
@@ -53,7 +53,7 @@ fn run() -> Result<()> {
     if args.len() != 3 {
         info!("wrong argument count");
         info!("usage: {} username password", args[0]);
-        return Err(err_msg("wrong argument count"));
+        return Err(anyhow!("wrong argument count"));
     }
 
     let username = args[1].clone();

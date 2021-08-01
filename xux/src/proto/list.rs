@@ -1,7 +1,7 @@
 use crate::proto::serialization::*;
 use crate::proto::Color;
 use crate::Result;
-use failure::{err_msg, format_err};
+use anyhow::anyhow;
 
 #[derive(Debug,Clone)]
 pub enum List {
@@ -102,9 +102,9 @@ impl FromBuf for List {
                     let len = r.u8()?;
                     if (len & 128) != 0 {
                         let len = r.i32()?;
-                        if len <= 0 { return Err(err_msg("List.from_buf: len <= 0")); }
+                        if len <= 0 { return Err(anyhow!("List.from_buf: len <= 0")); }
                         //TODO this magic 65535 const should be set to some adequate default (but what is adequate?)
-                        if len > 1024*1024 { return Err(err_msg("List.from_buf: len > MiB")); }
+                        if len > 1024*1024 { return Err(anyhow!("List.from_buf: len > MiB")); }
                         let mut bytes = vec![0; len as usize];
                         r.read_exact(&mut bytes)?;
                         list[deep].push(List::Bytes(bytes));
@@ -127,7 +127,7 @@ impl FromBuf for List {
                     list[deep].push(List::FCoord64((r.f64()?, r.f64()?)));
                 }
                 _ => {
-                    return Err(format_err!("unknown MstList type: {}", t));
+                    return Err(anyhow!("unknown MstList type: {}", t));
                 }
             }
         }
@@ -172,7 +172,7 @@ impl ToBuf for List {
                 w.color(r, g, b, a)?;
             }
             List::Ttol(_) => {
-                return Err(err_msg("list.to_buf is NOT implemented for TTOL"));
+                return Err(anyhow!("list.to_buf is NOT implemented for TTOL"));
             }
             List::Int8(i) => {
                 w.u8(T_INT8)?;
@@ -186,7 +186,7 @@ impl ToBuf for List {
                 w.u8(T_NIL)?;
             }
             List::Bytes(_) => {
-                return Err(err_msg("list.to_buf is NOT implemented for BYTES"));
+                return Err(anyhow!("list.to_buf is NOT implemented for BYTES"));
             }
             List::Float32(f) => {
                 w.u8(T_FLOAT32)?;

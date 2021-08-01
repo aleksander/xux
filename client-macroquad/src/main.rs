@@ -19,7 +19,7 @@ use xux::{
     state,
     proto::{ResID, ObjID, ObjXY},
 };
-use failure::err_msg;
+use anyhow::anyhow;
 use log::trace;
 use ron::de::from_reader;
 use xux::state::Surface;
@@ -51,7 +51,7 @@ async fn main () -> Result<()> {
     if args.len() != 3 {
         info!("wrong argument count");
         info!("usage: {} username password", args[0]);
-        return Err(err_msg("wrong argument count"));
+        return Err(anyhow!("wrong argument count"));
     }
 
     let username = args[1].clone();

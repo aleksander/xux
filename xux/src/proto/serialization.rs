@@ -2,7 +2,7 @@ use std::io::BufRead;
 use byteorder::LittleEndian as LE;
 use byteorder::{ReadBytesExt, WriteBytesExt};
 use crate::Result;
-use failure::err_msg;
+use anyhow::anyhow;
 
 pub trait ReadBytesSac : ReadBytesExt + BufRead {
     fn i8(&mut self) -> Result<i8> {
@@ -38,7 +38,7 @@ pub trait ReadBytesSac : ReadBytesExt + BufRead {
     fn strz(&mut self) -> Result<String> {
         let mut tmp = Vec::new();
         let count = self.read_until(0, &mut tmp)?;
-        if count == 0 { return Err(err_msg("unexpected EOF")); }
+        if count == 0 { return Err(anyhow!("unexpected EOF")); }
         tmp.pop();
         Ok(String::from_utf8(tmp)?)
     }

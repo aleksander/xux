@@ -1,4 +1,3 @@
-use failure::{err_msg, format_err};
 use std::{
     net,
     str,
@@ -14,6 +13,7 @@ use crate::{
     state::{self, State},
     Result,
 };
+use anyhow::anyhow;
 
 pub fn authorize(host: &str, port: u16, user: String, pass: String) -> Result<(String, Vec<u8>)> {
     #[allow(non_camel_case_types)]
@@ -51,18 +51,18 @@ pub fn authorize(host: &str, port: u16, user: String, pass: String) -> Result<(S
         stream.read_exact(msg.as_mut_slice())?;
         debug!("msg: {:?}", msg);
         if msg.len() < b"ok\0".len() {
-            return Err(format_err!("too short answer: {:?}", msg));
+            return Err(anyhow!("too short answer: {:?}", msg));
         }
         match &msg[..3] {
             b"ok\0" => Ok(msg[3..].to_vec()),
             b"no\0" => {
                 let msg = String::from_utf8(msg[3..].to_vec())?;
                 //TODO add errors::AuthError(msg)
-                Err(err_msg(msg))
+                Err(anyhow!(msg))
             }
             _ => {
                 let msg = str::from_utf8(&msg)?;
-                Err(format_err!("unexpected answer: '{}'", msg))
+                Err(anyhow!("unexpected answer: '{}'", msg))
             }
         }
     }

@@ -1,10 +1,10 @@
 use std::fmt;
 use std::fmt::Formatter;
-use failure::format_err;
 use crate::proto::serialization::*;
 use crate::proto::ObjXY;
 use crate::Result;
 use std::f64::consts::PI;
+use anyhow::anyhow;
 
 pub struct ObjData {
     pub obj: Vec<ObjDataElem>,
@@ -450,7 +450,7 @@ impl ObjDataElemProp {
             }
             OD_END => Ok(None),
             _ => {
-                Err(format_err!("unknown ObjDataElemProp: {}", t))
+                Err(anyhow!("unknown ObjDataElemProp: {}", t))
             }
         }
     }

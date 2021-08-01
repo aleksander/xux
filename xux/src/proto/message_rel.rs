@@ -3,7 +3,7 @@ use crate::proto::list::List;
 use crate::proto::serialization::*;
 use std::io::Write;
 use crate::Result;
-use failure::{err_msg, format_err};
+use anyhow::anyhow;
 
 pub struct Rels {
     pub seq: u16,
@@ -106,7 +106,7 @@ impl Rel {
             Fragment::ID => Ok(Rel::FRAGMENT(Fragment::from_buf(r)?)),
             AddWdg::ID => Ok(Rel::ADDWDG(AddWdg::from_buf(r)?)),
             id => {
-                Err(format_err!("unknown REL type: {}", id))
+                Err(anyhow!("unknown REL type: {}", id))
             }
         }
     }
@@ -130,7 +130,7 @@ impl Rel {
                 } else {
                     use std::u16;
                     w.u8(WdgMsg::ID | Rels::MORE_RELS_ATTACHED_BIT)?;
-                    if tmp.len() > u16::MAX as usize { return Err(err_msg("rel.to WDGMSG rel buf > u16.max")); }
+                    if tmp.len() > u16::MAX as usize { return Err(anyhow!("rel.to WDGMSG rel buf > u16.max")); }
                     w.u16(tmp.len() as u16)?; // rel length
                 }
                 w.write(&tmp)?;
@@ -138,7 +138,7 @@ impl Rel {
                 Ok(w)
             }
             ref other => {
-                Err(format_err!("rel.to is not implemented for {:?}", other))
+                Err(anyhow!("rel.to is not implemented for {:?}", other))
             }
         }
     }
@@ -264,7 +264,7 @@ impl Glob {
             "sky" => {Glob::Sky}
             "wth" => {Glob::Wth}
             _ => {
-                return Err(format_err!("unknown GLOBLOB type: '{:?}'", t.as_bytes()))
+                return Err(anyhow!("unknown GLOBLOB type: '{:?}'", t.as_bytes()))
             }
         })
     }
@@ -412,7 +412,7 @@ impl Fragment {
                 if head & 0x80 == 0 {
                     Fragment::Head(head, buf)
                 } else {
-                    return Err(format_err!("wrong framgent type {}", head));
+                    return Err(anyhow!("wrong framgent type {}", head));
                 }
             }
         })

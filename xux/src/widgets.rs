@@ -1,9 +1,9 @@
-use failure::err_msg;
 use std::slice::Iter;
 use std::iter::Iterator;
 use log::debug;
 use crate::Result;
 use crate::proto::list::List;
+use anyhow::anyhow;
 
 pub struct Widget {
     pub id: u16,
@@ -63,7 +63,7 @@ impl Widget {
             self.children.remove(i);
             return Ok(());
         }
-        Err(err_msg("unable to find widget"))
+        Err(anyhow!("unable to find widget"))
     }
 
     fn message (&mut self, msg: (String,Vec<List>)) {
@@ -84,7 +84,7 @@ impl Widgets {
 
     pub fn add_widget (&mut self, id: u16, name: String, parent: u16) -> Result<()> {
         debug!("adding widget {} '{}' [{}]", id, name, parent);
-        self.root.find(parent).ok_or(err_msg("unable to find widget"))?.add(Widget::new(id, name));
+        self.root.find(parent).ok_or(anyhow!("unable to find widget"))?.add(Widget::new(id, name));
         Ok(())
     }
 
@@ -95,7 +95,7 @@ impl Widgets {
 
     pub fn message (&mut self, id: u16, msg: (String,Vec<List>)) -> Result<()> {
         debug!("message to widget {} '{}'", id, msg.0);
-        self.root.find(id).ok_or(err_msg("unable to find widget"))?.message(msg);
+        self.root.find(id).ok_or(anyhow!("unable to find widget"))?.message(msg);
         Ok(())
     }
 
