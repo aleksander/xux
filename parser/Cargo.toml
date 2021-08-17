@@ -9,4 +9,4 @@ edition = "2018"
 xux = { path = "../xux" }
 pnet = "0.28.0"
 pcap = "0.8.1"
-clap = "3.0.0-beta.2"
+clap = "3.0.0-beta.4"
