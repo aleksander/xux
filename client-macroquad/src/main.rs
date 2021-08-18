@@ -48,15 +48,12 @@ use xux::state::Surface;
 
 #[macroquad::main("2d-macroquad-egui")]
 async fn main () -> Result<()> {
-    //let log_file_name = "xux.hafen.log";
 
-    //env_logger::init();
     env_logger::builder()
         .format_target(false)
         .format_module_path(false)
         .format_level(true)
         .format_timestamp(None)
-        //.filter_level(LevelFilter::Info)
         .init();
 
     info!("Starting...");
@@ -92,7 +89,6 @@ async fn main () -> Result<()> {
         // Process keys, mouse etc.
         render_ctx.update();
 
-        //TODO correct network session termination on window closing
         //TODO signal handling
 
         if render_ctx.should_exit { break; }
