@@ -2,7 +2,6 @@ use log::{info, error};
 use std::sync::mpsc::{Sender, Receiver, TryRecvError::*};
 use anyhow::{anyhow, Result};
 use xux::{client, driver, state};
-use std::error::Error;
 
 fn main () -> Result<()> {
 

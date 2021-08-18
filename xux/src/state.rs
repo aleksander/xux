@@ -1,5 +1,5 @@
 use flate2::read::ZlibDecoder;
-use log::{debug, info, warn, error};
+use log::{debug, info, warn};
 use std::{
     collections::{HashMap, LinkedList, BTreeSet},
     vec::Vec,
