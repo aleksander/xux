@@ -4,6 +4,7 @@ use crate::proto::serialization::*;
 use std::io::Write;
 use crate::Result;
 use anyhow::anyhow;
+use crate::state::WdgID;
 
 pub struct Rels {
     pub seq: u16,
@@ -116,7 +117,7 @@ impl Rel {
         match *self {
             Rel::WDGMSG(ref msg) => {
                 let mut tmp = vec![];
-                tmp.u16(msg.id)?; // widget ID
+                tmp.u32(msg.id)?; // widget ID
                 tmp.strz(&msg.name)?;
                 let args_buf = {
                     let mut v = Vec::new();
@@ -145,9 +146,9 @@ impl Rel {
 
 #[derive(Debug)]
 pub struct NewWdg {
-    pub id: u16, //TODO enum WdgID(u16)
+    pub id: WdgID, //TODO enum WdgID(u16)
     pub name: String,
-    pub parent: u16, //TODO enum WdgID(u16)
+    pub parent: WdgID, //TODO enum WdgID(u16)
     pub pargs: Vec<List>,
     pub cargs: Vec<List>,
 }
@@ -156,9 +157,9 @@ impl NewWdg {
     pub const ID: u8 = 0;
 
     fn from_buf <R:ReadBytesSac> (mut r: R) -> Result<NewWdg> {
-        let id = r.u16()?;
+        let id = r.u32()?;
         let name = r.strz()?;
-        let parent = r.u16()?;
+        let parent = r.u32()?;
         let pargs = List::from_buf(&mut r)?;
         let cargs = List::from_buf(&mut r)?;
         Ok(NewWdg {
@@ -173,7 +174,7 @@ impl NewWdg {
 
 #[derive(Debug)]
 pub struct WdgMsg {
-    pub id: u16,
+    pub id: WdgID,
     pub name: String,
     pub args: Vec<List>,
 }
@@ -181,7 +182,7 @@ pub struct WdgMsg {
 impl WdgMsg {
     pub const ID: u8 = 1;
 
-    pub fn new (id: u16, name: String, args: Vec<List>) -> WdgMsg {
+    pub fn new (id: u32, name: String, args: Vec<List>) -> WdgMsg {
         WdgMsg {
             id: id,
             name: name,
@@ -190,7 +191,7 @@ impl WdgMsg {
     }
 
     fn from_buf <R:ReadBytesSac> (mut r: R) -> Result<WdgMsg> {
-        let id = r.u16()?;
+        let id = r.u32()?;
         let name = r.strz()?;
         let args = List::from_buf(&mut r)?;
         Ok(WdgMsg {
@@ -203,14 +204,14 @@ impl WdgMsg {
 
 #[derive(Debug)]
 pub struct DstWdg {
-    pub id: u16,
+    pub id: WdgID,
 }
 
 impl DstWdg {
     pub const ID: u8 = 2;
 
     fn from_buf <R:ReadBytesSac> (mut r: R) -> Result<DstWdg> {
-        let id = r.u16()?;
+        let id = r.u32()?;
         Ok(DstWdg{ id: id })
     }
 }
@@ -420,8 +421,8 @@ impl Fragment {
 
 #[derive(Debug)]
 pub struct AddWdg {
-    pub id: u16, //TODO enum WdgID(u16)
-    pub parent: u16, //TODO enum WdgID(u16)
+    pub id: WdgID, //TODO enum WdgID(u16)
+    pub parent: WdgID, //TODO enum WdgID(u16)
     pub pargs: Vec<List>,
 }
 
@@ -429,8 +430,8 @@ impl AddWdg {
     pub const ID: u8 = 15;
 
     fn from_buf <R:ReadBytesSac> (mut r: R) -> Result<AddWdg> {
-        let id = r.u16()?;
-        let parent = r.u16()?;
+        let id = r.u32()?;
+        let parent = r.u32()?;
         let pargs = List::from_buf(&mut r)?;
         Ok(AddWdg {
             id: id,

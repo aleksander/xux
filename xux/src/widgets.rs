@@ -4,16 +4,17 @@ use log::debug;
 use crate::Result;
 use crate::proto::list::List;
 use anyhow::anyhow;
+use crate::state::WdgID;
 
 pub struct Widget {
-    pub id: u16,
+    pub id: WdgID,
     name: String,
     children: Vec<Widget>,
     pub messages: Vec<(String,Vec<List>)>,
 }
 
 impl Widget {
-    fn new (id: u16, name: String) -> Widget {
+    fn new (id: WdgID, name: String) -> Widget {
         Widget {
             id: id,
             name: name,
@@ -26,7 +27,7 @@ impl Widget {
         self.children.push(wdg)
     }
 
-    fn find (&mut self, id: u16) -> Option<&mut Widget> {
+    fn find (&mut self, id: WdgID) -> Option<&mut Widget> {
         if id == self.id { return Some(self); }
         for wdg in self.children.iter_mut() {
             if wdg.id == id {
@@ -48,7 +49,7 @@ impl Widget {
         None
     }
 
-    fn del (&mut self, id: u16) -> Result<()> {
+    fn del (&mut self, id: WdgID) -> Result<()> {
         let mut index = None;
         for (i,wdg) in self.children.iter_mut().enumerate() {
             if wdg.id == id {
@@ -82,18 +83,18 @@ impl Widgets {
         Widgets { root }
     }
 
-    pub fn add_widget (&mut self, id: u16, name: String, parent: u16) -> Result<()> {
+    pub fn add_widget (&mut self, id: WdgID, name: String, parent: WdgID) -> Result<()> {
         debug!("adding widget {} '{}' [{}]", id, name, parent);
         self.root.find(parent).ok_or(anyhow!("unable to find widget {}", parent))?.add(Widget::new(id, name));
         Ok(())
     }
 
-    pub fn del_widget (&mut self, id: u16) -> Result<()> {
+    pub fn del_widget (&mut self, id: WdgID) -> Result<()> {
         debug!("deleting widget {}", id);
         self.root.del(id)
     }
 
-    pub fn message (&mut self, id: u16, msg: (String,Vec<List>)) -> Result<()> {
+    pub fn message (&mut self, id: WdgID, msg: (String,Vec<List>)) -> Result<()> {
         debug!("message to widget {} '{}'", id, msg.0);
         self.root.find(id).ok_or(anyhow!("unable to find widget"))?.message(msg);
         Ok(())

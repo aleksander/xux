@@ -156,9 +156,9 @@ pub struct EnqueuedBuffer {
 }
 
 pub struct Widget {
-    pub id: u16,
+    pub id: WdgID,
     pub typ: String,
-    pub parent: u16,
+    pub parent: WdgID,
     pub name: Option<String>,
 }
 
@@ -522,7 +522,7 @@ impl PartialSurface {
     }
 }
 
-pub type WdgID = u16;
+pub type WdgID = u32;
 
 #[derive(Debug,Clone)]
 pub enum Wdg {
@@ -558,7 +558,7 @@ impl Sender {
 
 pub struct State {
     // TODO do all fields PRIVATE and use callback interface
-    pub widgets: HashMap<u16, Widget>,
+    pub widgets: HashMap<WdgID, Widget>,
     pub objects: HashMap<u32, Obj>,
     pub charlist: Vec<String>,
     pub resources: HashMap<u16, String>,
@@ -1121,7 +1121,7 @@ impl State {
         Ok(())
     }
 
-    pub fn widget_id(&self, typ: &str, name: Option<String>) -> Option<u16> {
+    pub fn widget_id(&self, typ: &str, name: Option<String>) -> Option<WdgID> {
         for (id, w) in &self.widgets {
             if (w.typ == typ) && (w.name == name) {
                 return Some(*id);
