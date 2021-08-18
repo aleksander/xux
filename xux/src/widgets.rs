@@ -77,14 +77,14 @@ pub struct Widgets {
 
 impl Widgets {
     pub fn new () -> Widgets {
-        Widgets {
-            root: Widget::new(0, "root".into())
-        }
+        let mut root = Widget::new(0, "root".into());
+        root.add(Widget::new(65535, "temp".into()));
+        Widgets { root }
     }
 
     pub fn add_widget (&mut self, id: u16, name: String, parent: u16) -> Result<()> {
         debug!("adding widget {} '{}' [{}]", id, name, parent);
-        self.root.find(parent).ok_or(anyhow!("unable to find widget"))?.add(Widget::new(id, name));
+        self.root.find(parent).ok_or(anyhow!("unable to find widget {}", parent))?.add(Widget::new(id, name));
         Ok(())
     }
 

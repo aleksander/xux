@@ -4,6 +4,7 @@ use crate::proto::serialization::*;
 use std::io::Write;
 use crate::Result;
 use anyhow::anyhow;
+use std::num::Wrapping;
 
 pub struct Rels {
     pub seq: u16,

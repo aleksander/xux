@@ -11,7 +11,29 @@ use std::{
     fs::File,
     default::Default,
 };
-use macroquad::prelude::*;
+use macroquad::prelude::{
+    prevent_quit,
+    clear_background,
+    next_frame,
+    BLACK,
+    WHITE,
+    BLUE,
+    Vec2,
+    Camera2D,
+    mouse_wheel,
+    mouse_position,
+    FilterMode,
+    MouseButton,
+    vec2,
+    is_mouse_button_down,
+    is_mouse_button_pressed,
+    Rect,
+    screen_width,
+    screen_height,
+    is_quit_requested,
+    set_camera,
+    DrawTextureParams,
+};
 use xux::{
     Result,
     client,
@@ -20,7 +42,7 @@ use xux::{
     proto::{ResID, ObjID, ObjXY},
 };
 use anyhow::anyhow;
-use log::trace;
+use log::{error, info, warn, debug};
 use ron::de::from_reader;
 use xux::state::Surface;
 
@@ -28,29 +50,21 @@ use xux::state::Surface;
 async fn main () -> Result<()> {
     //let log_file_name = "xux.hafen.log";
 
-    fern::Dispatch::new()
-        .level(log::LevelFilter::Debug)
-        .level_for("xux", log::LevelFilter::Debug)
-        .chain(std::io::stdout())
-        /*.chain(
-            //fern::log_file(log_file_name)
-            std::fs::OpenOptions::new()
-                .write(true)
-                .create(true)
-                .append(false)
-                .open(log_file_name)?)*/
-        .apply()?;
+    //env_logger::init();
+    env_logger::builder()
+        .format_target(false)
+        .format_module_path(false)
+        .format_level(true)
+        .format_timestamp(None)
+        //.filter_level(LevelFilter::Info)
+        .init();
 
-    trace!("Starting...");
-    debug!("Starting...");
     info!("Starting...");
-    warn!("Starting...");
-    error!("Starting...");
 
     let args: Vec<String> = std::env::args().collect();
     if args.len() != 3 {
-        info!("wrong argument count");
-        info!("usage: {} username password", args[0]);
+        error!("wrong argument count");
+        error!("usage: {} username password", args[0]);
         return Err(anyhow!("wrong argument count"));
     }
 
@@ -331,6 +345,7 @@ impl RenderContext {
     }
 
     fn draw (&self) {
+        info!("render thread: draw");
         set_camera(&self.camera);
         self.draw_tiles();
         self.draw_owning();

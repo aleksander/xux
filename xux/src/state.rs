@@ -1,5 +1,5 @@
 use flate2::read::ZlibDecoder;
-use log::{debug, info, warn};
+use log::{debug, info, warn, error};
 use std::{
     collections::{HashMap, LinkedList, BTreeSet},
     vec::Vec,
@@ -15,6 +15,7 @@ use crate::{
     driver::Driver,
 };
 use anyhow::anyhow;
+use std::num::Wrapping;
 
 struct ObjProp {
     frame: i32,
@@ -561,8 +562,8 @@ pub struct State {
     pub objects: HashMap<u32, Obj>,
     pub charlist: Vec<String>,
     pub resources: HashMap<u16, String>,
-    pub seq: u16,
-    pub rx_rel_seq: u16, //TODO wrap this to struct OverflowableCounter to incapsulate correct handling of all the operations on it
+    pub seq: Wrapping<u16>,
+    pub rx_rel_seq: Wrapping<u16>,
     pub que: LinkedList<EnqueuedBuffer>,
     pub enqueue_seq: usize,
     pub rel_cache: HashMap<u16, Rels>, //TODO unify with rx_rel_seq to have more consistent entity (struct Rel { ... })
@@ -592,8 +593,8 @@ impl State {
             objects: HashMap::new(),
             charlist: Vec::new(),
             resources: HashMap::new(),
-            seq: 0,
-            rx_rel_seq: 0,
+            seq: Wrapping(0),
+            rx_rel_seq: Wrapping(0),
             que: LinkedList::new(),
             enqueue_seq: 0,
             rel_cache: HashMap::new(),
@@ -629,8 +630,8 @@ impl State {
     pub fn enqueue_to_send(&mut self, mut msg: ClientMessage) -> Result<()> {
         if let ClientMessage::REL(ref mut rel) = msg {
             assert!(rel.seq == 0);
-            rel.seq = self.seq;
-            self.seq += rel.rels.len() as u16;
+            rel.seq = self.seq.0;
+            self.seq += Wrapping(rel.rels.len() as u16);
         }
         let mut buf = vec!();
         match msg.to_buf(&mut buf) {
@@ -725,18 +726,22 @@ impl State {
             }
             ServerMessage::REL(rel) => {
                 // info!("RX: REL {}", rel.seq);
-                if rel.seq == self.rx_rel_seq {
+                if rel.seq == self.rx_rel_seq.0 {
                     self.dispatch_rel_cache(&rel)?;
                     //TODO should we clean up cache here (remove RELs that in the past) ?
-                } else if rel.seq.wrapping_sub(self.rx_rel_seq) < u16::MAX/2 {
+                } else if (Wrapping(rel.seq) - self.rx_rel_seq).0 < u16::MAX/2 {
                     // future REL
                     self.cache_rel(rel);
                 } else {
                     // past REL
-                    info!("past");
-                    // TODO self.ack(seq);
-                    let last_acked_seq = self.rx_rel_seq - 1;
-                    self.enqueue_to_send(ClientMessage::ACK(Ack { seq: last_acked_seq }))?;
+                    warn!("past");
+                    let rel_tail_seq = Wrapping(rel.seq) + Wrapping(rel.rels.len() as u16);
+                    let delta = (rel_tail_seq - self.rx_rel_seq).0;
+                    if delta > 0 && delta < u16::MAX/2 {
+                        warn!("received a Rel which we already partially handled, \
+                        so that beginning of this Rel is in the past and the ending is in the future");
+                        self.dispatch_halfdispached_rel(&rel)?;
+                    }
                 }
             }
             ServerMessage::ACK(ack) => {
@@ -837,21 +842,18 @@ impl State {
 
     //TODO add struct Rel { ... } and move this to self.rel.cache(rel)
     fn cache_rel(&mut self, rel: Rels) {
-        info!("cache REL {}-{}", rel.seq, rel.seq + ((rel.rels.len() as u16) - 1));
+        warn!("cache REL {}-{}", rel.seq, (Wrapping(rel.seq) + Wrapping(rel.rels.len() as u16 - 1)).0);
         self.rel_cache.insert(rel.seq, rel);
     }
 
     //TODO add struct Rel { ... } and move this to self.rel.dispatch_cache(rel)
     fn dispatch_rel_cache(&mut self, rel: &Rels) -> Result<()> {
-        // XXX FIXME do we handle seq right in the case of overflow ???
-        //           to do refactor this code and replace add with wrapping_add
-        let mut next_rel_seq = rel.seq + ((rel.rels.len() as u16) - 1);
         self.dispatch_rels(rel)?;
         loop {
-            let next_rel = self.rel_cache.remove(&(next_rel_seq + 1));
+            let next_rel = self.rel_cache.remove(&(self.rx_rel_seq.0));
             match next_rel {
                 Some(rel) => {
-                    next_rel_seq = rel.seq + ((rel.rels.len() as u16) - 1);
+                    warn!("dispatching cached Rel {}", rel.seq);
                     self.dispatch_rels(&rel)?;
                 }
                 None => {
@@ -859,9 +861,25 @@ impl State {
                 }
             }
         }
-        self.enqueue_to_send(ClientMessage::ACK(Ack { seq: next_rel_seq }))?;
-        self.rx_rel_seq = next_rel_seq + 1;
-        Ok(())
+        self.acknowledge_last_rel()
+    }
+
+    fn acknowledge_last_rel (&mut self) -> Result<()> {
+        let seq = (self.rx_rel_seq - Wrapping(1)).0;
+        self.enqueue_to_send(ClientMessage::ACK(Ack { seq }))
+    }
+
+    fn dispatch_halfdispached_rel(&mut self, rel: &Rels) -> Result<()> {
+        let mut rel_seq = Wrapping(rel.seq);
+        for rel in &rel.rels {
+            if rel_seq == self.rx_rel_seq {
+                debug!("dispatch halfdispatched Rel {}", rel_seq.0);
+                self.dispatch_rel(rel)?;
+                self.rx_rel_seq += Wrapping(1);
+            }
+            rel_seq += Wrapping(1);
+        }
+        self.acknowledge_last_rel()
     }
 
     //TODO add struct Rel { ... } and move this to self.rel.dispatch(rel)
@@ -871,6 +889,7 @@ impl State {
         for r in &rel.rels {
             self.dispatch_rel(r)?;
         }
+        self.rx_rel_seq += Wrapping(rel.rels.len() as u16);
         Ok(())
     }
 
@@ -919,7 +938,7 @@ impl State {
                         self.fragment = Some((t, buf.clone()));
                     }
                     &Fragment::Middle(ref buf) => {
-                        if let Some((t, ref mut fragment)) = self.fragment {
+                        if let Some((_, ref mut fragment)) = self.fragment {
                             fragment.extend(buf.iter());
                         } else {
                             warn!("fragment middle while not fragmenting");
