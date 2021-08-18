@@ -9,7 +9,7 @@ use pnet::packet::{
     ip::IpNextHeaderProtocols::Udp,
     udp::UdpPacket,
 };
-use pcap::Capture;
+use pcap::{Capture, Linktype};
 use clap::{App, Arg};
 
 #[derive(Clone,Copy)]
@@ -75,21 +75,30 @@ fn main() {
 
     let mut capture = Capture::from_file(&input_file).expect("pcap::Capture::from_file");
 
+    let datalink = capture.get_datalink();
+    println!("capture datalink: {:?}", datalink);
+
+    match datalink {
+        Linktype(1) => { println!("ethernet datalink") }
+        Linktype(12) => { println!("raw ip datalink") }
+        Linktype(other) => panic!("unsupported datalink type {}", other)
+    }
+
     while let Ok(packet) = capture.next() {
-        let eth = EthernetPacket::new(&packet.data[..]).expect("EthernetPacket::new");
-
-        if eth.get_ethertype() != Ipv4 {
-            continue;
+        let mut data = packet.data.to_owned(); //FIXME to_owned() required here because of lifetime issue in EthernetPacket::payload()
+        if let Linktype(1) = datalink {
+            let eth = EthernetPacket::new(&data[..]).expect("EthernetPacket::new");
+            if eth.get_ethertype() != Ipv4 {
+                continue;
+            }
+            data = eth.payload().to_owned();
         }
-
-        let ip = Ipv4Packet::new(eth.payload()).expect("Ipv4Packet::new");
-
+        let ip = Ipv4Packet::new(&data[..]).expect("Ipv4Packet::new");
         if ip.get_next_level_protocol() != Udp {
             continue;
         }
-
-        let udp = UdpPacket::new(ip.payload()).expect("UdpPacket::new");
-
+        data = ip.payload().to_owned();
+        let udp = UdpPacket::new(&data[..]).expect("UdpPacket::new");
         let dir = if udp.get_destination() == 1870 {
             MessageDirection::FromClient
         } else if udp.get_source() == 1870 {
@@ -97,7 +106,6 @@ fn main() {
         } else {
             continue;
         };
-
         let mut r = udp.payload();
         match dir {
             MessageDirection::FromClient => {

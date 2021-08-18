@@ -341,7 +341,6 @@ impl RenderContext {
     }
 
     fn draw (&self) {
-        info!("render thread: draw");
         set_camera(&self.camera);
         self.draw_tiles();
         self.draw_owning();
