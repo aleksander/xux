@@ -150,7 +150,9 @@ fn main() {
                                 if let Some(buf) = remains {
                                     println!("REMAINS {} bytes", buf.len());
                                 }
-                                println!();
+                                if ! follow {
+                                    println!();
+                                }
                             }
                         }
                         Err(e) => {
@@ -196,7 +198,9 @@ fn main() {
                                 if let Some(buf) = remains {
                                     println!("REMAINS {} bytes", buf.len());
                                 }
-                                println!();
+                                if ! follow {
+                                    println!();
+                                }
                             }
                         }
                         Err(e) => {
