@@ -19,7 +19,7 @@ use std::num::Wrapping;
 
 struct ObjProp {
     frame: i32,
-    xy: Option<ObjXY>,
+    xy: Option<(ObjXY,f64)>,
     resid: Option<ResID>, // TODO replace with Vec<resid> for composite objects
     line: Option<Linbeg>,
     step: Option<Linstep>,
@@ -43,8 +43,8 @@ impl ObjProp {
                 &ObjDataElemProp::Rem => {
                     return None;
                 }
-                &ObjDataElemProp::Move(xy, _) => {
-                    prop.xy = Some(xy);
+                &ObjDataElemProp::Move(xy, angle) => {
+                    prop.xy = Some((xy,angle));
                 }
                 &ObjDataElemProp::Res(resid) => {
                     prop.resid = Some(resid);
@@ -70,12 +70,12 @@ pub struct Obj {
     pub id: ObjID, // TODO maybe remove this? because this is also a key field in objects hashmap
     pub frame: Option<i32>,
     pub resid: Option<ResID>,
-    pub xy: Option<ObjXY>,
+    pub xy: Option<(ObjXY,f64)>,
     pub movement: Option<Movement>,
 }
 
 impl Obj {
-    fn new(id: ObjID, frame: Option<i32>, resid: Option<ResID>, xy: Option<ObjXY>, movement: Option<Movement>) -> Obj {
+    fn new(id: ObjID, frame: Option<i32>, resid: Option<ResID>, xy: Option<(ObjXY,f64)>, movement: Option<Movement>) -> Obj {
         Obj {
             id: id,
             frame: frame,
@@ -535,10 +535,10 @@ pub enum Wdg {
 pub enum Event {
     //Tiles(Vec<TileRes>),
     Surface(Surface),
-    Obj(ObjID, ObjXY, ResID),
+    Obj(ObjID, (ObjXY, f64), ResID),
     ObjRemove(ObjID),
     Res(ResID, String),
-    Hero(ObjXY),
+    Hero((ObjXY,f64)),
     Wdg(Wdg),
     Hearthfire(ObjXY),
 }
@@ -992,7 +992,7 @@ impl State {
                     match cached_hero_obj {
                         Some(cached_hero_obj) => {
                             self.sender.send_event(Event::ObjRemove(id))?;
-                            self.sender.send_event(Event::Hero(cached_hero_obj.xy.unwrap_or(ObjXY::new())))?;
+                            self.sender.send_event(Event::Hero(cached_hero_obj.xy.unwrap_or((ObjXY::new(),0.0))))?;
                             self.hero.obj = Some(cached_hero_obj);
                             info!("HERO: obj: {:?}", self.hero.obj);
                             self.request_grids_around_hero();
@@ -1191,7 +1191,7 @@ impl State {
 
     pub fn hero_xy(&self) -> Option<ObjXY> {
         match self.hero.obj {
-            Some(ref hero) => hero.xy,
+            Some(ref hero) => if let Some(pos) = hero.xy { Some(pos.0) } else { None }
             None => None,
         }
     }

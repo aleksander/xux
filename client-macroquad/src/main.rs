@@ -45,6 +45,7 @@ use anyhow::anyhow;
 use log::{error, info, warn, debug};
 use ron::de::from_reader;
 use xux::state::{Surface, WdgID};
+use xux::state::Event::Obj;
 
 #[macroquad::main("2d-macroquad-egui")]
 async fn main () -> Result<()> {
@@ -107,7 +108,8 @@ struct RenderContext {
     //struct State {
     widgets: BTreeMap<WdgID, (String, WdgID)>, //TODO add Vec<messages> to every widget
     resources: BTreeMap<ResID, String>,
-    objects: BTreeMap<ObjID, (ObjXY, ResID)>,
+    objects: BTreeMap<ObjID, ((ObjXY,f64), ResID)>,
+    objects_by_resid: BTreeMap<ResID, usize>,
     hero_x: f32,
     hero_y: f32,
     hero_isnt_set_yet: bool,
@@ -130,7 +132,7 @@ struct RenderContext {
     show_owning: bool,
     // }
     should_exit: bool,
-    target: Vec2,
+    target: (Vec2,f64),
     zoom: f32,
     mouse: Vec2,
     camera: Camera2D,
@@ -149,6 +151,7 @@ impl RenderContext {
             widgets: BTreeMap::new(),
             resources: BTreeMap::new(),
             objects: BTreeMap::new(),
+            objects_by_resid: BTreeMap::new(),
             hero_x: 0.0,
             hero_y: 0.0,
             hero_isnt_set_yet: true,
@@ -167,7 +170,7 @@ impl RenderContext {
             show_heights: true,
             show_owning: true,
             should_exit: false,
-            target: vec2(0.0, 0.0),
+            target: (vec2(0.0, 0.0),0.0),
             zoom: 1.0,
             mouse: vec2(0.0, 0.0),
             camera: Camera2D::default(),
@@ -239,24 +242,25 @@ impl RenderContext {
                 #[cfg(TODO)]
                 self.grids_heights.push(heights);
             }
-            state::Event::Obj(id,xy,resid) => {
-                debug!("RENDER: obj ({}, {})", xy.0, xy.1);
+            state::Event::Obj(id,(xy,angle),resid) => {
+                debug!("RENDER: obj ({}, {}) {} {}", xy.0, xy.1, angle, resid);
                 //TODO ??? separate static objects like trees and
                 //dynamic objects like rabbits to two
                 //different caches
-                self.objects.insert(id, (xy, resid));
+                self.objects.insert(id, ((xy,angle), resid));
+                *self.objects_by_resid.entry(resid).or_default() += 1;
             }
             state::Event::ObjRemove(ref id) => {
                 debug!("RENDER: obj remove {}", id);
                 self.objects.remove(id);
             }
-            state::Event::Hero(ObjXY(x,y)) => {
-                debug!("RENDER: hero ({}, {})", x, y);
+            state::Event::Hero((ObjXY(x,y),angle)) => {
+                debug!("RENDER: hero ({}, {}) {}", x, y, angle);
                 //TODO ??? add to objects
                 self.hero_x = x as f32;
                 self.hero_y = y as f32;
                 if self.hero_isnt_set_yet {
-                    self.target = vec2(self.hero_x, self.hero_y);
+                    self.target = (vec2(self.hero_x, self.hero_y),angle);
                     self.hero_isnt_set_yet = false;
                 }
             }
@@ -294,11 +298,11 @@ impl RenderContext {
         self.mouse = mouse;
 
         if is_mouse_button_down(MouseButton::Right) {
-            self.target += delta / self.zoom;
+            self.target.0 += delta / self.zoom;
         }
 
         self.camera = Camera2D::from_display_rect(Rect::new(0.0, 0.0, screen_width(), screen_height()));
-        self.camera.target += self.target;
+        self.camera.target += self.target.0;
         self.camera.target -= vec2(screen_width() / 2.0, screen_height() / 2.0);
         self.camera.zoom *= self.zoom;
 
@@ -334,7 +338,17 @@ impl RenderContext {
                     if ui.button("exit").clicked() {
                         self.event_tx.send(driver::Event::User(driver::UserInput::Quit)).expect("unable to send User::Quit");
                     }
-                    ui.label("Test");
+                    for (resid,quantity) in self.objects_by_resid.iter() {
+                        ui.horizontal(|ui| {
+                            if let Some(resname) = self.resources.get(resid) {
+                                ui.label(resname);
+                            } else {
+                                let resid = resid.to_string();
+                                ui.label(resid);
+                            }
+                            ui.label(quantity.to_string());
+                        });
+                    }
                 });
             });
         });
@@ -385,13 +399,25 @@ impl RenderContext {
     }
 
     fn draw_objects (&self) {
-        for (ObjXY(x,y),_) in self.objects.values() {
+        for ((ObjXY(x,y),angle),_) in self.objects.values() {
             const OBJ_SIZE: f64 = 4.0;
-            let x = (x + - OBJ_SIZE / 2.0) as f32;
-            let y = (y + - OBJ_SIZE / 2.0) as f32;
-            let w = OBJ_SIZE as f32;
-            let h = OBJ_SIZE as f32;
-            macroquad::shapes::draw_rectangle(x, y, w, h, WHITE);
+            {
+                let x = (x + -OBJ_SIZE / 2.0) as f32;
+                let y = (y + -OBJ_SIZE / 2.0) as f32;
+                let w = OBJ_SIZE as f32;
+                let h = OBJ_SIZE as f32;
+                macroquad::shapes::draw_rectangle(x, y, w, h, WHITE);
+            }
+            let rot = nalgebra::Rotation2::new(*angle);
+            let obj = nalgebra::geometry::Translation::from([*x,*y]);
+            let p0 = rot * (nalgebra::Point2::new(1.0, 0.5) * OBJ_SIZE);
+            let p1 = rot * (nalgebra::Point2::new(1.0, -0.5) * OBJ_SIZE);
+            let p2 = rot * (nalgebra::Point2::new(2.0, 0.0) * OBJ_SIZE);
+            let obj = vec2(*x as f32, *y as f32);
+            let p0 = vec2(p0.x as f32, p0.y as f32) + obj;
+            let p1 = vec2(p1.x as f32, p1.y as f32) + obj;
+            let p2 = vec2(p2.x as f32, p2.y as f32) + obj;
+            macroquad::shapes::draw_triangle(p0, p1, p2, WHITE);
         }
     }
 
