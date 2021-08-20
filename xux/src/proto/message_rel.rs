@@ -82,6 +82,7 @@ pub enum Rel {
     SESSKEY(SessKey),
     FRAGMENT(Fragment),
     ADDWDG(AddWdg),
+    WDGBAR(WdgBar),
 }
 
 impl Rel {
@@ -105,6 +106,7 @@ impl Rel {
             SessKey::ID => Ok(Rel::SESSKEY(SessKey)),
             Fragment::ID => Ok(Rel::FRAGMENT(Fragment::from_buf(r)?)),
             AddWdg::ID => Ok(Rel::ADDWDG(AddWdg::from_buf(r)?)),
+            WdgBar::ID => Ok(Rel::WDGBAR(WdgBar)),
             id => {
                 Err(anyhow!("unknown REL type: {}", id))
             }
@@ -439,4 +441,11 @@ impl AddWdg {
             pargs: pargs,
         })
     }
+}
+
+#[derive(Debug)]
+pub struct WdgBar;
+
+impl WdgBar {
+    pub const ID: u8 = 16;
 }

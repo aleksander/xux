@@ -44,7 +44,7 @@ use xux::{
 use anyhow::anyhow;
 use log::{error, info, warn, debug};
 use ron::de::from_reader;
-use xux::state::Surface;
+use xux::state::{Surface, WdgID};
 
 #[macroquad::main("2d-macroquad-egui")]
 async fn main () -> Result<()> {
@@ -105,7 +105,7 @@ struct RenderContext {
     event_rx: Receiver<state::Event>,
     //TODO
     //struct State {
-    widgets: BTreeMap<u16, (String, u16)>, //TODO add Vec<messages> to every widget
+    widgets: BTreeMap<WdgID, (String, WdgID)>, //TODO add Vec<messages> to every widget
     resources: BTreeMap<ResID, String>,
     objects: BTreeMap<ObjID, (ObjXY, ResID)>,
     hero_x: f32,

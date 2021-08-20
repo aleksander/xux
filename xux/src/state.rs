@@ -959,7 +959,10 @@ impl State {
                 }
             }
             Rel::ADDWDG(ref wdg) => {
-                info!("      {:?}", wdg);
+                warn!("      {:?}", wdg);
+            }
+            Rel::WDGBAR(ref wdgbar) => {
+                warn!("      {:?}", wdgbar);
             }
         }
         Ok(())
