@@ -11,6 +11,7 @@ use pnet::packet::{
 };
 use pcap::{Capture, Linktype};
 use clap::{App, Arg};
+use std::num::Wrapping;
 
 #[derive(Clone,Copy)]
 pub enum MessageDirection {
@@ -55,6 +56,7 @@ fn main() {
                  .multiple_values(true)
                  .require_delimiter(true)
                  .use_delimiter(true))
+        .arg("-f, --follow 'Follow the REL stream'")
         .arg("<PCAP> 'pcap file to parse'")
         .get_matches();
 
@@ -72,6 +74,10 @@ fn main() {
         vec!()
     };
     let types: Vec<MsgType> = types.iter().map(|&t| MsgType::from_str(t)).collect();
+
+    let follow = matches.is_present("follow");
+    let mut client_seq = Wrapping(0);
+    let mut server_seq = Wrapping(0);
 
     let mut capture = Capture::from_file(&input_file).expect("pcap::Capture::from_file");
 
@@ -127,7 +133,20 @@ fn main() {
                                     }
                                 };
                             if show_message {
-                                println!("CLIENT: {:?}", msg);
+                                if follow && msg.is_rel() {
+                                    if let ClientMessage::REL(rels) = msg {
+                                        let mut seq = Wrapping(rels.seq);
+                                        for rel in &rels.rels {
+                                            if seq == client_seq {
+                                                println!("{:?}", rel);
+                                                client_seq += Wrapping(1);
+                                            }
+                                            seq += Wrapping(1);
+                                        }
+                                    }
+                                } else {
+                                    println!("CLIENT: {:?}", msg);
+                                }
                                 if let Some(buf) = remains {
                                     println!("REMAINS {} bytes", buf.len());
                                 }
@@ -160,7 +179,20 @@ fn main() {
                                     }
                                 };
                             if show_message {
-                                println!("SERVER: {:?}", msg);
+                                if follow && msg.is_rel() {
+                                    if let ServerMessage::REL(rels) = msg {
+                                        let mut seq = Wrapping(rels.seq);
+                                        for rel in &rels.rels {
+                                            if seq == server_seq {
+                                                println!("{:?}", rel);
+                                                server_seq += Wrapping(1);
+                                            }
+                                            seq += Wrapping(1);
+                                        }
+                                    }
+                                } else {
+                                    println!("SERVER: {:?}", msg);
+                                }
                                 if let Some(buf) = remains {
                                     println!("REMAINS {} bytes", buf.len());
                                 }

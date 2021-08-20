@@ -96,6 +96,10 @@ impl ClientMessage {
             }
         }
     }
+
+    pub fn is_rel (&self) -> bool {
+        if let ClientMessage::REL(_) = self { true } else { false }
+    }
 }
 
 impl ServerMessage {
@@ -153,4 +157,8 @@ impl ServerMessage {
         }
     }
     */
+
+    pub fn is_rel (&self) -> bool {
+        if let ServerMessage::REL(_) = self { true } else { false }
+    }
 }
