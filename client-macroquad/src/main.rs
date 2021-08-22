@@ -1,12 +1,6 @@
 #![feature(stmt_expr_attributes)]
+#![feature(destructuring_assignment)]
 
-use anyhow::anyhow;
-use log::{debug, error, info, warn};
-use macroquad::prelude::{
-    clear_background, is_mouse_button_down, is_mouse_button_pressed, is_quit_requested, mouse_position, mouse_wheel, next_frame, prevent_quit, screen_height, screen_width, set_camera, vec2, Camera2D,
-    Color, DrawTextureParams, FilterMode, MouseButton, Rect, Vec2, BLACK, BLUE, WHITE,
-};
-use ron::de::from_reader;
 use std::{
     collections::BTreeMap,
     default::Default,
@@ -14,13 +8,24 @@ use std::{
     io::BufReader,
     sync::mpsc::{Receiver, Sender, TryRecvError::*},
 };
-use xux::state::Event::Obj;
-use xux::state::{Surface, WdgID};
+
+use anyhow::anyhow;
+use egui_macroquad::ui;
+use log::{debug, error, info, warn};
+use macroquad::prelude::{
+    BLACK, BLUE, Camera2D, clear_background, Color, DrawTextureParams, FilterMode, is_mouse_button_down, is_mouse_button_pressed, is_quit_requested, mouse_position, mouse_wheel, MouseButton,
+    next_frame, prevent_quit, Rect, screen_height, screen_width, set_camera, vec2, Vec2, WHITE,
+};
+use ron::de::from_reader;
+
 use xux::{
     client, driver,
     proto::{ObjID, ObjXY, ResID},
-    state, Result,
+    Result, state,
 };
+use xux::state::{Surface, WdgID};
+use xux::state::Event::Obj;
+use egui::Pos2;
 
 #[macroquad::main("2d-macroquad-egui")]
 async fn main() -> Result<()> {
@@ -245,31 +250,6 @@ impl RenderContext {
     }
 
     fn update(&mut self) {
-        self.zoom *= 1.0 + mouse_wheel().1 / 10.0;
-
-        let mouse = Vec2::from(mouse_position());
-        let delta = self.mouse - mouse;
-        self.mouse = mouse;
-
-        if is_mouse_button_down(MouseButton::Right) {
-            self.target += delta / self.zoom;
-        }
-
-        self.camera = Camera2D::from_display_rect(Rect::new(0.0, 0.0, screen_width(), screen_height()));
-        self.camera.target += self.target;
-        self.camera.target -= vec2(screen_width() / 2.0, screen_height() / 2.0);
-        self.camera.zoom *= self.zoom;
-
-        if is_mouse_button_pressed(MouseButton::Left) {
-            let mark = self.camera.screen_to_world(mouse);
-            self.marks.push(mark);
-            self.event_tx.send(driver::Event::User(driver::UserInput::Go(mark[0], mark[1]))).expect("unable to send User::Quit");
-        }
-
-        if is_quit_requested() {
-            self.event_tx.send(driver::Event::User(driver::UserInput::Quit)).expect("unable to send User::Quit");
-        }
-
         loop {
             match self.event_rx.try_recv() {
                 Ok(event) => {
@@ -288,8 +268,10 @@ impl RenderContext {
             }
         }
 
+        let mut ui_hovered = false;
+
         egui_macroquad::ui(|egui_ctx| {
-            egui::Window::new("Окно №1").show(egui_ctx, |ui| {
+            let response = egui::Window::new("Окно №1").show(egui_ctx, |ui| {
                 ui.vertical(|ui| {
                     if ui.button("exit").clicked() {
                         self.event_tx.send(driver::Event::User(driver::UserInput::Quit)).expect("unable to send User::Quit");
@@ -311,7 +293,36 @@ impl RenderContext {
                     }
                 });
             });
+            if let Some(ref response) = response {
+                let mouse = mouse_position();
+                ui_hovered = response.rect.contains(Pos2::new(mouse.0, mouse.1));
+            }
         });
+
+        self.zoom *= 1.0 + mouse_wheel().1 / 10.0;
+
+        let mouse = Vec2::from(mouse_position());
+        let delta = self.mouse - mouse;
+        self.mouse = mouse;
+
+        if is_mouse_button_down(MouseButton::Right) {
+            self.target += delta / self.zoom;
+        }
+
+        self.camera = Camera2D::from_display_rect(Rect::new(0.0, 0.0, screen_width(), screen_height()));
+        self.camera.target += self.target;
+        self.camera.target -= vec2(screen_width() / 2.0, screen_height() / 2.0);
+        self.camera.zoom *= self.zoom;
+
+        if is_mouse_button_pressed(MouseButton::Left) && ! ui_hovered {
+            let mark = self.camera.screen_to_world(mouse);
+            self.marks.push(mark);
+            self.event_tx.send(driver::Event::User(driver::UserInput::Go(mark[0], mark[1]))).expect("unable to send User::Quit");
+        }
+
+        if is_quit_requested() {
+            self.event_tx.send(driver::Event::User(driver::UserInput::Quit)).expect("unable to send User::Quit");
+        }
     }
 
     fn draw(&self) {
