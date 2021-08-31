@@ -9,7 +9,7 @@ use std::io;
 use std::error::Error;
 
 // TODO grid_to_png(..., Mapper::first())
-pub fn tiles_to_png(login: &str, name: &str, timestamp: &str, x: i32, y: i32, tiles: &[u8] /* TODO z: &[i16] */) -> Result<(), Box<dyn Error>> {
+pub fn tiles_to_png(login: &str, name: &str, timestamp: &str, x: i32, y: i32, tiles: &[u8], palette: &[[u8;4]] /* TODO z: &[i16] */) -> Result<(), Box<dyn Error>> {
     let mut path = PathBuf::new();
     path.push(login);
     path.push(name);
@@ -29,11 +29,8 @@ pub fn tiles_to_png(login: &str, name: &str, timestamp: &str, x: i32, y: i32, ti
     for y in 0..100 {
         for x in 0..100 {
             let tile = tiles[y * 100 + x];
-            //TODO get RGB from palette 'tile_colors.ron'
-            let r = tile;
-            let g = 0;
-            let b = 0;
-            img.put_pixel(x as u32, y as u32, Rgb([g, r, b]));
+            let rgb = palette[tile as usize];
+            img.put_pixel(x as u32, y as u32, Rgb([rgb[0], rgb[1], rgb[2]]));
         }
     }
     Ok(ImageRgb8(img).save(path)?)

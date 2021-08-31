@@ -149,7 +149,7 @@ impl RenderContext {
         match surface.tiles() {
             Some(ref tiles) => {
                 //FIXME remove expect(), propagate error up
-                util::tiles_to_png(&self.login, &self.name, &self.timestamp, surface.x(), surface.y(), tiles /* TODO &s.z */).expect("Unable to save tiles");
+                util::tiles_to_png(&self.login, &self.name, &self.timestamp, surface.x(), surface.y(), tiles, &self.palette /* TODO &s.z */).expect("Unable to save tiles");
                 Ok(())
             }
             None => {
@@ -167,7 +167,6 @@ impl RenderContext {
             }*/
             state::Event::Surface(ref surface) => {
                 debug!("RENDER: surface v{} ({}, {})", surface.version(), surface.x(), surface.y());
-                self.tiles_to_png(surface).expect("Unable to save tiles");
                 if let Some(tileres) = surface.tileres() {
                     for tile in tileres {
                         debug!("RENDER: tile {} {}", tile.id, tile.name);
@@ -178,6 +177,7 @@ impl RenderContext {
                         }
                     }
                 }
+                self.tiles_to_png(surface).expect("Unable to save tiles");
                 //TODO app.rebuild_grid_cache(...)
                 //XXX FIXME TODO one BIG mesh with all grids in it ?
                 //or individual buffer+pipe.data for every grid ?
