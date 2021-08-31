@@ -26,4 +26,7 @@
     "gfx/tiles/water"             : ( 33,  97,  140, 255 ),
     "gfx/tiles/lichenwold"        : ( 0x65, 0x6d, 0x4a, 0xff ),
     "gfx/tiles/scrubveld"         : ( 0xf9, 0x84, 0x4a, 0xff ),
+    "gfx/tiles/mountainsnow"      : ( 220, 220, 220, 255 ),
+    "gfx/tiles/snow"              : ( 200, 200, 200, 255 ),
+    "gfx/tiles/ice"               : ( 200, 200, 255, 255 ),
 }

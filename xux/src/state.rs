@@ -452,6 +452,16 @@ impl Surface {
         }
     }
 
+    pub fn heights (&self) -> Option<&[f32]> {
+        match self {
+            Surface::V0(_s) => panic!("heights() for v0 surfaces does not implemented"),
+            Surface::V1(s) => match s.heights {
+                Some(ref heights) => Some(heights),
+                None => None,
+            }
+        }
+    }
+
     pub fn version (&self) -> usize {
         match self {
             Surface::V0(_) => 0,

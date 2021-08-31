@@ -73,7 +73,7 @@ struct RenderContext {
     event_tx: Sender<driver::Event>,
     event_rx: Receiver<state::Event>,
     //TODO
-    //struct State {
+    //struct XuxState {
     widgets: BTreeMap<WdgID, (String, WdgID)>, //TODO add Vec<messages> to every widget
     resources: BTreeMap<ResID, String>,
     objects: BTreeMap<ObjID, ((ObjXY, f64), ResID)>,
@@ -88,7 +88,8 @@ struct RenderContext {
     //struct RenderState {
     tile_colors: BTreeMap<String, [u8; 4]>,
     palette: [[u8; 4]; 256],
-    grids_tiles: Vec<(i32, i32, macroquad::texture::Texture2D)>,
+    grids_tiles: Vec<(i32, i32, macroquad::texture::Texture2D)>, // (x,y,tiles)
+    grids_heights: Vec<(i32, i32, Vec<f32>)>, // (x,y,heights)
     // }
     //TODO
     //struct RenderConfig {
@@ -103,6 +104,7 @@ struct RenderContext {
     mouse: Vec2,
     camera: Camera2D,
     marks: Vec<Vec2>,
+    height_threshold: f32,
 }
 
 impl RenderContext {
@@ -128,6 +130,7 @@ impl RenderContext {
             },
             palette: [[0, 0, 250, 255]; 256],
             grids_tiles: Vec::new(),
+            grids_heights: Vec::new(),
             show_tiles: true,
             show_heights: true,
             show_owning: true,
@@ -138,6 +141,7 @@ impl RenderContext {
             mouse: vec2(0.0, 0.0),
             camera: Camera2D::default(),
             marks: Vec::new(),
+            height_threshold: 20.0,
         }
     }
 
@@ -189,7 +193,6 @@ impl RenderContext {
                     }
                     let texture = macroquad::texture::Texture2D::from_rgba8(100, 100, texture_data.as_slice());
                     texture.set_filter(FilterMode::Nearest);
-                    // ObjTex::plane_from_tiles(1100.0, x, y, tiles.as_ref(), &self.palette).bake(self.main_color.clone(), &mut self.factory);
                     self.grids_tiles.push((surface.x(), surface.y(), texture));
                 }
                 #[cfg(TODO)]
@@ -200,8 +203,11 @@ impl RenderContext {
                 //    .bake(main_color.clone(), &mut factory, threshold);
                 #[cfg(TODO)]
                 let heights = ObjCol::grid_from_heights2(100, 11.0, x, y, z.as_ref()).bake(self.main_color.clone(), &mut self.factory, self.threshold);
-                #[cfg(TODO)]
-                self.grids_heights.push(heights);
+                if let Some(heights) = surface.heights() {
+                    self.grids_heights.push((surface.x(), surface.y(), heights.to_vec()));
+                } else {
+                    warn!("RENDER: surface without heights");
+                }
             }
             state::Event::Obj(id, (xy, angle), resid) => {
                 debug!("RENDER: obj ({}, {}) {} {}", xy.0, xy.1, angle, resid);
@@ -273,6 +279,10 @@ impl RenderContext {
         egui_macroquad::ui(|egui_ctx| {
             let response = egui::Window::new("Окно №1").show(egui_ctx, |ui| {
                 ui.vertical(|ui| {
+                    ui.checkbox(&mut self.show_tiles, "Show tiles");
+                    ui.checkbox(&mut self.show_heights, "Show heights");
+                    ui.checkbox(&mut self.show_owning, "Show owning");
+                    ui.add(egui::Slider::new(&mut self.height_threshold, 0.0..=30.0));
                     if ui.button("exit").clicked() {
                         self.event_tx.send(driver::Event::User(driver::UserInput::Quit)).expect("unable to send User::Quit");
                     }
@@ -328,8 +338,8 @@ impl RenderContext {
     fn draw(&self) {
         set_camera(&self.camera);
         self.draw_tiles();
-        self.draw_owning();
         self.draw_heights();
+        self.draw_owning();
         self.draw_objects();
         self.draw_marks();
         self.draw_hero();
@@ -364,9 +374,27 @@ impl RenderContext {
 
     fn draw_heights(&self) {
         if self.show_heights {
-            #[cfg(TODO)]
-            for t in self.state.grids_heights.iter() {
-                self.state.encoder.draw(&t.slice, &self.state.pso_col, &t.data);
+            for &(x, y, ref heights) in self.grids_heights.iter() {
+                for tx in 0..99 {
+                    for ty in 0..99 {
+                        let h00 = heights[ty * 100 + tx];
+                        let h10 = heights[ty * 100 + tx + 1];
+                        let h01 = heights[(ty + 1) * 100 + tx];
+                        let h11 = heights[(ty + 1) * 100 + tx + 1];
+                        let dh0 = (h00 - h10).abs();
+                        let dh1 = (h00 - h01).abs();
+                        let dh2 = (h10 - h11).abs();
+                        let dh3 = (h01 - h11).abs();
+                        let dh = dh0.max(dh1).max(dh2).max(dh3);
+                        if dh >= self.height_threshold {
+                            let x = x as f32 * 1100.0 + tx as f32 * 11.0 + 1.0;
+                            let y = y as f32 * 1100.0 + ty as f32 * 11.0 + 1.0;
+                            let w = 9.0;
+                            let h = 9.0;
+                            macroquad::shapes::draw_rectangle(x, y, w, h, BLACK);
+                        }
+                    }
+                }
             }
         }
     }
@@ -375,8 +403,8 @@ impl RenderContext {
         for ((ObjXY(x, y), angle), _) in self.objects.values() {
             const OBJ_SIZE: f64 = 4.0;
             {
-                let x = (x + -OBJ_SIZE / 2.0) as f32;
-                let y = (y + -OBJ_SIZE / 2.0) as f32;
+                let x = (x - OBJ_SIZE / 2.0) as f32;
+                let y = (y - OBJ_SIZE / 2.0) as f32;
                 let w = OBJ_SIZE as f32;
                 let h = OBJ_SIZE as f32;
                 macroquad::shapes::draw_rectangle(x, y, w, h, WHITE);
@@ -389,8 +417,8 @@ impl RenderContext {
         use macroquad::prelude::*;
         for mark in &self.marks {
             const OBJ_SIZE: f32 = 2.0;
-            let x = mark[0] + -OBJ_SIZE / 2.0;
-            let y = mark[1] + -OBJ_SIZE / 2.0;
+            let x = mark[0] - OBJ_SIZE / 2.0;
+            let y = mark[1] - OBJ_SIZE / 2.0;
             let w = OBJ_SIZE;
             let h = OBJ_SIZE;
             draw_rectangle(x, y, w, h, RED);
