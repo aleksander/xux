@@ -9,7 +9,6 @@ use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use log::{debug, info};
 use crate::{
     driver,
-    ai,
     state::{self, State},
     Result,
 };
@@ -110,10 +109,7 @@ pub fn run_threaded (host: &str, port: u16, login: String, cookie: Vec<u8>) -> R
     let (hl_que_tx_render, hl_que_rx_render) = channel();
     let render_ques = (driver.sender(), hl_que_rx_render);
 
-    let (hl_que_tx_ai, hl_que_rx_ai) = channel();
-    ai::new(driver.sender(), hl_que_rx_ai);
-
-    let state = State::new(hl_que_tx_render, hl_que_tx_ai, driver);
+    let state = State::new(hl_que_tx_render, driver);
     state.run_threaded(login, cookie);
 
     Ok(render_ques)

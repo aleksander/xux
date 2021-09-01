@@ -539,6 +539,7 @@ pub enum Wdg {
     New(WdgID,String,WdgID),
     Msg(WdgID,String,Vec<List>),
     Del(WdgID),
+    Add(WdgID),
 }
 
 #[derive(Clone)]
@@ -550,20 +551,6 @@ pub enum Event {
     Res(ResID, String),
     Hero((ObjXY,f64)),
     Wdg(Wdg),
-    Hearthfire(ObjXY),
-}
-
-struct Sender {
-    events_tx1: mpsc::Sender<Event>,
-    events_tx2: mpsc::Sender<Event>,
-}
-
-impl Sender {
-    fn send_event (&self, event: Event) -> Result<()> {
-        self.events_tx1.send(event.clone())?;
-        self.events_tx2.send(event)?;
-        Ok(())
-    }
 }
 
 pub struct State {
@@ -580,14 +567,14 @@ pub struct State {
     pub fragment: Option<(u8, Vec<u8>)>,
     pub hero: Hero,
     pub map: PartialSurface,
-    sender: Sender,
+    events_tx: mpsc::Sender<Event>,
     requested_grids: BTreeSet<(i32, i32)>,
     pub login: String,
     driver: Driver,
 }
 
 impl State {
-    pub fn new(events_tx1: mpsc::Sender<Event>, events_tx2: mpsc::Sender<Event>, driver: Driver) -> State {
+    pub fn new(events_tx: mpsc::Sender<Event>, driver: Driver) -> State {
         let mut widgets = HashMap::new();
         widgets.insert(0,
             Widget {
@@ -623,10 +610,7 @@ impl State {
                 pieces: HashMap::new(),
                 grids: BTreeSet::new(),
             },
-            sender: Sender {
-                events_tx1: events_tx1,
-                events_tx2: events_tx2,
-            },
+            events_tx: events_tx,
             requested_grids: BTreeSet::new(),
             login: "".into(),
             driver: driver,
@@ -777,7 +761,7 @@ impl State {
                             //FIXME do this in client
                             //let name = if let Some(ref name) = self.hero.name { name } else { "none" };
                             //map.save_to_png(&self.login, name, &self.timestamp)?;
-                            self.sender.send_event(Event::Surface(map))?;
+                            self.events_tx.send(Event::Surface(map))?;
                         }
                     }
                 }
@@ -798,7 +782,7 @@ impl State {
                                         if let Some(mut cached_hero_obj) = self.objects.remove(&hero_id) {
                                             cached_hero_obj.update(new_obj_prop);
                                             self.hero.obj = Some(cached_hero_obj);
-                                            self.sender.send_event(Event::ObjRemove(hero_id))?;
+                                            self.events_tx.send(Event::ObjRemove(hero_id))?;
                                         } else {
                                             let mut hero_obj = Obj::new(o.id, None, None, None, None);
                                             hero_obj.update(new_obj_prop);
@@ -808,7 +792,7 @@ impl State {
                                     }
                                     if let Some(ref obj) = self.hero.obj {
                                         if let Some(xy) = obj.xy {
-                                            self.sender.send_event(Event::Hero(xy))?;
+                                            self.events_tx.send(Event::Hero(xy))?;
                                         } else {
                                             return Err(anyhow!("hero without coordinates"));
                                         }
@@ -826,14 +810,14 @@ impl State {
 
                             if obj.update(&new_obj_prop) {
                                 if let Some(xy) = obj.xy {
-                                    self.sender.send_event(Event::Obj(obj.id, xy, obj.resid.unwrap_or(0)))?;
+                                    self.events_tx.send(Event::Obj(obj.id, xy, obj.resid.unwrap_or(0)))?;
                                 }
                                 info!("OBJ: {:?}", obj);
                             }
                         }
                         None => {
                             self.objects.remove(&o.id);
-                            self.sender.send_event(Event::ObjRemove(o.id))?;
+                            self.events_tx.send(Event::ObjRemove(o.id))?;
                             info!("OBJ: {} removed", o.id);
                         }
                     }
@@ -909,17 +893,17 @@ impl State {
             Rel::NEWWDG(ref wdg) => {
                 // info!("      {:?}", wdg);
                 self.dispatch_newwdg(wdg)?;
-                self.sender.send_event(Event::Wdg(Wdg::New(wdg.id, wdg.name.clone(), wdg.parent)))?;
+                self.events_tx.send(Event::Wdg(Wdg::New(wdg.id, wdg.name.clone(), wdg.parent)))?;
             }
             Rel::WDGMSG(ref msg) => {
                 // info!("      {:?}", msg);
                 self.dispatch_wdgmsg(msg)?;
-                self.sender.send_event(Event::Wdg(Wdg::Msg(msg.id, msg.name.clone(), msg.args.clone())))?;
+                self.events_tx.send(Event::Wdg(Wdg::Msg(msg.id, msg.name.clone(), msg.args.clone())))?;
             }
             Rel::DSTWDG(ref wdg) => {
                 // info!("      {:?}", wdg);
                 self.widgets.remove(&wdg.id);
-                self.sender.send_event(Event::Wdg(Wdg::Del(wdg.id)))?;
+                self.events_tx.send(Event::Wdg(Wdg::Del(wdg.id)))?;
             }
             Rel::MAPIV(_) => {}
             Rel::GLOBLOB(_) => {}
@@ -927,14 +911,14 @@ impl State {
             Rel::RESID(ref res) => {
                 // info!("      {:?}", res);
                 self.resources.insert(res.id, res.name.clone());
-                self.sender.send_event(Event::Res(res.id, res.name.clone()))?;
+                self.events_tx.send(Event::Res(res.id, res.name.clone()))?;
             }
             Rel::PARTY(_) => {}
             Rel::SFX(_) => {}
             Rel::CATTR(_) => {}
             Rel::MUSIC(_) => {}
             Rel::TILES(ref _tiles) => {
-                //self.sender.send_event(Event::Tiles(tiles.tiles.clone()))?;
+                //self.events_tx.send(Event::Tiles(tiles.tiles.clone()))?;
                 warn!("TILES RECEIVED! we expect tileres will be in MAPDATA message")
             }
             Rel::BUFF(_) => {}
@@ -1001,8 +985,8 @@ impl State {
                     let cached_hero_obj = self.objects.remove(&id);
                     match cached_hero_obj {
                         Some(cached_hero_obj) => {
-                            self.sender.send_event(Event::ObjRemove(id))?;
-                            self.sender.send_event(Event::Hero(cached_hero_obj.xy.unwrap_or((ObjXY::new(),0.0))))?;
+                            self.events_tx.send(Event::ObjRemove(id))?;
+                            self.events_tx.send(Event::Hero(cached_hero_obj.xy.unwrap_or((ObjXY::new(),0.0))))?;
                             self.hero.obj = Some(cached_hero_obj);
                             info!("HERO: obj: {:?}", self.hero.obj);
                             self.request_grids_around_hero();
@@ -1076,8 +1060,8 @@ impl State {
                     if msg.name == "upd" {
                         if let Some(&List::Coord(xy)) = msg.args.get(0) {
                             self.hero.hearthfire = Some(xy);
-                            info!("HERO: heathfire = '{:?}'", self.hero.hearthfire);
-                            self.sender.send_event(Event::Hearthfire(xy.into()))?;
+                            warn!("HERO: heathfire = '{:?}'", self.hero.hearthfire);
+                            //self.events_tx.send(Event::Hearthfire(xy.into()))?;
                         }
                     }
                 }

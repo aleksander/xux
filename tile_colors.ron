@@ -64,4 +64,6 @@
     "gfx/tiles/rocks/zincspar"    : ( 150, 100, 150, 255 ),
     "gfx/tiles/rocks/schist"      : ( 150, 100, 150, 255 ),
     "gfx/tiles/rocks/hornblende"  : ( 150, 100, 150, 255 ),
+    "gfx/tiles/mossbrush"         : (  70,  60,  50, 255 ),
+    "gfx/tiles/sandcliff"         : (  50,  70,  70, 255 ),
 }

@@ -10,7 +10,6 @@ use std::{
 };
 
 use anyhow::anyhow;
-use egui_macroquad::ui;
 use log::{debug, error, info, warn};
 use macroquad::prelude::{
     BLACK, BLUE, Camera2D, clear_background, Color, DrawTextureParams, FilterMode, is_mouse_button_down, is_mouse_button_pressed, is_quit_requested, mouse_position, mouse_wheel, MouseButton,
@@ -22,10 +21,11 @@ use xux::{
     client, driver,
     proto::{ObjID, ObjXY, ResID},
     Result, state,
+    state::{Wdg, Surface},
 };
-use xux::state::{Surface, WdgID};
-use xux::state::Event::Obj;
 use egui::Pos2;
+use xux::proto::List;
+use xux::widgets::Widgets;
 
 #[macroquad::main("2d-macroquad-egui")]
 async fn main() -> Result<()> {
@@ -74,12 +74,10 @@ struct RenderContext {
     event_rx: Receiver<state::Event>,
     //TODO
     //struct XuxState {
-    widgets: BTreeMap<WdgID, (String, WdgID)>, //TODO add Vec<messages> to every widget
+    widgets: xux::widgets::Widgets,
     resources: BTreeMap<ResID, String>,
     objects: BTreeMap<ObjID, ((ObjXY, f64), ResID)>,
     hero: (ObjXY, f64),
-    hf_x: f32,
-    hf_y: f32,
     login: String,
     name: String,
     timestamp: String,
@@ -105,6 +103,7 @@ struct RenderContext {
     camera: Camera2D,
     marks: Vec<Vec2>,
     height_threshold: f32,
+    logged_in: bool,
 }
 
 impl RenderContext {
@@ -115,12 +114,10 @@ impl RenderContext {
         RenderContext {
             event_tx: event_tx,
             event_rx: event_rx,
-            widgets: BTreeMap::new(),
+            widgets: Widgets::new(),
             resources: BTreeMap::new(),
             objects: BTreeMap::new(),
             hero: (ObjXY(0.0, 0.0), 0.0),
-            hf_x: 0.0,
-            hf_y: 0.0,
             login: "nobody".into(), //FIXME set to login on login
             name: "noone".into(),   //FIXME set to hero name on hero choise
             timestamp: chrono::Local::now().format("%Y-%m-%d %H-%M-%S").to_string(),
@@ -142,6 +139,7 @@ impl RenderContext {
             camera: Camera2D::default(),
             marks: Vec::new(),
             height_threshold: 20.0,
+            logged_in: false,
         }
     }
 
@@ -233,29 +231,32 @@ impl RenderContext {
                 debug!("RENDER: res {} {}", id, name);
                 self.resources.insert(id, name);
             }
-            state::Event::Wdg(state::Wdg::New(id, name, parent)) => {
-                debug!("RENDER: wdg new {} {} {}", id, name, parent);
-                self.widgets.insert(id, (name.clone(), parent));
-                //self.xui.add_widget(id,name,parent).expect("unable to ui.add_widget");
-            }
-            state::Event::Wdg(state::Wdg::Msg(id, name, _args)) => {
-                debug!("RENDER: wdg msg {} {}", id, name);
-                //self.xui.message(id,(name,args)).expect("unable to ui.message");
-            }
-            state::Event::Wdg(state::Wdg::Del(id)) => {
-                debug!("RENDER: wdg del {}", id);
-                self.widgets.remove(&id);
-                //self.xui.del_widget(id).expect("unable to ui.del_widget");
-            }
-            state::Event::Hearthfire(ObjXY(x, y)) => {
-                debug!("RENDER: hearthfire ({}, {})", x, y);
-                self.hf_x = x as f32;
-                self.hf_y = y as f32;
+            state::Event::Wdg(action) => {
+                match action {
+                    Wdg::New(id, name, parent_id) => {
+                        self.widgets.add_widget(id, name, parent_id).expect("unable to add_widget");
+                    }
+                    Wdg::Msg(id, name, args) => {
+                        self.widgets.message(id, (name, args)).expect("unable to add message");
+                    }
+                    Wdg::Del(id) => {
+                        self.widgets.del_widget(id).expect("unable to del_widget");
+                    }
+                    Wdg::Add(_id) => {
+                        warn!("Wdg::Add should be handled");
+                    }
+                }
             }
         }
     }
 
     fn update(&mut self) {
+        self.handle_events();
+        self.handle_input();
+        self.ai_tick();
+    }
+
+    fn handle_events (&mut self) {
         loop {
             match self.event_rx.try_recv() {
                 Ok(event) => {
@@ -273,9 +274,10 @@ impl RenderContext {
                 }
             }
         }
+    }
 
+    fn handle_input (&mut self) {
         let mut ui_hovered = false;
-
         egui_macroquad::ui(|egui_ctx| {
             let response = egui::Window::new("Окно №1").show(egui_ctx, |ui| {
                 ui.vertical(|ui| {
@@ -284,6 +286,7 @@ impl RenderContext {
                     ui.checkbox(&mut self.show_owning, "Show owning");
                     ui.add(egui::Slider::new(&mut self.height_threshold, 0.0..=30.0));
                     if ui.button("exit").clicked() {
+                        //TODO maybe instead tell self.AI to exit to correctly finish current task and don't do any tasks AI doing currently
                         self.event_tx.send(driver::Event::User(driver::UserInput::Quit)).expect("unable to send User::Quit");
                     }
                     let mut objects_by_resid: BTreeMap<ResID, usize> = BTreeMap::new();
@@ -332,6 +335,23 @@ impl RenderContext {
 
         if is_quit_requested() {
             self.event_tx.send(driver::Event::User(driver::UserInput::Quit)).expect("unable to send User::Quit");
+        }
+    }
+
+    fn ai_tick (&mut self) {
+        if ! self.logged_in {
+            if let Some(ref charlist) = self.widgets.find_chain(&["ccnt","charlist"]) {
+                let chars = charlist.messages.iter().filter(|&&(ref name,_)|name == "add").count();
+                info!("AI: found {} characters on account", chars);
+                if chars > 0 {
+                    if let Some(&(_,ref args)) = charlist.messages.iter().filter(|&&(ref name,_)|name == "add").next() {
+                        if let Some(&List::Str(ref name)) = args.get(0) {
+                            self.event_tx.send(xux::driver::Event::User(xux::driver::UserInput::Message(charlist.id, "play".into(), [List::Str(name.clone())].to_vec()))).expect("unable to send User::Message");
+                            self.logged_in = true;
+                        }
+                    }
+                }
+            }
         }
     }
 

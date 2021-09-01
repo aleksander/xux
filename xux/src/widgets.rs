@@ -79,7 +79,7 @@ pub struct Widgets {
 impl Widgets {
     pub fn new () -> Widgets {
         let mut root = Widget::new(0, "root".into());
-        root.add(Widget::new(4294967295, "temp".into()));
+        root.add(Widget::new(0xffffffff, "temp".into()));
         Widgets { root }
     }
 

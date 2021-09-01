@@ -6,8 +6,7 @@
 pub mod proto;
 pub mod state;
 pub mod driver;
-mod ai;
 pub mod client;
-mod widgets;
+pub mod widgets;
 
 pub type Result<T> = anyhow::Result<T>;
