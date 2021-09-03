@@ -1,6 +1,8 @@
 #![feature(stmt_expr_attributes)]
 #![feature(destructuring_assignment)]
 
+mod behavior_trees;
+
 use std::{
     collections::BTreeMap,
     default::Default,
@@ -197,10 +199,6 @@ impl RenderContext {
                 let owning = ObjTex::plane_from_owning(1100.0, x, y, ol.as_ref()).bake(self.main_color.clone(), &mut self.factory);
                 #[cfg(TODO)]
                 self.grids_owning.push(owning);
-                //let heights = ObjCol::grid_from_heights(100, 11.0, grid_x, grid_y, heights.as_ref(), 1.0)
-                //    .bake(main_color.clone(), &mut factory, threshold);
-                #[cfg(TODO)]
-                let heights = ObjCol::grid_from_heights2(100, 11.0, x, y, z.as_ref()).bake(self.main_color.clone(), &mut self.factory, self.threshold);
                 if let Some(heights) = surface.heights() {
                     self.grids_heights.push((surface.x(), surface.y(), heights.to_vec()));
                 } else {
