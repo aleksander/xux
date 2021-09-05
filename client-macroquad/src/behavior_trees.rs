@@ -8,6 +8,8 @@
 //      ...
 
 use behavior_tree::{Node, Status, AlwaysRunning, boxed};
+use std::time::{Duration, Instant};
+use std::sync::{Arc, Mutex};
 
 fn root () -> boxed::Sequence<2> {
     boxed::Sequence::new([
@@ -21,9 +23,9 @@ fn root () -> boxed::Sequence<2> {
 //     &
 //     login-existing-character | create-a-new-character
 //
-fn login () -> boxed::Sequence<2> {
+fn login (state: Arc<Mutex<XuxState>>) -> boxed::Sequence<2> {
     boxed::Sequence::new([
-        Box::new(wait_login_screen()),
+        Box::new(wait_login_screen(state)),
         Box::new(boxed::Selector::new([
             Box::new(login_existing_character()),
             Box::new(create_a_new_character()),
@@ -32,19 +34,86 @@ fn login () -> boxed::Sequence<2> {
 }
 
 // wait-login-screen
-//     wait-widget-1
-//     &
-//     wait-widget-2
-//     &
-//     wait-widget-3
+//     wait-widget-chain
 //     &
 //     wait-a-second
 //
-fn wait_login_screen () -> boxed::Sequence<2> {
+fn wait_login_screen (state: Arc<Mutex<XuxState>>) -> boxed::Sequence<2> {
     boxed::Sequence::new([
-        Box::new(wait_widget_chain(&["ccnt","charlist"])),
-        Box::new(wait_millis(300)),
+        Box::new(wait_widget_chain(state, vec!("ccnt","charlist"))),
+        Box::new(wait_second()),
     ])
+}
+
+//
+// wait-widget-chain
+//
+fn wait_widget_chain (state: Arc<Mutex<XuxState>>, chain: Vec<&'static str>) -> WaitWidgetChain {
+    WaitWidgetChain::new(state, chain)
+}
+
+struct WaitWidgetChain {
+    state: Arc<Mutex<XuxState>>,
+    chain: Vec<&'static str>,
+}
+
+impl WaitWidgetChain {
+    fn new (state: Arc<Mutex<XuxState>>, chain: Vec<&'static str>) -> WaitWidgetChain {
+        WaitWidgetChain { state, chain }
+    }
+}
+
+impl Node for WaitWidgetChain {
+    fn tick(&mut self) -> Status {
+        if self.widgets.find_chain(chain).is_some() {
+            Status::Success
+        } else {
+            Status::Running
+        }
+    }
+}
+
+//
+// wait-a-second
+//
+fn wait_second () -> Wait {
+    wait(Duration::from_secs(1))
+}
+
+fn wait (duration: Duration) -> Wait {
+    Wait::new(duration)
+}
+
+struct Wait {
+    duration: Duration,
+    start: Option<Instant>,
+}
+
+impl Wait {
+    fn new (duration: Duration) -> Wait {
+        Wait {
+            duration,
+            start: None,
+        }
+    }
+}
+
+impl Node for Wait {
+    fn tick(&mut self) -> Status {
+        match self.start {
+            None => {
+                self.start = Some(Instant::now());
+                Status::Running
+            }
+            Some(ref start) => {
+                if self.start.elapsed() >= self.duration {
+                    Status::Success
+                } else {
+                    Status::Running
+                }
+            }
+        }
+    }
 }
 
 // login-existing-character
@@ -55,11 +124,11 @@ fn wait_login_screen () -> boxed::Sequence<2> {
 //      wait-gameui
 //
 fn login_existing_character () -> boxed::Sequence<3> {
-    Box::new(boxed::Sequence::new([
+    boxed::Sequence::new([
         Box::new(have_any_characters()),
         Box::new(choose_a_character()),
         Box::new(wait_gameui()),
-    ]))
+    ])
 }
 
 // choose-a-character {
