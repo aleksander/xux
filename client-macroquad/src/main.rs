@@ -28,6 +28,10 @@ use xux::{
 use egui::Pos2;
 use xux::proto::List;
 use xux::widgets::Widgets;
+use behavior_tree::Node;
+use crate::behavior_trees::root;
+use std::cell::RefCell;
+use std::rc::Rc;
 
 #[macroquad::main("2d-macroquad-egui")]
 async fn main() -> Result<()> {
@@ -71,11 +75,9 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-struct RenderContext {
+pub struct XuxState {
     event_tx: Sender<driver::Event>,
     event_rx: Receiver<state::Event>,
-    //TODO
-    //struct XuxState {
     widgets: xux::widgets::Widgets,
     resources: BTreeMap<ResID, String>,
     objects: BTreeMap<ObjID, ((ObjXY, f64), ResID)>,
@@ -83,7 +85,11 @@ struct RenderContext {
     login: String,
     name: String,
     timestamp: String,
-    //}
+}
+
+struct RenderContext {
+    xux_state: Rc<RefCell<XuxState>>,
+    behavior_tree: Box<dyn Node>,
     //TODO
     //struct RenderState {
     tile_colors: BTreeMap<String, [u8; 4]>,
@@ -113,7 +119,7 @@ impl RenderContext {
         //#[cfg(feature = "dump_events")]
         //let mut dumper = dumper::Dumper::init().expect("unable to create dumper");
 
-        RenderContext {
+        let xux_state = Rc::new(RefCell::new(XuxState {
             event_tx: event_tx,
             event_rx: event_rx,
             widgets: Widgets::new(),
@@ -123,6 +129,13 @@ impl RenderContext {
             login: "nobody".into(), //FIXME set to login on login
             name: "noone".into(),   //FIXME set to hero name on hero choise
             timestamp: chrono::Local::now().format("%Y-%m-%d %H-%M-%S").to_string(),
+        }));
+
+        let behavior_tree = Box::new(root(xux_state.clone()));
+
+        RenderContext {
+            xux_state,
+            behavior_tree,
             tile_colors: {
                 let f = File::open("tile_colors.ron").expect("unable to open tile_colors.ron");
                 from_reader(BufReader::new(f)).expect("unable to deserialize")
@@ -149,7 +162,7 @@ impl RenderContext {
         match surface.tiles() {
             Some(ref tiles) => {
                 //FIXME remove expect(), propagate error up
-                util::tiles_to_png(&self.login, &self.name, &self.timestamp, surface.x(), surface.y(), tiles, &self.palette /* TODO &s.z */).expect("Unable to save tiles");
+                util::tiles_to_png(&self.xux_state.borrow().login, &self.xux_state.borrow().name, &self.xux_state.borrow().timestamp, surface.x(), surface.y(), tiles, &self.palette /* TODO &s.z */).expect("Unable to save tiles");
                 Ok(())
             }
             None => {
@@ -210,35 +223,35 @@ impl RenderContext {
                 //TODO ??? separate static objects like trees and
                 //dynamic objects like rabbits to two
                 //different caches
-                self.objects.insert(id, ((xy, angle), resid));
+                self.xux_state.borrow_mut().objects.insert(id, ((xy, angle), resid));
             }
             state::Event::ObjRemove(ref id) => {
                 debug!("RENDER: obj remove {}", id);
-                self.objects.remove(id);
+                self.xux_state.borrow_mut().objects.remove(id);
             }
             state::Event::Hero(position) => {
                 debug!("RENDER: hero ({}, {}) {}", position.0 .0, position.0 .1, position.1);
                 //TODO ??? add to objects
-                self.hero = position;
+                self.xux_state.borrow_mut().hero = position;
                 if self.target_isnt_set {
-                    self.target = vec2(self.hero.0 .0 as f32, self.hero.0 .1 as f32);
+                    self.target = vec2(self.xux_state.borrow().hero.0 .0 as f32, self.xux_state.borrow().hero.0 .1 as f32);
                     self.target_isnt_set = false;
                 }
             }
             state::Event::Res(id, name) => {
                 debug!("RENDER: res {} {}", id, name);
-                self.resources.insert(id, name);
+                self.xux_state.borrow_mut().resources.insert(id, name);
             }
             state::Event::Wdg(action) => {
                 match action {
                     Wdg::New(id, name, parent_id) => {
-                        self.widgets.add_widget(id, name, parent_id).expect("unable to add_widget");
+                        self.xux_state.borrow_mut().widgets.add_widget(id, name, parent_id).expect("unable to add_widget");
                     }
                     Wdg::Msg(id, name, args) => {
-                        self.widgets.message(id, (name, args)).expect("unable to add message");
+                        self.xux_state.borrow_mut().widgets.message(id, (name, args)).expect("unable to add message");
                     }
                     Wdg::Del(id) => {
-                        self.widgets.del_widget(id).expect("unable to del_widget");
+                        self.xux_state.borrow_mut().widgets.del_widget(id).expect("unable to del_widget");
                     }
                     Wdg::Add(_id) => {
                         warn!("Wdg::Add should be handled");
@@ -256,7 +269,8 @@ impl RenderContext {
 
     fn handle_events (&mut self) {
         loop {
-            match self.event_rx.try_recv() {
+            let event = self.xux_state.borrow().event_rx.try_recv();
+            match event {
                 Ok(event) => {
                     //#[cfg(feature = "dump_events")]
                     //dumper.dump(&event).expect("unable to dump event");
@@ -285,15 +299,15 @@ impl RenderContext {
                     ui.add(egui::Slider::new(&mut self.height_threshold, 0.0..=30.0));
                     if ui.button("exit").clicked() {
                         //TODO maybe instead tell self.AI to exit to correctly finish current task and don't do any tasks AI doing currently
-                        self.event_tx.send(driver::Event::User(driver::UserInput::Quit)).expect("unable to send User::Quit");
+                        self.xux_state.borrow().event_tx.send(driver::Event::User(driver::UserInput::Quit)).expect("unable to send User::Quit");
                     }
                     let mut objects_by_resid: BTreeMap<ResID, usize> = BTreeMap::new();
-                    for (_, resid) in self.objects.values() {
+                    for (_, resid) in self.xux_state.borrow().objects.values() {
                         *objects_by_resid.entry(*resid).or_default() += 1;
                     }
                     for (resid, quantity) in objects_by_resid.iter() {
                         ui.horizontal(|ui| {
-                            if let Some(resname) = self.resources.get(resid) {
+                            if let Some(resname) = self.xux_state.borrow().resources.get(resid) {
                                 ui.label(resname);
                             } else {
                                 let resid = resid.to_string();
@@ -328,15 +342,17 @@ impl RenderContext {
         if is_mouse_button_pressed(MouseButton::Left) && ! ui_hovered {
             let mark = self.camera.screen_to_world(mouse);
             self.marks.push(mark);
-            self.event_tx.send(driver::Event::User(driver::UserInput::Go(mark[0], mark[1]))).expect("unable to send User::Quit");
+            self.xux_state.borrow().event_tx.send(driver::Event::User(driver::UserInput::Go(mark[0], mark[1]))).expect("unable to send User::Quit");
         }
 
         if is_quit_requested() {
-            self.event_tx.send(driver::Event::User(driver::UserInput::Quit)).expect("unable to send User::Quit");
+            self.xux_state.borrow().event_tx.send(driver::Event::User(driver::UserInput::Quit)).expect("unable to send User::Quit");
         }
     }
 
     fn ai_tick (&mut self) {
+        self.behavior_tree.tick();
+        /*
         if ! self.logged_in {
             if let Some(ref charlist) = self.widgets.find_chain(&["ccnt","charlist"]) {
                 let chars = charlist.messages.iter().filter(|&&(ref name,_)|name == "add").count();
@@ -351,6 +367,7 @@ impl RenderContext {
                 }
             }
         }
+        */
     }
 
     fn draw(&self) {
@@ -418,7 +435,7 @@ impl RenderContext {
     }
 
     fn draw_objects(&self) {
-        for ((ObjXY(x, y), angle), _) in self.objects.values() {
+        for ((ObjXY(x, y), angle), _) in self.xux_state.borrow().objects.values() {
             const OBJ_SIZE: f64 = 4.0;
             {
                 let x = (x - OBJ_SIZE / 2.0) as f32;
@@ -445,12 +462,12 @@ impl RenderContext {
 
     fn draw_hero(&self) {
         const OBJ_SIZE: f32 = 4.0;
-        let x = self.hero.0 .0 as f32 - OBJ_SIZE / 2.0;
-        let y = self.hero.0 .1 as f32 - OBJ_SIZE / 2.0;
+        let x = self.xux_state.borrow().hero.0 .0 as f32 - OBJ_SIZE / 2.0;
+        let y = self.xux_state.borrow().hero.0 .1 as f32 - OBJ_SIZE / 2.0;
         let w = OBJ_SIZE;
         let h = OBJ_SIZE;
         macroquad::shapes::draw_rectangle(x, y, w, h, BLUE);
-        direction_marker(self.hero.0 .0 as f32, self.hero.0 .1 as f32, self.hero.1 as f32, OBJ_SIZE as f32, BLUE);
+        direction_marker(self.xux_state.borrow().hero.0 .0 as f32, self.xux_state.borrow().hero.0 .1 as f32, self.xux_state.borrow().hero.1 as f32, OBJ_SIZE as f32, BLUE);
     }
 
     fn draw_gui(&self) {

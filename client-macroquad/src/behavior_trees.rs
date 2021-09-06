@@ -1,3 +1,12 @@
+use behavior_tree::{Node, Status, AlwaysRunning, boxed, Wait, AlwaysFailure};
+use std::time::{Duration, Instant};
+use std::sync::{Arc, Mutex};
+use std::cell::RefCell;
+use crate::XuxState;
+use xux::proto::List;
+use log::info;
+use std::rc::Rc;
+
 //
 // login & fell-trees
 //
@@ -7,13 +16,9 @@
 // create-a-new-character
 //      ...
 
-use behavior_tree::{Node, Status, AlwaysRunning, boxed};
-use std::time::{Duration, Instant};
-use std::sync::{Arc, Mutex};
-
-fn root () -> boxed::Sequence<2> {
+pub fn root (state: Rc<RefCell<XuxState>>) -> boxed::Sequence<2> {
     boxed::Sequence::new([
-        Box::new(login()),
+        Box::new(login(state)),
         Box::new(fell_trees())
     ])
 }
@@ -23,11 +28,11 @@ fn root () -> boxed::Sequence<2> {
 //     &
 //     login-existing-character | create-a-new-character
 //
-fn login (state: Arc<Mutex<XuxState>>) -> boxed::Sequence<2> {
+fn login (state: Rc<RefCell<XuxState>>) -> boxed::Sequence<2> {
     boxed::Sequence::new([
-        Box::new(wait_login_screen(state)),
+        Box::new(wait_login_screen(state.clone())),
         Box::new(boxed::Selector::new([
-            Box::new(login_existing_character()),
+            Box::new(login_existing_character(state)),
             Box::new(create_a_new_character()),
         ]))
     ])
@@ -38,7 +43,7 @@ fn login (state: Arc<Mutex<XuxState>>) -> boxed::Sequence<2> {
 //     &
 //     wait-a-second
 //
-fn wait_login_screen (state: Arc<Mutex<XuxState>>) -> boxed::Sequence<2> {
+fn wait_login_screen (state: Rc<RefCell<XuxState>>) -> boxed::Sequence<2> {
     boxed::Sequence::new([
         Box::new(wait_widget_chain(state, vec!("ccnt","charlist"))),
         Box::new(wait_second()),
@@ -48,24 +53,24 @@ fn wait_login_screen (state: Arc<Mutex<XuxState>>) -> boxed::Sequence<2> {
 //
 // wait-widget-chain
 //
-fn wait_widget_chain (state: Arc<Mutex<XuxState>>, chain: Vec<&'static str>) -> WaitWidgetChain {
+fn wait_widget_chain (state: Rc<RefCell<XuxState>>, chain: Vec<&'static str>) -> WaitWidgetChain {
     WaitWidgetChain::new(state, chain)
 }
 
 struct WaitWidgetChain {
-    state: Arc<Mutex<XuxState>>,
+    state: Rc<RefCell<XuxState>>,
     chain: Vec<&'static str>,
 }
 
 impl WaitWidgetChain {
-    fn new (state: Arc<Mutex<XuxState>>, chain: Vec<&'static str>) -> WaitWidgetChain {
+    fn new (state: Rc<RefCell<XuxState>>, chain: Vec<&'static str>) -> WaitWidgetChain {
         WaitWidgetChain { state, chain }
     }
 }
 
 impl Node for WaitWidgetChain {
     fn tick(&mut self) -> Status {
-        if self.widgets.find_chain(chain).is_some() {
+        if self.state.borrow().widgets.find_chain(&self.chain).is_some() {
             Status::Success
         } else {
             Status::Running
@@ -84,38 +89,6 @@ fn wait (duration: Duration) -> Wait {
     Wait::new(duration)
 }
 
-struct Wait {
-    duration: Duration,
-    start: Option<Instant>,
-}
-
-impl Wait {
-    fn new (duration: Duration) -> Wait {
-        Wait {
-            duration,
-            start: None,
-        }
-    }
-}
-
-impl Node for Wait {
-    fn tick(&mut self) -> Status {
-        match self.start {
-            None => {
-                self.start = Some(Instant::now());
-                Status::Running
-            }
-            Some(ref start) => {
-                if self.start.elapsed() >= self.duration {
-                    Status::Success
-                } else {
-                    Status::Running
-                }
-            }
-        }
-    }
-}
-
 // login-existing-character
 //      have-any-characters
 //      &
@@ -123,11 +96,11 @@ impl Node for Wait {
 //      &
 //      wait-gameui
 //
-fn login_existing_character () -> boxed::Sequence<3> {
+fn login_existing_character (state: Rc<RefCell<XuxState>>) -> boxed::Sequence<3> {
     boxed::Sequence::new([
-        Box::new(have_any_characters()),
-        Box::new(choose_a_character()),
-        Box::new(wait_gameui()),
+        Box::new(have_any_characters(state.clone())),
+        Box::new(choose_a_character("Клёцка", state.clone())),
+        Box::new(wait_gameui(state)),
     ])
 }
 
@@ -136,12 +109,83 @@ fn login_existing_character () -> boxed::Sequence<3> {
 //     send msg::play("name")
 // }
 //
-fn have_any_characters() -> {}
-fn choose_a_character() -> {}
-fn wait_gameui() -> {}
+fn have_any_characters(state: Rc<RefCell<XuxState>>) -> HaveAnyCharacters {
+    HaveAnyCharacters { state }
+}
 
-fn create_a_new_character () -> AlwaysFailed {
-    AlwaysFailed
+struct HaveAnyCharacters {
+    state: Rc<RefCell<XuxState>>
+}
+
+impl HaveAnyCharacters {
+    fn new (state: Rc<RefCell<XuxState>>) -> HaveAnyCharacters {
+        HaveAnyCharacters { state }
+    }
+}
+
+impl Node for HaveAnyCharacters {
+    fn tick(&mut self) -> Status {
+        if let Some(ref charlist) = self.state.borrow().widgets.find_chain(&["ccnt","charlist"]) {
+            let chars = charlist.messages.iter().filter(|&&(ref name,_)|name == "add").count();
+            info!("AI: found {} characters on account", chars);
+            if chars > 0 {
+                Status::Success
+            } else {
+                Status::Failure
+            }
+        } else {
+            Status::Failure
+        }
+    }
+}
+
+fn choose_a_character(name: &'static str, state: Rc<RefCell<XuxState>>) -> ChooseACharacter {
+    ChooseACharacter::new(name, state)
+}
+
+struct ChooseACharacter {
+    name: &'static str,
+    state: Rc<RefCell<XuxState>>,
+    play_message_sent: bool,
+}
+
+impl ChooseACharacter {
+    fn new (name: &'static str, state: Rc<RefCell<XuxState>>) -> ChooseACharacter {
+        ChooseACharacter { name, state, play_message_sent: false }
+    }
+}
+
+impl Node for ChooseACharacter {
+    fn tick(&mut self) -> Status {
+        if self.play_message_sent {
+            return Status::Success;
+        }
+        let state = self.state.borrow();
+        let charlist = state.widgets.find_chain(&["ccnt","charlist"]);
+        let charlist = match charlist {
+            Some(ref charlist) => charlist,
+            None => return Status::Failure,
+        };
+        for (_,args) in charlist.messages.iter().filter(|&&(ref name,_)|name == "add") {
+            if let Some(&List::Str(ref name)) = args.get(0) {
+                if name == self.name {
+                    //TODO send "focus" message
+                    self.state.borrow().event_tx.send(xux::driver::Event::User(xux::driver::UserInput::Message(charlist.id, "play".into(), [List::Str(name.clone())].to_vec()))).expect("unable to send User::Message");
+                    self.play_message_sent = true;
+                    return Status::Success;
+                }
+            }
+        }
+        Status::Failure
+    }
+}
+
+fn wait_gameui(state: Rc<RefCell<XuxState>>) -> WaitWidgetChain {
+    WaitWidgetChain::new(state, vec!("gameui"))
+}
+
+fn create_a_new_character () -> AlwaysFailure {
+    AlwaysFailure
 }
 
 // fell-trees
@@ -150,7 +194,7 @@ fn create_a_new_character () -> AlwaysFailed {
 //      restore-stamina
 //      &
 //      cut-down-nearest-tree
-fn fell_trees () -> boxed::Sequence {
+fn fell_trees () -> boxed::Sequence<1> {
     boxed::Sequence::new([
         Box::new(AlwaysRunning)
     ])
