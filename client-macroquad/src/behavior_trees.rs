@@ -17,7 +17,7 @@ use std::rc::Rc;
 //      ...
 
 pub fn root (state: Rc<RefCell<XuxState>>) -> boxed::Sequence<2> {
-    boxed::Sequence::new([
+    boxed::Sequence::new("root".into(), [
         Box::new(login(state)),
         Box::new(fell_trees())
     ])
@@ -26,12 +26,15 @@ pub fn root (state: Rc<RefCell<XuxState>>) -> boxed::Sequence<2> {
 // login
 //     wait-login-screen
 //     &
+//     login-character
+//
+// login-character
 //     login-existing-character | create-a-new-character
 //
 fn login (state: Rc<RefCell<XuxState>>) -> boxed::Sequence<2> {
-    boxed::Sequence::new([
+    boxed::Sequence::new("login".into(), [
         Box::new(wait_login_screen(state.clone())),
-        Box::new(boxed::Selector::new([
+        Box::new(boxed::Selector::new("login-character".into(), [
             Box::new(login_existing_character(state)),
             Box::new(create_a_new_character()),
         ]))
@@ -44,7 +47,7 @@ fn login (state: Rc<RefCell<XuxState>>) -> boxed::Sequence<2> {
 //     wait-a-second
 //
 fn wait_login_screen (state: Rc<RefCell<XuxState>>) -> boxed::Sequence<2> {
-    boxed::Sequence::new([
+    boxed::Sequence::new("wait-login-screen".into(), [
         Box::new(wait_widget_chain(state, vec!("ccnt","charlist"))),
         Box::new(wait_second()),
     ])
@@ -97,7 +100,7 @@ fn wait (duration: Duration) -> Wait {
 //      wait-gameui
 //
 fn login_existing_character (state: Rc<RefCell<XuxState>>) -> boxed::Sequence<3> {
-    boxed::Sequence::new([
+    boxed::Sequence::new("login-existing-character".into(), [
         Box::new(have_any_characters(state.clone())),
         Box::new(choose_a_character("Клёцка", state.clone())),
         Box::new(wait_gameui(state)),
@@ -195,7 +198,7 @@ fn create_a_new_character () -> AlwaysFailure {
 //      &
 //      cut-down-nearest-tree
 fn fell_trees () -> boxed::Sequence<1> {
-    boxed::Sequence::new([
+    boxed::Sequence::new("fell-trees".into(), [
         Box::new(AlwaysRunning)
     ])
 }
