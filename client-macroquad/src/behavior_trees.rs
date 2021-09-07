@@ -14,11 +14,11 @@ use std::rc::Rc;
 // create-a-new-character
 //      ...
 
-pub fn root (state: Rc<RefCell<XuxState>>) -> boxed::Sequence<2> {
-    boxed::Sequence::new("root".into(), [
-        Box::new(login(state)),
-        Box::new(fell_trees())
-    ])
+pub fn root (state: Rc<RefCell<XuxState>>) -> Box<dyn Node> {
+    Box::new(boxed::Sequence::new("root".into(), [
+        login(state),
+        fell_trees()
+    ]))
 }
 
 // login
@@ -29,14 +29,14 @@ pub fn root (state: Rc<RefCell<XuxState>>) -> boxed::Sequence<2> {
 // login-character
 //     login-existing-character | create-a-new-character
 //
-fn login (state: Rc<RefCell<XuxState>>) -> boxed::Sequence<2> {
-    boxed::Sequence::new("login".into(), [
-        Box::new(Once::new( Box::new(wait_login_screen(state.clone())) )),
-        Box::new(Once::new( Box::new(boxed::Selector::new("login-character".into(), [
+fn login (state: Rc<RefCell<XuxState>>) -> Box<dyn Node> {
+    Box::new( boxed::Sequence::new("login".into(), [
+        Box::new( Once::new( Box::new( wait_login_screen(state.clone())) )),
+        Box::new( Once::new( Box::new( boxed::Selector::new("login-character".into(), [
             Box::new(login_existing_character(state)),
             Box::new(create_a_new_character()),
         ])) ))
-    ])
+    ]))
 }
 
 // wait-login-screen
@@ -256,10 +256,12 @@ fn create_a_new_character () -> AlwaysFailure {
 //      restore-stamina
 //      &
 //      cut-down-nearest-tree
-fn fell_trees () -> boxed::Sequence<1> {
-    boxed::Sequence::new("fell-trees".into(), [
-        Box::new(AlwaysRunning)
-    ])
+fn fell_trees () -> Box<dyn Node> {
+    Box::new( boxed::Sequence::new("fell-trees".into(), [
+        avoid_hostiles(),
+        restore_stamina(),
+        cut_down_nearest_tree(),
+    ]))
 }
 
 // avoid-hostiles
@@ -267,21 +269,71 @@ fn fell_trees () -> boxed::Sequence<1> {
 //      avoid-predators
 //      &
 //      avoid-players
+fn avoid_hostiles() -> Box<dyn Node> {
+    Box::new( boxed::Sequence::new("avoid-hostiles".into(), [
+        avoid_predators(),
+        avoid_players(),
+    ]))
+}
+
 //
 // avoid-predators
-//      cant-see-any-predators | avoid-nearest-predator
+//      see-any-predators & avoid-nearest-predator
 //
+fn avoid_predators() -> Box<dyn Node> {
+    Box::new(AvoidPredators)
+}
+
+struct AvoidPredators {
+    state: Rc<RefCell<XuxState>>
+}
+
+impl Node for AvoidPredators {
+    fn tick(&mut self, depth: usize, debug: &mut Option<Vec<(usize, String)>>) -> Status {
+        if let Some(ref mut debug) = debug {
+            debug.push((depth, self.name()));
+        }
+        const predator_names = ["todo", "todo", "todo"];
+        let mut predators = vec!();
+        for object in self.state.objects.iter() {
+            let res_name = self.state.resources.get(object.resid);
+            if predator_names.contain(res_name) {
+                predators.push(object.xy);
+            }
+        }
+        if ! predators.is_empty() {
+            let vectors = predators.iter().map(|predator|{ self.state.borrow().hero.xy - predator }).collect::<Vec<Vec2>>();
+            let distances = vectors.iter().map(|vector|{ vector.length() }).collect::<Vec<f32>>();
+            let zip = vectors.iter().zip(distances).collect();
+            let nearest = zip.iter().min_by();
+            let avoidance_vector = nearest.0.invert().normalize() * 10;
+            let movement_point = self.state.borrow().hero.xy + avoidance_vector;
+            self.state.borrow().event_tx.send(xux::driver::Event::User(xux::driver::UserInput::Go(movement_point))).expect("unable to send User::Message");
+            //TODO save current avoiding object
+            Status::Running
+        } else {
+            Status::Success
+        }
+    }
+    fn name(&self) -> String {
+        "avoid-predators".into()
+    }
+}
+
 // cant-see-any-predators
 //      ...
 //
 // avoid-nearest-predator
 //      # choose max available speed
-//      # at the same time drink water if any in inventory
+//      # at the same time drink water if any in inventory (use Parallel Node to do this)
 //      ...
 //
 // avoid-players
-//      cant-see-any-players | avoid-nearest-player
+//      see-any-player & avoid-nearest-player
 //
+fn avoid_players() -> Box<dyn Node> {
+}
+
 // cant-see-any-players
 //      ...
 //
@@ -293,6 +345,11 @@ fn fell_trees () -> boxed::Sequence<1> {
 // restore-stamina
 //      dont-need-to-drink | drink
 //
+fn restore_stamina() -> Box<dyn Node> {
+    Box::new( boxed::Sequence::new("restore-stamina".into(), [
+    ]))
+}
+
 // dont-need-to-drink
 //      if is_consuming {
 //          if stamina > min_threshold {
@@ -324,6 +381,11 @@ fn fell_trees () -> boxed::Sequence<1> {
 //      &
 //      chop-nearest-tree
 //
+fn cut_down_nearest_tree() -> Box<dyn Node> {
+    Box::new( boxed::Sequence::new("".into(), [
+    ]))
+}
+
 // have-an-axe-in-a-hand
 //      ...
 //

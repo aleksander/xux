@@ -129,7 +129,7 @@ impl RenderContext {
             timestamp: chrono::Local::now().format("%Y-%m-%d %H-%M-%S").to_string(),
         }));
 
-        let behavior_tree = Box::new(root(xux_state.clone()));
+        let behavior_tree = root(xux_state.clone());
 
         RenderContext {
             xux_state,
