@@ -26,7 +26,6 @@ use xux::{
     state::{Wdg, Surface},
 };
 use egui::Pos2;
-use xux::proto::List;
 use xux::widgets::Widgets;
 use behavior_tree::Node;
 use crate::behavior_trees::root;
@@ -35,7 +34,7 @@ use std::rc::Rc;
 
 #[macroquad::main("2d-macroquad-egui")]
 async fn main() -> Result<()> {
-    env_logger::builder().format_target(false).format_module_path(false).format_level(true).format_timestamp(None).init();
+    env_logger::builder().format_target(true).format_module_path(true).format_level(true).format_timestamp(None).init();
 
     info!("Starting...");
 
@@ -111,7 +110,6 @@ struct RenderContext {
     camera: Camera2D,
     marks: Vec<Vec2>,
     height_threshold: f32,
-    logged_in: bool,
 }
 
 impl RenderContext {
@@ -154,7 +152,6 @@ impl RenderContext {
             camera: Camera2D::default(),
             marks: Vec::new(),
             height_threshold: 20.0,
-            logged_in: false,
         }
     }
 
@@ -351,23 +348,11 @@ impl RenderContext {
     }
 
     fn ai_tick (&mut self) {
-        self.behavior_tree.tick();
-        /*
-        if ! self.logged_in {
-            if let Some(ref charlist) = self.widgets.find_chain(&["ccnt","charlist"]) {
-                let chars = charlist.messages.iter().filter(|&&(ref name,_)|name == "add").count();
-                info!("AI: found {} characters on account", chars);
-                if chars > 0 {
-                    if let Some(&(_,ref args)) = charlist.messages.iter().filter(|&&(ref name,_)|name == "add").next() {
-                        if let Some(&List::Str(ref name)) = args.get(0) {
-                            self.event_tx.send(xux::driver::Event::User(xux::driver::UserInput::Message(charlist.id, "play".into(), [List::Str(name.clone())].to_vec()))).expect("unable to send User::Message");
-                            self.logged_in = true;
-                        }
-                    }
-                }
-            }
+        let mut stack = Some(vec!());
+        self.behavior_tree.tick(0, &mut stack);
+        for &(offset, ref notice) in stack.unwrap().iter() {
+            debug!("{}{}", "   ".repeat(offset), notice);
         }
-        */
     }
 
     fn draw(&self) {
